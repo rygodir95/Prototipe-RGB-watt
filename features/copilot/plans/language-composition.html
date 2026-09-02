@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Repo Language Composition — rygodir95/Prototipe-RGB-watt</title>
+<style>
+  :root{--bg:#ffffff;--muted:#666;--text:#111}
+  body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin:24px; background:var(--bg); color:var(--text)}
+  .wrap{display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap}
+  .card{background:#fff;border-radius:10px;padding:18px;box-shadow:0 6px 20px rgba(20,20,30,0.06);}
+  .chart{width:360px;height:360px}
+  .legend{min-width:300px}
+  .legend h2{margin:0 0 8px 0;font-size:16px}
+  .item{display:flex;gap:12px;align-items:center;padding:8px 0}
+  .swatch{width:18px;height:18px;border-radius:4px;flex:0 0 18px}
+  .label{flex:1;font-size:14px}
+  .pct{font-weight:700;font-size:14px;color:#222}
+  .center{display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .controls{margin-top:12px;display:flex;gap:8px}
+  button{background:#0b5cff;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+  button.secondary{background:#f3f4f6;color:#111}
+  footer{margin-top:14px;color:var(--muted);font-size:13px}
+  @media (max-width:860px){.wrap{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+  <h1>Language composition — rygodir95/Prototipe-RGB-watt</h1>
+  <div class="wrap">
+    <div class="card">
+      <div class="chart" id="chart" aria-hidden="false"></div>
+      <div class="center" style="margin-top:8px">
+        <div style="color:var(--muted)">Total</div>
+        <div style="font-weight:700;font-size:20px">100%</div>
+        <div class="controls">
+          <button id="download-svg">Download SVG</button>
+          <button id="download-png" class="secondary">Download PNG</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card legend">
+      <h2>Breakdown</h2>
+      <div id="legend-list"></div>
+      <footer>Hover or tap slices to see exact percentages. Small slices: HTML/CSS/Other are 0.2% each.</footer>
+    </div>
+  </div>
+
+<script>
+// Data (from the repo language composition you provided)
+const data = [
+  { name: 'C', pct: 48.2, color: '#1f77b4' },
+  { name: 'Makefile', pct: 27.4, color: '#ff7f0e' },
+  { name: 'C++', pct: 22.3, color: '#2ca02c' },
+  { name: 'JavaScript', pct: 1.5, color: '#d62728' },
+  { name: 'HTML', pct: 0.2, color: '#9467bd' },
+  { name: 'CSS', pct: 0.2, color: '#8c564b' },
+  { name: 'Other', pct: 0.2, color: '#e377c2' }
+];
+
+// Build SVG donut and legend
+const W = 360, H = 360, CX = W/2, CY = H/2, R = 120, STROKE = 80;
+const svgNS = 'http://www.w3.org/2000/svg';
+const svg = document.createElementNS(svgNS,'svg');
+svg.setAttribute('width', W);
+svg.setAttribute('height', H);
+svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+svg.setAttribute('role','img');
+svg.setAttribute('aria-label','Language composition donut chart');
+
+// background ring
+const bgRing = document.createElementNS(svgNS,'circle');
+bgRing.setAttribute('cx',CX);
+bgRing.setAttribute('cy',CY);
+bgRing.setAttribute('r',R);
+bgRing.setAttribute('fill','none');
+bgRing.setAttribute('stroke','#f1f3f5');
+bgRing.setAttribute('stroke-width',STROKE);
+svg.appendChild(bgRing);
+
+// donut segments using stroke-dasharray
+const circumference = 2*Math.PI*R;
+let offset = 0; // in length along circumference
+
+const group = document.createElementNS(svgNS,'g');
+svg.appendChild(group);
+
+function pctToLength(p){return (p/100)*circumference}
+
+data.forEach((d,i)=>{
+  const len = pctToLength(d.pct);
+  const circle = document.createElementNS(svgNS,'circle');
+  circle.setAttribute('cx',CX);
+  circle.setAttribute('cy',CY);
+  circle.setAttribute('r',R);
+  circle.setAttribute('fill','none');
+  circle.setAttribute('stroke',d.color);
+  circle.setAttribute('stroke-width',STROKE);
+  circle.setAttribute('stroke-linecap','butt');
+  circle.setAttribute('transform', `rotate(-90 ${CX} ${CY})`);
+  circle.setAttribute('stroke-dasharray', `${len} ${circumference}`);
+  circle.setAttribute('stroke-dashoffset', `-${offset}`);
+  circle.style.transition = 'transform 140ms ease, filter 140ms ease';
+  circle.dataset.name = d.name;
+  circle.dataset.pct = d.pct;
+  circle.addEventListener('mouseenter', onSliceEnter);
+  circle.addEventListener('mouseleave', onSliceLeave);
+  circle.addEventListener('click', ()=>alert(`${d.name} — ${d.pct}%`));
+
+  // tooltip via title element for accessibility
+  const title = document.createElementNS(svgNS,'title');
+  title.textContent = `${d.name} — ${d.pct}%`;
+  circle.appendChild(title);
+
+  group.appendChild(circle);
+  offset += len;
+});
+
+// center hole (white circle)
+const hole = document.createElementNS(svgNS,'circle');
+hole.setAttribute('cx',CX);
+hole.setAttribute('cy',CY);
+hole.setAttribute('r',R-40);
+hole.setAttribute('fill','#fff');
+svg.appendChild(hole);
+
+// put SVG into DOM
+document.getElementById('chart').appendChild(svg);
+
+// Legend
+const legend = document.getElementById('legend-list');
+data.forEach(d=>{
+  const item = document.createElement('div');
+  item.className = 'item';
+  const sw = document.createElement('div'); sw.className='swatch'; sw.style.background = d.color;
+  const lbl = document.createElement('div'); lbl.className='label'; lbl.textContent = d.name;
+  const pct = document.createElement('div'); pct.className='pct'; pct.textContent = d.pct + '%';
+  item.appendChild(sw); item.appendChild(lbl); item.appendChild(pct);
+  legend.appendChild(item);
+});
+
+// Hover handlers highlight the slice
+function onSliceEnter(e){
+  const c = e.currentTarget;
+  c.style.transform = 'scale(1.03)';
+  c.style.filter = 'drop-shadow(0 8px 18px rgba(0,0,0,0.12))';
+}
+function onSliceLeave(e){
+  const c = e.currentTarget;
+  c.style.transform = 'scale(1)';
+  c.style.filter = 'none';
+}
+
+// Downloads
+document.getElementById('download-svg').addEventListener('click', ()=>{
+  const serializer = new XMLSerializer();
+  const text = serializer.serializeToString(svg);
+  const blob = new Blob([text], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'language-composition.svg'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
+
+document.getElementById('download-png').addEventListener('click', ()=>{
+  const serializer = new XMLSerializer();
+  const text = serializer.serializeToString(svg);
+  const img = new Image();
+  const svgBlob = new Blob([text],{type:'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(svgBlob);
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    // white background
+    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0);
+    const png = canvas.toDataURL('image/png');
+    const a = document.createElement('a'); a.href = png; a.download = 'language-composition.png'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+  img.src = url;
+});
+
+</script>
+
+<p style="margin-top:18px;color:#444">This file is saved in the repository so you can open it on GitHub Pages or view raw HTML. If you'd like, I can move it to a different path or commit it to another branch.</p>
+</body>
+</html>
