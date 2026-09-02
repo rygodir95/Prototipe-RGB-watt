@@ -11,6 +11,9 @@
 #include "BLEPower.h"
 #include "Simulation.h"
 #include "WebInterface.h"
+#include "Security.h"
+#include "FirmwareVersion.h"
+#include "Log.h"
 
 // ---- Global subsystems ------------------------------------------------------
 Storage        storage;
@@ -20,6 +23,8 @@ BLEPower       ble;
 Simulation     sim;
 WebInterface   web;
 
+bool g_logEnabled = true;   // gated by build type + config.debug
+
 static int      s_prevZone   = 0;
 static uint32_t s_rebootAt   = 0;
 static uint32_t s_lastProc   = 0;
@@ -27,6 +32,7 @@ static uint32_t s_lastDebug  = 0;
 
 // ---- Config application -----------------------------------------------------
 void applyRuntimeConfig() {
+  g_logEnabled = g_config.debug;
   processor.setSmoothing(g_config.smoothing);
   leds.reconfigure(g_config.ledPin, g_config.ledCount, g_config.ledType);
   leds.setBrightnessPct(g_config.brightness);
@@ -130,11 +136,15 @@ static void processPipeline() {
 void setup() {
   Serial.begin(115200);
   delay(200);
-  Serial.println("\n[SYS] ESP32 RGB Watt Zone Controller");
+  Serial.println("\n[BOOT] RGB Watt Controller");
+  Serial.printf("[FW] Version %s (%s)\n", FW_VERSION_FULL, FW_BUILD_TYPE);
   g_tel.state = DeviceState::STARTING;
+
+  Security::begin();   // device identity / security layer (non-destructive)
 
   storage.begin();
   storage.load(g_config);
+  g_logEnabled = g_config.debug;
 
   if (!leds.begin(g_config.ledPin, g_config.ledCount, g_config.ledType, g_config.brightness)) {
     Serial.println("[RGB] WARNING: LED init failed");

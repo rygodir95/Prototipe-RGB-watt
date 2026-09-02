@@ -5,9 +5,12 @@
 #include "Storage.h"
 #include "BLEPower.h"
 #include "Simulation.h"
+#include "Security.h"
+#include "FirmwareVersion.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <Update.h>
+#include <mbedtls/sha256.h>
 
 // Globals defined in main.cpp
 extern Storage    storage;
@@ -246,28 +249,45 @@ void WebInterface::setupRoutes() {
   });
 
   // Over-the-air firmware update: POST a compiled .bin as multipart upload.
+  // Production builds enforce an ECDSA signature (X-FW-Signature header, hex DER)
+  // and an anti-rollback version check. Development builds allow unsigned uploads
+  // but still verify a signature if one is supplied.
   server.on("/api/ota", HTTP_POST,
     [](AsyncWebServerRequest *req) {
-      bool ok = !Update.hasError();
-      AsyncWebServerResponse *res = req->beginResponse(
-        200, "application/json", ok ? "{\"ok\":true,\"reboot\":true}" : "{\"ok\":false}");
+      bool ok = !Update.hasError() && !s_otaRejected;
+      const char *msg = ok ? "{\"ok\":true,\"reboot\":true}"
+                           : (s_otaReason[0] ? nullptr : "{\"ok\":false}");
+      String body;
+      if (msg) body = msg;
+      else { body = String("{\"ok\":false,\"error\":\"") + s_otaReason + "\"}"; }
+      AsyncWebServerResponse *res = req->beginResponse(ok ? 200 : 400, "application/json", body);
       res->addHeader("Connection", "close");
       req->send(res);
       if (ok) scheduleReboot(1500);
     },
     [](AsyncWebServerRequest *req, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-      if (index == 0) {
-        Serial.printf("[OTA] Start: %s\n", filename.c_str());
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
-      }
-      if (len) {
-        if (Update.write(data, len) != len) Update.printError(Serial);
-      }
-      if (final) {
-        if (Update.end(true)) Serial.printf("[OTA] Success: %u bytes\n", (unsigned)(index + len));
-        else Update.printError(Serial);
-      }
+      if (index == 0) otaBegin(req, filename);
+      if (s_otaRejected) return;
+      otaWrite(data, len);
+      if (final) otaFinish(index + len);
     });
+
+  // Device / firmware / security information.
+  server.on("/api/info", HTTP_GET, [](AsyncWebServerRequest *req) {
+    JsonDocument doc;
+    doc["version"]        = FW_VERSION_FULL;
+    doc["versionCode"]    = FW_VERSION_CODE;
+    doc["build"]          = FW_BUILD_TYPE;
+    doc["production"]     = Security::isProduction();
+    doc["deviceId"]       = Security::deviceId();
+    doc["serial"]         = Security::serialNumber();
+    doc["provisioned"]    = Security::isProvisioned();
+    doc["secureBoot"]     = Security::secureBootEnabled();
+    doc["flashEncrypted"] = Security::flashEncryptionEnabled();
+    doc["signedOtaRequired"] = Security::requireSignedOTA();
+    String out; serializeJson(doc, out);
+    req->send(200, "application/json", out);
+  });
 
   server.onNotFound([](AsyncWebServerRequest *req) {
     req->send(404, "text/plain", "Not found");

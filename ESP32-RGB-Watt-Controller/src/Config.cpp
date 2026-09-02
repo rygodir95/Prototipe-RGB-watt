@@ -1,4 +1,5 @@
 #include "Config.h"
+#include "FirmwareVersion.h"
 
 AppConfig g_config;
 
@@ -96,8 +97,12 @@ void configLoadDefaults(AppConfig &c) {
   c.wifiSsid[0]    = '\0';
   c.wifiPass[0]    = '\0';
 
-  strncpy(c.theme, "system", sizeof(c.theme) - 1);
+  strncpy(c.theme, "dark", sizeof(c.theme) - 1);
+#if defined(BUILD_PROD)
+  c.debug          = false;   // production reduces logging by default
+#else
   c.debug          = true;
+#endif
 
   configApplyDefaultZones(c);
 }
