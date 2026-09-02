@@ -178,4 +178,7 @@
  /root/.platformio/packages/framework-arduinoespressif32/cores/esp32/cbuf.h \
  .pio/libdeps/esp32dev/ESPAsyncWebServer/src/AsyncJson.h \
  .pio/libdeps/esp32dev/ESPAsyncWebServer/src/ChunkPrint.h \
- /root/.platformio/packages/framework-arduinoespressif32/cores/esp32/Print.h
+ /root/.platformio/packages/framework-arduinoespressif32/cores/esp32/Print.h \
+ /root/.platformio/packages/framework-arduinoespressif32/libraries/Update/src/Update.h \
+ /root/.platformio/packages/framework-arduinoespressif32/cores/esp32/MD5Builder.h \
+ /root/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_rom/include/esp_rom_md5.h

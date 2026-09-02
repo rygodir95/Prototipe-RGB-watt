@@ -176,9 +176,17 @@ const char INDEX_HTML[] = R"rgbwatt(
               </select>
             </div>
             <div class="field">
-              <label>Brightness <span class="val" id="brightVal"></span></label>
-              <input type="range" min="0" max="100" id="brightInput" class="slider" data-testid="brightness-input" />
+              <label>Effect</label>
+              <select id="ledEffectSel" data-testid="led-effect-select">
+                <option value="0">Solid</option>
+                <option value="1">Breathing</option>
+                <option value="2">Comet</option>
+              </select>
             </div>
+          </div>
+          <div class="field">
+            <label>Brightness <span class="val" id="brightVal"></span></label>
+            <input type="range" min="0" max="100" id="brightInput" class="slider" data-testid="brightness-input" />
           </div>
         </div>
 
@@ -212,6 +220,14 @@ const char INDEX_HTML[] = R"rgbwatt(
             <input type="password" id="wifiPass" data-testid="wifi-pass-input" placeholder="••••••••" />
           </div>
           <button class="btn primary" id="wifiSaveBtn" data-testid="wifi-save-btn">Save &amp; Reboot</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Firmware Update (OTA)</div>
+          <p class="muted">Upload a compiled <code>firmware.bin</code> to flash wirelessly. The device reboots when done — don't close this page during upload.</p>
+          <input type="file" id="otaFile" accept=".bin" data-testid="ota-file-input" />
+          <div class="ota-progress" id="otaProgress"><div class="ota-bar" id="otaBar"></div></div>
+          <button class="btn primary" id="otaBtn" data-testid="ota-upload-btn">Upload &amp; Flash</button>
         </div>
 
         <div class="card danger-card">
@@ -434,6 +450,12 @@ input:focus, select:focus { border-color: var(--accent); }
 .device-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .device-addr { font-size: 12px; color: var(--muted); }
 .device-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .5px; padding: 2px 7px; border-radius: 6px; background: var(--accent); color: #fff; vertical-align: middle; }
+
+/* OTA */
+.ota-progress { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; margin: 14px 0; }
+.ota-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .2s; }
+input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
 
 /* Zone editor */
 .zone-editor { display: flex; flex-direction: column; gap: 12px; margin: 8px 0 16px; }
@@ -550,6 +572,7 @@ function fillForms() {
   $("ledPinInput").value = config.ledPin;
   $("ledCountInput").value = config.ledCount;
   $("ledTypeSel").value = config.ledType;
+  $("ledEffectSel").value = config.ledEffect;
   $("brightInput").value = config.brightness;
   $("brightVal").textContent = config.brightness + "%";
   $("autoReconnect").checked = config.autoReconnect;
@@ -633,6 +656,7 @@ async function saveSettings() {
     ledPin: +$("ledPinInput").value,
     ledCount: +$("ledCountInput").value,
     ledType: $("ledTypeSel").value,
+    ledEffect: +$("ledEffectSel").value,
     brightness: +$("brightInput").value,
     autoReconnect: $("autoReconnect").checked,
     debug: $("debugToggle").checked,
@@ -653,6 +677,32 @@ async function factoryReset() {
   if (!confirm("Reset all settings to factory defaults?")) return;
   await fetch("/api/factory-reset", { method: "POST" });
   toast("Factory reset — rebooting…");
+}
+
+// ---------------- OTA ----------------
+function otaUpload() {
+  const f = $("otaFile").files[0];
+  if (!f) { toast("Choose a firmware .bin first"); return; }
+  const bar = $("otaBar");
+  const btn = $("otaBtn");
+  btn.disabled = true;
+  bar.style.width = "0%";
+  const fd = new FormData();
+  fd.append("firmware", f, f.name);
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/ota");
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) bar.style.width = Math.round((e.loaded / e.total) * 100) + "%";
+  };
+  xhr.onload = () => {
+    let ok = false;
+    try { ok = JSON.parse(xhr.responseText).ok; } catch (_) {}
+    if (ok) { bar.style.width = "100%"; toast("Firmware flashed — rebooting…"); }
+    else { toast("Update failed"); btn.disabled = false; }
+  };
+  xhr.onerror = () => { toast("Upload error"); btn.disabled = false; };
+  xhr.send(fd);
+  toast("Uploading firmware…");
 }
 
 // ---------------- Power Source ----------------
@@ -689,7 +739,7 @@ async function refreshDevices() {
       '<div class="device-info">' +
         '<span class="device-radio"></span>' +
         '<div class="device-meta">' +
-          '<div class="device-name">' + escapeHtml(d.name) + "</div>" +
+          '<div class="device-name">' + escapeHtml(d.name) + (d.type ? ' <span class="badge">' + d.type + '</span>' : "") + "</div>" +
           '<div class="device-addr">' + d.address + "  ·  " + d.rssi + " dBm</div>" +
         "</div></div>" +
       '<div class="device-actions"></div>';
@@ -825,6 +875,8 @@ async function init() {
   $("saveSettingsBtn").addEventListener("click", saveSettings);
   $("wifiSaveBtn").addEventListener("click", saveWifi);
   $("factoryBtn").addEventListener("click", factoryReset);
+  $("otaBtn").addEventListener("click", otaUpload);
+  $("ledEffectSel").addEventListener("change", async () => { await postConfig({ ledEffect: +$("ledEffectSel").value }); toast("Effect updated"); });
   $("scanBtn").addEventListener("click", scan);
   $("smoothInput").addEventListener("input", () => ($("smoothVal").textContent = $("smoothInput").value));
   $("brightInput").addEventListener("input", () => ($("brightVal").textContent = $("brightInput").value + "%"));

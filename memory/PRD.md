@@ -34,7 +34,11 @@ BLE Power Source → Watts → EMA smoothing → Zone calc (+hysteresis) → Col
 - Firmware cannot be run/tested in this cloud pod (no ESP32 hardware). Verification = clean compile.
 - Only standard BLE CPS (0x1818/0x2A63) supported. FTMS-only / proprietary trainers need extra protocol work (documented in README).
 
-## Backlog (P1/P2)
+## Updates (2026-06)
+- **FTMS support**: BLE client now tries CPS (0x1818/0x2A63) then FTMS (0x1826/0x2AD2 Indoor Bike Data) — trainers without CPS work too. Scan tags each device CPS/FTMS.
+- **LED effects**: Solid / Breathing / Comet, selectable + persisted (config version bumped to 4).
+- **OTA**: web-based firmware upload at POST /api/ota using Update lib; UI file picker + progress bar in Settings.
+- Verified: `pio run` clean compile (RAM 17.1%, Flash 37.3%, 0 project warnings).
 - FTMS service support for trainers that don't expose CPS
 - Per-LED gradient / effects (comet, breathing) instead of solid fill
 - OTA firmware updates

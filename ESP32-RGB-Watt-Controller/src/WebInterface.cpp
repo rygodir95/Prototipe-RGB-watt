@@ -7,6 +7,7 @@
 #include "Simulation.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <Update.h>
 
 // Globals defined in main.cpp
 extern Storage    storage;
@@ -41,6 +42,7 @@ static void buildConfigJson(JsonDocument &doc) {
   doc["ledCount"]     = g_config.ledCount;
   doc["brightness"]   = g_config.brightness;
   doc["ledType"]      = (g_config.ledType == LED_SK6812) ? "SK6812" : "WS2812B";
+  doc["ledEffect"]    = g_config.ledEffect;
   doc["autoReconnect"]= g_config.autoReconnect;
   doc["sourceAddr"]   = g_config.sourceAddr;
   doc["sourceName"]   = g_config.sourceName;
@@ -109,6 +111,7 @@ static void applyConfigPatch(JsonDocument &doc) {
     const char *t = doc["ledType"].as<const char*>();
     g_config.ledType = (t && strcmp(t, "SK6812") == 0) ? LED_SK6812 : LED_WS2812B;
   }
+  if (!doc["ledEffect"].isNull()) g_config.ledEffect = constrain(doc["ledEffect"].as<int>(), 0, 2);
   if (!doc["autoReconnect"].isNull()) g_config.autoReconnect = doc["autoReconnect"].as<bool>();
   if (!doc["theme"].isNull()) {
     strncpy(g_config.theme, doc["theme"].as<const char*>(), sizeof(g_config.theme) - 1);
@@ -181,6 +184,7 @@ void WebInterface::setupRoutes() {
       JsonObject o = arr.add<JsonObject>();
       o["address"]   = d.address;
       o["name"]      = d.name;
+      o["type"]      = d.type;
       o["rssi"]      = d.rssi;
       o["connected"] = ble.isConnected() && strcmp(g_config.sourceAddr, d.address.c_str()) == 0;
     }
@@ -240,6 +244,30 @@ void WebInterface::setupRoutes() {
     req->send(200, "application/json", "{\"ok\":true,\"reboot\":true}");
     scheduleReboot(1500);
   });
+
+  // Over-the-air firmware update: POST a compiled .bin as multipart upload.
+  server.on("/api/ota", HTTP_POST,
+    [](AsyncWebServerRequest *req) {
+      bool ok = !Update.hasError();
+      AsyncWebServerResponse *res = req->beginResponse(
+        200, "application/json", ok ? "{\"ok\":true,\"reboot\":true}" : "{\"ok\":false}");
+      res->addHeader("Connection", "close");
+      req->send(res);
+      if (ok) scheduleReboot(1500);
+    },
+    [](AsyncWebServerRequest *req, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+      if (index == 0) {
+        Serial.printf("[OTA] Start: %s\n", filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
+      }
+      if (len) {
+        if (Update.write(data, len) != len) Update.printError(Serial);
+      }
+      if (final) {
+        if (Update.end(true)) Serial.printf("[OTA] Success: %u bytes\n", (unsigned)(index + len));
+        else Update.printError(Serial);
+      }
+    });
 
   server.onNotFound([](AsyncWebServerRequest *req) {
     req->send(404, "text/plain", "Not found");

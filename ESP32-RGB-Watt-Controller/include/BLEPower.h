@@ -8,6 +8,7 @@ class NimBLEClient;
 struct BLEDeviceInfo {
   std::string address;
   std::string name;
+  std::string type;   // "CPS" or "FTMS"
   int         rssi;
 };
 
@@ -36,7 +37,7 @@ public:
   uint32_t getPowerTime() const { return _powerTime; }
 
   // callbacks invoked from NimBLE tasks / free callbacks
-  void onDeviceFound(const std::string &addr, const std::string &name, int rssi);
+  void onDeviceFound(const std::string &addr, const std::string &name, const std::string &type, int rssi);
   void onScanEnd();
   void onNotify(const uint8_t *data, size_t len);
   void onClientConnect();
@@ -53,6 +54,7 @@ private:
 
   bool _scanning     = false;
   bool _connected    = false;
+  bool _ftms         = false;   // active source uses FTMS Indoor Bike Data
   bool _desired      = false;   // user wants a connection to _targetAddr
   bool _autoReconnect = true;
   bool _doConnect    = false;   // deferred connect flag (executed in update())

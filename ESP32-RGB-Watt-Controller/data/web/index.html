@@ -171,9 +171,17 @@
               </select>
             </div>
             <div class="field">
-              <label>Brightness <span class="val" id="brightVal"></span></label>
-              <input type="range" min="0" max="100" id="brightInput" class="slider" data-testid="brightness-input" />
+              <label>Effect</label>
+              <select id="ledEffectSel" data-testid="led-effect-select">
+                <option value="0">Solid</option>
+                <option value="1">Breathing</option>
+                <option value="2">Comet</option>
+              </select>
             </div>
+          </div>
+          <div class="field">
+            <label>Brightness <span class="val" id="brightVal"></span></label>
+            <input type="range" min="0" max="100" id="brightInput" class="slider" data-testid="brightness-input" />
           </div>
         </div>
 
@@ -207,6 +215,14 @@
             <input type="password" id="wifiPass" data-testid="wifi-pass-input" placeholder="••••••••" />
           </div>
           <button class="btn primary" id="wifiSaveBtn" data-testid="wifi-save-btn">Save &amp; Reboot</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Firmware Update (OTA)</div>
+          <p class="muted">Upload a compiled <code>firmware.bin</code> to flash wirelessly. The device reboots when done — don't close this page during upload.</p>
+          <input type="file" id="otaFile" accept=".bin" data-testid="ota-file-input" />
+          <div class="ota-progress" id="otaProgress"><div class="ota-bar" id="otaBar"></div></div>
+          <button class="btn primary" id="otaBtn" data-testid="ota-upload-btn">Upload &amp; Flash</button>
         </div>
 
         <div class="card danger-card">

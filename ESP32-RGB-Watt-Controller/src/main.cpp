@@ -30,6 +30,7 @@ void applyRuntimeConfig() {
   processor.setSmoothing(g_config.smoothing);
   leds.reconfigure(g_config.ledPin, g_config.ledCount, g_config.ledType);
   leds.setBrightnessPct(g_config.brightness);
+  leds.setEffect(g_config.ledEffect);
   ble.setAutoReconnect(g_config.autoReconnect);
 }
 
@@ -139,6 +140,7 @@ void setup() {
     Serial.println("[RGB] WARNING: LED init failed");
     g_tel.state = DeviceState::ERROR;
   }
+  leds.setEffect(g_config.ledEffect);
   processor.setSmoothing(g_config.smoothing);
 
   setupWifi();

@@ -202,6 +202,12 @@ input:focus, select:focus { border-color: var(--accent); }
 .device-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .device-addr { font-size: 12px; color: var(--muted); }
 .device-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .5px; padding: 2px 7px; border-radius: 6px; background: var(--accent); color: #fff; vertical-align: middle; }
+
+/* OTA */
+.ota-progress { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; margin: 14px 0; }
+.ota-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .2s; }
+input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
 
 /* Zone editor */
 .zone-editor { display: flex; flex-direction: column; gap: 12px; margin: 8px 0 16px; }

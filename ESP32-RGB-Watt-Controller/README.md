@@ -16,15 +16,19 @@ BLE Power Source  →  Watts  →  Smoothing (EMA)  →  Zone calc  →  Colour 
 ## Features
 
 - **Generic BLE Cycling Power Service (CPS)** client — works with any power
-  meter *or* smart trainer that exposes standard CPS data (see compatibility).
+  meter *or* smart trainer that exposes standard CPS data.
+- **FTMS fallback** — smart trainers exposing power only through the Fitness
+  Machine Service (Indoor Bike Data) are also supported automatically.
 - Configurable **EMA smoothing** and optional **zone-boundary hysteresis**.
 - **5 / 6 / 7 zone** models (default 7), fully editable names, boundaries and colours.
 - **Continuous colour interpolation** between adjacent zone colours — no hard switching.
 - Addressable **WS2812B / SK6812** support with configurable GPIO, count and brightness.
+- **LED effects**: Solid, Breathing and Comet — all driven by the current power colour.
 - **No-power fade-out** to an inactive state after a configurable timeout.
 - Clear internal **state machine** surfaced live in the UI.
 - **Modern web dashboard** with light / dark / system themes, live WebSocket updates,
   device manager, visual zone editor and a **simulation mode**.
+- **Over-the-air (OTA) firmware updates** straight from the web UI — no USB needed.
 - **Persistent config** in NVS with **factory reset**.
 - **Wi-Fi**: connects to your network, or falls back to its own Access Point.
 - Non-blocking architecture (`millis()`, async callbacks, no long `delay()`).
@@ -97,23 +101,28 @@ The core RGB controller works fully offline; internet is never required.
 
 ## BLE Compatibility
 
-The firmware implements the **standard Bluetooth SIG Cycling Power Service**:
+The firmware implements the **standard Bluetooth SIG Cycling Power Service**
+and, as a fallback, the **Fitness Machine Service (FTMS)**:
 
-- Service `0x1818` (`00001818-0000-1000-8000-00805F9B34FB`)
-- Cycling Power Measurement `0x2A63` (`00002A63-...`) — instantaneous power (W)
+- CPS Service `0x1818` → Cycling Power Measurement `0x2A63` (instantaneous power, W)
+- FTMS Service `0x1826` → Indoor Bike Data `0x2AD2` (instantaneous power field, W)
 
-Any device advertising this service is discoverable and usable, including:
+On connect the device tries CPS first, then FTMS, and feeds either into the same
+pipeline. Any device advertising one of these services is discoverable, including:
 
 - **Power meters:** Favero Assioma, Garmin Rally, Wahoo POWRLINK, 4iiii,
   SRAM/Quarq, Magene, Elite, and other standard CPS meters.
-- **Smart trainers** that expose power via CPS: many Tacx, Wahoo KICKR and
-  Elite trainers.
+- **Smart trainers** via CPS or FTMS: many Tacx, Wahoo KICKR and Elite trainers.
 
-> **Not every trainer is automatically supported.** Some trainers expose power
-> only through the FTMS (Fitness Machine) service or a proprietary protocol
-> rather than CPS. Those would require additional protocol support and are **not**
-> covered by this generic CPS implementation. No manufacturer-specific code is
-> used — every compatible source flows through the same pipeline.
+> Trainers using a fully proprietary protocol (neither CPS nor FTMS power) still
+> require additional protocol support and are not covered. No manufacturer-specific
+> code is used — every compatible source flows through the same pipeline.
+
+### Firmware Update (OTA)
+
+In **Settings → Firmware Update (OTA)**, choose a compiled `firmware.bin`
+(`.pio/build/esp32dev/firmware.bin`) and upload it. The device flashes and
+reboots automatically — no USB cable required after the first flash.
 
 ---
 

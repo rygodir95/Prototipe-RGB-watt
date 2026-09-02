@@ -83,6 +83,7 @@ function fillForms() {
   $("ledPinInput").value = config.ledPin;
   $("ledCountInput").value = config.ledCount;
   $("ledTypeSel").value = config.ledType;
+  $("ledEffectSel").value = config.ledEffect;
   $("brightInput").value = config.brightness;
   $("brightVal").textContent = config.brightness + "%";
   $("autoReconnect").checked = config.autoReconnect;
@@ -166,6 +167,7 @@ async function saveSettings() {
     ledPin: +$("ledPinInput").value,
     ledCount: +$("ledCountInput").value,
     ledType: $("ledTypeSel").value,
+    ledEffect: +$("ledEffectSel").value,
     brightness: +$("brightInput").value,
     autoReconnect: $("autoReconnect").checked,
     debug: $("debugToggle").checked,
@@ -186,6 +188,32 @@ async function factoryReset() {
   if (!confirm("Reset all settings to factory defaults?")) return;
   await fetch("/api/factory-reset", { method: "POST" });
   toast("Factory reset — rebooting…");
+}
+
+// ---------------- OTA ----------------
+function otaUpload() {
+  const f = $("otaFile").files[0];
+  if (!f) { toast("Choose a firmware .bin first"); return; }
+  const bar = $("otaBar");
+  const btn = $("otaBtn");
+  btn.disabled = true;
+  bar.style.width = "0%";
+  const fd = new FormData();
+  fd.append("firmware", f, f.name);
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/ota");
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) bar.style.width = Math.round((e.loaded / e.total) * 100) + "%";
+  };
+  xhr.onload = () => {
+    let ok = false;
+    try { ok = JSON.parse(xhr.responseText).ok; } catch (_) {}
+    if (ok) { bar.style.width = "100%"; toast("Firmware flashed — rebooting…"); }
+    else { toast("Update failed"); btn.disabled = false; }
+  };
+  xhr.onerror = () => { toast("Upload error"); btn.disabled = false; };
+  xhr.send(fd);
+  toast("Uploading firmware…");
 }
 
 // ---------------- Power Source ----------------
@@ -222,7 +250,7 @@ async function refreshDevices() {
       '<div class="device-info">' +
         '<span class="device-radio"></span>' +
         '<div class="device-meta">' +
-          '<div class="device-name">' + escapeHtml(d.name) + "</div>" +
+          '<div class="device-name">' + escapeHtml(d.name) + (d.type ? ' <span class="badge">' + d.type + '</span>' : "") + "</div>" +
           '<div class="device-addr">' + d.address + "  ·  " + d.rssi + " dBm</div>" +
         "</div></div>" +
       '<div class="device-actions"></div>';
@@ -358,6 +386,8 @@ async function init() {
   $("saveSettingsBtn").addEventListener("click", saveSettings);
   $("wifiSaveBtn").addEventListener("click", saveWifi);
   $("factoryBtn").addEventListener("click", factoryReset);
+  $("otaBtn").addEventListener("click", otaUpload);
+  $("ledEffectSel").addEventListener("change", async () => { await postConfig({ ledEffect: +$("ledEffectSel").value }); toast("Effect updated"); });
   $("scanBtn").addEventListener("click", scan);
   $("smoothInput").addEventListener("input", () => ($("smoothVal").textContent = $("smoothInput").value));
   $("brightInput").addEventListener("input", () => ($("brightVal").textContent = $("brightInput").value + "%"));

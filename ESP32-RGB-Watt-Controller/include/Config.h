@@ -6,11 +6,17 @@
 
 static const int   MAX_ZONES        = 7;
 static const int   MIN_ZONES        = 5;
-static const uint32_t CONFIG_VERSION = 0x52474203; // 'RGB' + version 3
+static const uint32_t CONFIG_VERSION = 0x52474204; // 'RGB' + version 4
 
 enum LedType : uint8_t {
   LED_WS2812B = 0,
   LED_SK6812  = 1,
+};
+
+enum LedEffect : uint8_t {
+  EFFECT_SOLID     = 0,
+  EFFECT_BREATHING = 1,
+  EFFECT_COMET     = 2,
 };
 
 struct Zone {
@@ -37,6 +43,7 @@ struct AppConfig {
   int ledCount;
   int brightness;      // 0..100 %
   int ledType;         // LedType
+  int ledEffect;       // LedEffect
 
   // --- BLE ---
   char sourceAddr[24];

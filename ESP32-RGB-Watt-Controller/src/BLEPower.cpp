@@ -9,6 +9,9 @@ BLEPower *BLEPower::instance = nullptr;
 // Standard Bluetooth SIG Cycling Power Service UUIDs.
 static const NimBLEUUID CPS_SERVICE((uint16_t)0x1818);
 static const NimBLEUUID CPS_MEASURE((uint16_t)0x2A63);
+// Fitness Machine Service (FTMS) for smart trainers not exposing CPS.
+static const NimBLEUUID FTMS_SERVICE((uint16_t)0x1826);
+static const NimBLEUUID FTMS_INDOOR_BIKE((uint16_t)0x2AD2);
 
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 static std::map<std::string, NimBLEAddress> g_addrMap;
@@ -27,14 +30,17 @@ static void scanCompleteCB(NimBLEScanResults results) {
 
 class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
   void onResult(NimBLEAdvertisedDevice *dev) override {
-    if (!dev->isAdvertisingService(CPS_SERVICE)) return;
+    bool cps  = dev->isAdvertisingService(CPS_SERVICE);
+    bool ftms = dev->isAdvertisingService(FTMS_SERVICE);
+    if (!cps && !ftms) return;
     std::string addr = dev->getAddress().toString();
     std::string name = dev->getName();
     if (name.empty()) name = "Unknown Power Source";
+    std::string type = cps ? "CPS" : "FTMS";   // prefer CPS when both advertised
     portENTER_CRITICAL(&g_mux);
     g_addrMap[addr] = dev->getAddress();
     portEXIT_CRITICAL(&g_mux);
-    if (BLEPower::instance) BLEPower::instance->onDeviceFound(addr, name, dev->getRSSI());
+    if (BLEPower::instance) BLEPower::instance->onDeviceFound(addr, name, type, dev->getRSSI());
   }
 };
 static ScanCallbacks g_scanCB;
@@ -87,14 +93,14 @@ std::vector<BLEDeviceInfo> BLEPower::getDevices() {
   return copy;
 }
 
-void BLEPower::onDeviceFound(const std::string &addr, const std::string &name, int rssi) {
+void BLEPower::onDeviceFound(const std::string &addr, const std::string &name, const std::string &type, int rssi) {
   portENTER_CRITICAL(&g_mux);
   for (auto &d : _devices) {
     if (d.address == addr) { d.rssi = rssi; if (d.name.empty()) d.name = name; portEXIT_CRITICAL(&g_mux); return; }
   }
-  _devices.push_back({addr, name, rssi});
+  _devices.push_back({addr, name, type, rssi});
   portEXIT_CRITICAL(&g_mux);
-  Serial.printf("[BLE] Found %s (%s)\n", name.c_str(), addr.c_str());
+  Serial.printf("[BLE] Found %s (%s) [%s]\n", name.c_str(), addr.c_str(), type.c_str());
 }
 
 void BLEPower::onScanEnd() {
@@ -158,22 +164,29 @@ bool BLEPower::connectInternal(const std::string &addr) {
   }
 
   NimBLERemoteService *svc = _client->getService(CPS_SERVICE);
-  if (!svc) {
-    Serial.println("[BLE] Cycling Power Service not found");
-    _client->disconnect();
-    return false;
+  if (svc) {
+    NimBLERemoteCharacteristic *chr = svc->getCharacteristic(CPS_MEASURE);
+    if (!chr) { Serial.println("[BLE] CPS measurement characteristic missing"); _client->disconnect(); return false; }
+    if (chr->canNotify()) chr->subscribe(true, notifyCB);
+    _ftms = false;
+    Serial.println("[BLE] Connected (Cycling Power Service)");
+    return true;
   }
-  NimBLERemoteCharacteristic *chr = svc->getCharacteristic(CPS_MEASURE);
-  if (!chr) {
-    Serial.println("[BLE] Power Measurement characteristic not found");
-    _client->disconnect();
-    return false;
+
+  // Fall back to FTMS Indoor Bike Data for smart trainers without CPS.
+  svc = _client->getService(FTMS_SERVICE);
+  if (svc) {
+    NimBLERemoteCharacteristic *chr = svc->getCharacteristic(FTMS_INDOOR_BIKE);
+    if (!chr) { Serial.println("[BLE] FTMS Indoor Bike Data characteristic missing"); _client->disconnect(); return false; }
+    if (chr->canNotify()) chr->subscribe(true, notifyCB);
+    _ftms = true;
+    Serial.println("[BLE] Connected (Fitness Machine Service)");
+    return true;
   }
-  if (chr->canNotify()) {
-    chr->subscribe(true, notifyCB);
-  }
-  Serial.println("[BLE] Connected");
-  return true;
+
+  Serial.println("[BLE] No compatible power service (CPS/FTMS) found");
+  _client->disconnect();
+  return false;
 }
 
 void BLEPower::scheduleReconnect() {
@@ -209,11 +222,28 @@ void BLEPower::update() {
 }
 
 void BLEPower::onNotify(const uint8_t *data, size_t len) {
-  if (len < 4) return;
-  // CPS Measurement: [flags:2][instantaneous power:int16 LE] ...
-  int16_t p = (int16_t)(data[2] | (data[3] << 8));
-  if (p < 0)     p = 0;
-  if (p > 3000)  return;   // reject implausible values
+  int16_t p;
+  if (_ftms) {
+    // FTMS Indoor Bike Data (0x2AD2): flags then conditional fields.
+    if (len < 4) return;
+    uint16_t flags = (uint16_t)(data[0] | (data[1] << 8));
+    size_t off = 2;
+    if (!(flags & 0x0001)) off += 2;   // Instantaneous Speed (present when bit0 == 0)
+    if (flags & 0x0002)   off += 2;    // Average Speed
+    if (flags & 0x0004)   off += 2;    // Instantaneous Cadence
+    if (flags & 0x0008)   off += 2;    // Average Cadence
+    if (flags & 0x0010)   off += 3;    // Total Distance (uint24)
+    if (flags & 0x0020)   off += 2;    // Resistance Level
+    if (!(flags & 0x0040)) return;     // Instantaneous Power not present
+    if (off + 2 > len) return;
+    p = (int16_t)(data[off] | (data[off + 1] << 8));
+  } else {
+    // CPS Measurement (0x2A63): [flags:2][instantaneous power:int16 LE] ...
+    if (len < 4) return;
+    p = (int16_t)(data[2] | (data[3] << 8));
+  }
+  if (p < 0)    p = 0;
+  if (p > 3000) return;   // reject implausible values
   _power     = (float)p;
   _powerTime = millis();
 }

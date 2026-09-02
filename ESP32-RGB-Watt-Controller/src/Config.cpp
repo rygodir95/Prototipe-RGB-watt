@@ -87,6 +87,7 @@ void configLoadDefaults(AppConfig &c) {
   c.ledCount       = 60;
   c.brightness     = 100;
   c.ledType        = LED_WS2812B;
+  c.ledEffect      = EFFECT_SOLID;
 
   c.sourceAddr[0]  = '\0';
   c.sourceName[0]  = '\0';
