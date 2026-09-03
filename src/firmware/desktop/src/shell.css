@@ -1,0 +1,120 @@
+/* ZoneGlow desktop shell - minimal styling for the connection layer only.
+   The ZoneGlow UI itself keeps its own styles, served by the backend. */
+
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: #0b0e14;
+  color: #e6e9f0;
+  font-family: system-ui, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+/* ---- connection status bar ---- */
+#statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  background: #10141d;
+  border-bottom: 1px solid #1d2330;
+}
+#backendLabel { color: #8b94a7; }
+.sep { color: #3a4356; }
+#statusDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f0b429;
+  flex: 0 0 auto;
+}
+body[data-state="connected"] #statusDot {
+  background: #2ecc71;
+  box-shadow: 0 0 8px rgba(46, 204, 113, 0.55);
+}
+body[data-state="connecting"] #statusDot { background: #f0b429; }
+body[data-state="disconnected"] #statusDot { background: #e74c3c; }
+body[data-state="connected"] #statusText { color: #2ecc71; }
+body[data-state="disconnected"] #statusText { color: #e74c3c; }
+
+/* ---- embedded ZoneGlow UI ---- */
+#uiFrame {
+  flex: 1 1 auto;
+  width: 100%;
+  border: 0;
+  background: #0b0e14;
+}
+
+/* ---- connecting / disconnected overlay ---- */
+#overlay {
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.overlay-card {
+  width: 100%;
+  max-width: 430px;
+  padding: 28px;
+  background: #10141d;
+  border: 1px solid #1d2330;
+  border-radius: 12px;
+  text-align: center;
+}
+.overlay-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.overlay-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgb(0, 90, 255);
+  box-shadow: 0 0 18px rgba(0, 90, 255, 0.65);
+  flex: 0 0 auto;
+}
+.overlay-brand h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.overlay-brand p { margin: 2px 0 0; color: #8b94a7; }
+.overlay-hint { color: #8b94a7; line-height: 1.5; margin: 0 0 6px; }
+.overlay-label {
+  display: block;
+  margin: 18px 0 6px;
+  text-align: left;
+  color: #8b94a7;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.overlay-row { display: flex; gap: 8px; }
+.overlay-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  background: #0b0e14;
+  border: 1px solid #2a3347;
+  border-radius: 8px;
+  color: #e6e9f0;
+  font-size: 14px;
+  outline: none;
+}
+.overlay-row input:focus { border-color: rgb(0, 90, 255); }
+.overlay-row input.invalid { border-color: #e74c3c; }
+.overlay-row button {
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(0, 90, 255);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.overlay-row button:hover { background: rgb(25, 110, 255); }
