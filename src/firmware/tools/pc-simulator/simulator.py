@@ -414,6 +414,13 @@ class Simulator:
             n = len(self.ws_clients)
             for c in self.ws_clients:
                 try:
+                    # shutdown() first: close() alone does not wake the blocked
+                    # recv() in the client's handler thread, so no FIN would be
+                    # sent and the browser would never see the disconnect.
+                    c.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                try:
                     c.close()
                 except OSError:
                     pass
