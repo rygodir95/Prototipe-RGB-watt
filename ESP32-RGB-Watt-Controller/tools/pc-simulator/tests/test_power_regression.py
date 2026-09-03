@@ -89,7 +89,7 @@ class TestPowerConfig(unittest.TestCase):
         c = fw.AppConfig()
         fw.apply_config_patch(c, {"zoneCount": 5, "ftp": 221})
         self.assertEqual(c.zone_count, 5)
-        self.assertEqual(c.zones[4].name, "VO2 Max")
+        self.assertEqual(c.zones[4].name, "Z5 · VO₂ Max")
 
     def test_patch_explicit_zones(self):
         c = fw.AppConfig()
@@ -140,7 +140,7 @@ class TestPowerSimulator(unittest.TestCase):
         self.assertEqual(tel["mode"], "power")
         self.assertEqual(tel["state"], "RECEIVING_POWER")
         self.assertEqual(tel["smoothed"], 150)
-        self.assertEqual(tel["zoneName"], "Endurance")
+        self.assertEqual(tel["zoneName"], "Z2 · Endurance")
         self.assertEqual(tel["ftp"], 221)
 
     def test_timeout_fades_and_demotes_state(self):

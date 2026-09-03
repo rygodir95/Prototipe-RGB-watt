@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>RGB Watt Controller</title>
+  <title>ZoneGlow</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -13,8 +13,8 @@
       <div class="brand">
         <span class="brand-dot" id="brandDot"></span>
         <div>
-          <h1>RGB Watt</h1>
-          <p class="brand-sub">Zone Controller</p>
+          <h1>ZoneGlow</h1>
+          <p class="brand-sub">Training Zone Lighting</p>
         </div>
       </div>
       <div class="topbar-right">
@@ -46,7 +46,7 @@
             <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em id="powerUnit">W</em></div>
             <div class="power-raw" id="powerRawRow">Raw <span id="powerRaw">0</span> <span id="powerRawUnit">W</span></div>
             <div class="zone-badge" id="zoneBadge" data-testid="zone-badge">
-              <span id="zoneNum">Z1</span> — <span id="zoneName">—</span>
+              <span id="zoneNum">Z1</span> · <span id="zoneName">—</span>
             </div>
           </div>
 
@@ -91,7 +91,7 @@
 
           <div class="device-section">
             <div class="device-section-head">
-              <span class="device-section-title power-title">POWER SENSORS</span>
+              <span class="device-section-title power-title">POWER</span>
               <span class="muted" id="powerSavedHint">No saved device</span>
             </div>
             <div class="device-list" id="powerDeviceList" data-testid="power-device-list">
@@ -101,7 +101,7 @@
 
           <div class="device-section">
             <div class="device-section-head">
-              <span class="device-section-title hr-title">HEART RATE SENSORS</span>
+              <span class="device-section-title hr-title">HEART RATE</span>
               <span class="muted" id="hrSavedHint">No saved device</span>
             </div>
             <div class="device-list" id="hrDeviceList" data-testid="hr-device-list">
@@ -117,7 +117,7 @@
           <div class="card-header">
             <div>
               <div class="card-title">Power Zones</div>
-              <p class="muted">FTP-based training zones (5/6/7 zone models).</p>
+              <p class="muted" id="powerZoneSub"></p>
             </div>
             <button class="btn" id="resetZonesBtn" data-testid="reset-zones-btn">Reset to FTP defaults</button>
           </div>
@@ -149,7 +149,7 @@
           </div>
           <div class="field-row">
             <div class="field">
-              <label>Max HR (bpm)</label>
+              <label>Max HR (BPM)</label>
               <input type="number" id="hrMaxInput" data-testid="hr-max-input" min="100" max="230" />
             </div>
             <div class="field">
@@ -165,8 +165,8 @@
       <!-- SETTINGS -->
       <section class="view" id="view-settings">
         <div class="card">
-          <div class="card-title">Control Source</div>
-          <p class="muted">Only one source is active at a time. Switching disconnects the current sensor, stops its scan/reconnect logic and clears its live data. You can also switch by connecting a device on the Devices page.</p>
+          <div class="card-title">LED Control</div>
+          <p class="muted">Choose which measurement controls your lighting. Only one source is active at a time; switching disconnects the current sensor. You can also switch by connecting a device on the Devices page.</p>
           <div class="seg" id="sourceSeg">
             <button data-src="power" class="active" data-testid="src-power">Power</button>
             <button data-src="hr" data-testid="src-hr">Heart Rate</button>
