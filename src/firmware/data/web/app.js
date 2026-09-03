@@ -345,10 +345,15 @@ function updateLive(t) {
   pill.className = "status-pill " + s.cls;
   $("statusText").textContent = t.sim ? "Simulation" : s.label;
 
-  // Colour glow + brand
-  $("powerGlow").style.background = "radial-gradient(circle, " + t.color + "cc, transparent 70%)";
-  $("brandDot").style.background = t.color;
-  $("brandDot").style.boxShadow = "0 0 24px " + t.color + "88";
+  // Colour glow + brand: must show the SAME zone as the label. t.color is the
+  // interpolated LED gradient, which leads the hysteresis-stabilised zone
+  // number/name by up to one zone. Use the current zone's configured colour so
+  // zone number = zone name = displayed colour.
+  const zoneColor = (config && config.zones && t.zone >= 0 && t.zone < config.zones.length)
+    ? config.zones[t.zone].color : t.color;
+  $("powerGlow").style.background = "radial-gradient(circle, " + zoneColor + "cc, transparent 70%)";
+  $("brandDot").style.background = zoneColor;
+  $("brandDot").style.boxShadow = "0 0 24px " + zoneColor + "88";
 
   // Dashboard source
   $("dashSourceName").textContent = t.source || (t.sim ? "Simulation" : "—");
