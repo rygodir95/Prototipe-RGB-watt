@@ -1,0 +1,15 @@
+{
+  "name": "zoneglow-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ZoneGlow - Training Zone Lighting (Windows desktop shell)",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:exe": "tauri build --no-bundle"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

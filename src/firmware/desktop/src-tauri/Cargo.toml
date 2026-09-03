@@ -1,0 +1,11 @@
+[package]
+name = "zoneglow-desktop"
+version = "0.1.0"
+description = "ZoneGlow - Training Zone Lighting (desktop shell over the ZoneGlow controller backend)"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
