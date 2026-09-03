@@ -114,11 +114,11 @@ function fillForms() {
   $("powerRawRow").style.display = hr ? "none" : "";   // no raw watts readout in HR mode
   $("statFtpLabel").textContent = hr ? "Max HR" : "FTP";
   $("statFtp").textContent = hr ? config.hrMax : config.ftp;
-  $("statFtpUnit").textContent = hr ? "bpm" : "W";
+  $("statFtpUnit").textContent = hr ? "BPM" : "W";
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
-  $("simUnit").textContent = hr ? "bpm" : "W";
-  $("hysUnit").textContent = hr ? "bpm" : "W";
-  $("sourceMiniLabel").textContent = hr ? "Heart Rate Source" : "Power Source";
+  $("simUnit").textContent = hr ? "BPM" : "W";
+  $("hysUnit").textContent = hr ? "BPM" : "W";
+  $("sourceMiniLabel").textContent = hr ? "Heart Rate" : "Power Source";
   document.querySelectorAll("#sourceSeg button").forEach((b) => {
     b.classList.toggle("active", (b.dataset.src === "hr") === hr);
   });
@@ -127,10 +127,14 @@ function fillForms() {
   $("powerSavedHint").textContent = config.sourceName ? "Saved: " + config.sourceName : "No saved device";
   $("hrSavedHint").textContent = config.hrSourceName ? "Saved: " + config.hrSourceName : "No saved device";
 
-  // ---- HR zones: explain how Max HR interacts with the boundaries ----
-  $("hrZoneNote").textContent = config.hrZonesCustom
+  // ---- Zones page section subtitles ----
+  $("powerZoneSub").textContent = "FTP: " + config.ftp + " W · " + config.zoneCount + " zones";
+  // ---- HR zones: header summary + how Max HR interacts with the boundaries ----
+  const hrSummary = "Max HR: " + (config.hrMax || 190) + " BPM · " +
+    (config.hrZones ? config.hrZones.length : 5) + " zones. ";
+  $("hrZoneNote").textContent = hrSummary + (config.hrZonesCustom
     ? "Boundaries customised — changing Max HR keeps them. Reset restores the defaults."
-    : "5 zones generated from your Max HR. Changing Max HR recalculates them automatically.";
+    : "Changing Max HR recalculates them automatically.");
 
   renderZoneEditor();
   renderHrZoneEditor();
@@ -162,7 +166,7 @@ function renderHrZoneEditor() {
     const pctLo = Math.floor(z.min / hrMax * 100);
     const pctHi = Math.round(maxBpm / hrMax * 100);
     el.appendChild(zoneRow(z, i, "hr-zone", {
-      unit: "bpm", max: maxBpm, pct: pctLo + "–" + pctHi + "%",
+      unit: "BPM", max: maxBpm, pct: pctLo + "–" + pctHi + "% Max HR",
     }));
   });
   bindZoneEditor(el, config.hrZones);
@@ -218,7 +222,7 @@ async function saveHrZones() {
   }));
   await postConfig({ hrZones: zones });
   fillForms();
-  toast("HR zones saved");
+  toast("Heart Rate zones saved");
 }
 
 async function onZoneCountChange() {
@@ -234,7 +238,7 @@ async function resetZones() {
 async function resetHrZones() {
   await postConfig({ hrZonesReset: true });
   fillForms();
-  toast("HR zones reset to Max HR defaults");
+  toast("Heart Rate zones reset to Max HR defaults");
 }
 
 // ---------------- Settings ----------------
@@ -296,13 +300,13 @@ function otaUpload() {
 }
 
 // ---------------- Devices (Power + Heart Rate sensors) ----------------
-const TYPE_LABEL = { CPS: "Power Meter", FTMS: "Trainer / Power", HRS: "Heart Rate" };
+const TYPE_LABEL = { CPS: "Power Meter", FTMS: "Smart Trainer", HRS: "Heart Rate Monitor" };
 let deviceTimer = null;
 async function scan() {
   await fetch("/api/scan", { method: "POST" });
-  $("scanBtn").textContent = "Scanning…";
+  $("scanBtn").textContent = "Searching…";
   $("scanBtn").disabled = true;
-  toast("Scanning for power and heart rate sensors…");
+  toast("Searching for power and heart rate sensors…");
   let ticks = 0;
   clearInterval(deviceTimer);
   deviceTimer = setInterval(async () => {
@@ -323,7 +327,7 @@ async function refreshDevices() {
 }
 function renderDeviceList(list, devices, scanning) {
   if (!devices.length) {
-    list.innerHTML = '<div class="empty">' + (scanning ? "Scanning…" : "No devices found. Tap Scan.") + "</div>";
+    list.innerHTML = '<div class="empty">' + (scanning ? "Searching…" : "No devices found. Tap Scan.") + "</div>";
     return;
   }
   list.innerHTML = "";
@@ -337,6 +341,7 @@ function renderDeviceList(list, devices, scanning) {
           '<div class="device-name">' + escapeHtml(d.name) +
             ' <span class="badge badge-' + d.category + '">' + (TYPE_LABEL[d.type] || d.type) + '</span></div>' +
           '<div class="device-addr">' + d.address + "  ·  " + d.rssi + " dBm</div>" +
+          '<div class="device-state">' + (d.connected ? "Connected" : "Available") + "</div>" +
         "</div></div>" +
       '<div class="device-actions"></div>';
     const actions = row.querySelector(".device-actions");
@@ -477,9 +482,9 @@ function initWs() {
 const STATE_MAP = {
   RECEIVING_POWER: { cls: "live", label: "Receiving Data" },
   CONNECTED: { cls: "ok", label: "Connected" },
-  CONNECTING: { cls: "warn", label: "Connecting" },
-  RECONNECTING: { cls: "warn", label: "Reconnecting" },
-  SCANNING: { cls: "warn", label: "Scanning" },
+  CONNECTING: { cls: "warn", label: "Connecting…" },
+  RECONNECTING: { cls: "warn", label: "Reconnecting…" },
+  SCANNING: { cls: "warn", label: "Searching…" },
   DISCONNECTED: { cls: "", label: "Disconnected" },
   STARTING: { cls: "", label: "Starting" },
   ERROR: { cls: "err", label: "Error" },
@@ -492,18 +497,21 @@ function updateLive(t) {
     config.controlSource = tMode;
     fillForms();
   }
+  const hr = isHrMode();
+  const stateLabel = (t.state === "RECEIVING_POWER")
+    ? (hr ? "Receiving heart rate" : "Receiving power")   // mode-specific wording
+    : (STATE_MAP[t.state] || STATE_MAP.STARTING).label;
   $("powerWatts").textContent = t.smoothed;
   $("zoneNum").textContent = "Z" + (t.zone + 1);
-  $("zoneName").textContent = t.zoneName || "—";
+  $("zoneName").textContent = (t.zoneName || "—").replace(/^Z\d+\s·\s/, "");
   const s = STATE_MAP[t.state] || STATE_MAP.STARTING;
   const pill = $("statusPill");
   pill.className = "status-pill " + s.cls;
-  $("statusText").textContent = t.sim ? "Simulation" : s.label;
+  $("statusText").textContent = t.sim ? "Simulation" : stateLabel;
 
   // Colour glow + brand: must show the SAME zone as the label. Use the current
   // zone's configured colour of the ACTIVE control source so
   // zone number = zone name = displayed colour.
-  const hr = isHrMode();
   const zones = hr ? (config.hrZones || []) : (config.zones || []);
   const zoneColor = (t.zone >= 0 && t.zone < zones.length) ? zones[t.zone].color : t.color;
   $("powerGlow").style.background = "radial-gradient(circle, " + zoneColor + "cc, transparent 70%)";
@@ -513,7 +521,7 @@ function updateLive(t) {
   // Dashboard source
   $("dashSourceName").textContent = t.source || (t.sim ? "Simulation" : "—");
   const ds = $("dashSourceState");
-  ds.querySelector("span:last-child").textContent = t.sim ? "Simulated" : s.label;
+  ds.querySelector("span:last-child").textContent = t.sim ? "Simulated" : stateLabel;
   ds.querySelector(".pill-dot").style.background = s.cls === "live" || s.cls === "ok" ? "var(--ok)" : "var(--muted)";
 }
 

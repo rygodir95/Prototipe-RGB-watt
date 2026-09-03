@@ -9,13 +9,15 @@ static const int PCT_6[6] = { 0, 56, 76, 91, 106, 121 };
 static const int PCT_5[5] = { 0, 56, 76, 91, 106 };
 
 static const char *NAMES_7[7] = {
-  "Recovery", "Endurance", "Tempo", "Threshold", "VO2 Max", "Anaerobic", "Neuromuscular"
+  "Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold",
+  "Z5 · VO₂ Max", "Z6 · Anaerobic", "Z7 · Neuromuscular"
 };
 static const char *NAMES_6[6] = {
-  "Recovery", "Endurance", "Tempo", "Threshold", "VO2 Max", "Anaerobic"
+  "Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold",
+  "Z5 · VO₂ Max", "Z6 · Anaerobic"
 };
 static const char *NAMES_5[5] = {
-  "Recovery", "Endurance", "Tempo", "Threshold", "VO2 Max"
+  "Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold", "Z5 · VO₂ Max"
 };
 
 struct RGB { uint8_t r, g, b; };
@@ -37,7 +39,7 @@ static const RGB COLORS_5[5] = {
 // (Z1 spans everything below 60 %, Z5 everything at or above 90 %).
 static const int HR_PCT[MAX_HR_ZONES]     = { 50, 60, 70, 80, 90 };
 static const char *HR_NAMES[MAX_HR_ZONES] = {
-  "Very Light", "Light", "Moderate", "Hard", "Maximum"
+  "Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold", "Z5 · Maximum"
 };
 static const RGB HR_COLORS[MAX_HR_ZONES] = {
   {120, 130, 255}, {  0, 190, 255}, {  0, 230, 120},

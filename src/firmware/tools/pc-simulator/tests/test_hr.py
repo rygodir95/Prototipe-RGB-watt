@@ -119,7 +119,7 @@ class TestHrZones(unittest.TestCase):
     def test_config_json_hr_section(self):
         doc = fw.build_config_json(fw.AppConfig())
         self.assertEqual(len(doc["hrZones"]), fw.MAX_HR_ZONES)
-        self.assertEqual(doc["hrZones"][0]["name"], "Very Light")
+        self.assertEqual(doc["hrZones"][0]["name"], "Z1 · Recovery")
         self.assertFalse(doc["hrZonesCustom"])                   # generated, not custom
         self.assertEqual(doc["hrZones"][0]["max"], 114)          # contiguous ranges
         self.assertEqual(doc["hrZones"][4]["max"], 190)          # Z5 ends at Max HR
@@ -267,7 +267,7 @@ class TestHrTelemetry(unittest.TestCase):
         self.assertEqual(tel["hrRaw"], 120)
         self.assertEqual(tel["hrMax"], 190)
         self.assertEqual(tel["zone"], 1)
-        self.assertEqual(tel["zoneName"], "Light")
+        self.assertEqual(tel["zoneName"], "Z2 · Endurance")
         self.assertEqual(tel["zoneCount"], fw.MAX_HR_ZONES)
         self.assertEqual(tel["source"], STRAP["name"])
 

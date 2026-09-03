@@ -83,9 +83,12 @@ PCT_7 = [0, 56, 76, 91, 106, 121, 151]
 PCT_6 = [0, 56, 76, 91, 106, 121]
 PCT_5 = [0, 56, 76, 91, 106]
 
-NAMES_7 = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2 Max", "Anaerobic", "Neuromuscular"]
-NAMES_6 = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2 Max", "Anaerobic"]
-NAMES_5 = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2 Max"]
+NAMES_7 = ["Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold",
+           "Z5 · VO₂ Max", "Z6 · Anaerobic", "Z7 · Neuromuscular"]
+NAMES_6 = ["Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold",
+           "Z5 · VO₂ Max", "Z6 · Anaerobic"]
+NAMES_5 = ["Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold",
+           "Z5 · VO₂ Max"]
 
 # Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Deep Red
 COLORS_7 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 220, 0),
@@ -98,7 +101,7 @@ COLORS_5 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 140, 0),
 # Heart-rate zones: lower bounds at 50/60/70/80/90 % of Max HR
 # (Z1 spans everything below 60 %, Z5 everything at or above 90 %).
 HR_PCT = [50, 60, 70, 80, 90]
-HR_NAMES = ["Very Light", "Light", "Moderate", "Hard", "Maximum"]
+HR_NAMES = ["Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold", "Z5 · Maximum"]
 HR_COLORS = [(120, 130, 255), (0, 190, 255), (0, 230, 120),
              (255, 200, 0), (255, 40, 40)]
 
