@@ -5,26 +5,28 @@
 
 class NimBLEClient;
 
-struct BLEDeviceInfo {
+struct HRDeviceInfo {
   std::string address;
   std::string name;
-  std::string type;   // "CPS" or "FTMS"
+  std::string type;   // "HRS"
   int         rssi;
 };
 
-// BLE Cycling Power Service (CPS) client. Scans for, connects to and receives
-// notifications from any device exposing service 0x1818 / characteristic 0x2A63.
-class BLEPower {
+// BLE Heart Rate Service (HRS) client. Scans for, connects to and receives
+// notifications from any device exposing service 0x180D / characteristic
+// 0x2A37. Mutually exclusive with BLEPower: only the module matching the
+// active ControlSource is ever scanned/connected/updated.
+class HRSensor {
 public:
-  static BLEPower *instance;
+  static HRSensor *instance;
 
-  BLEPower();
-  void begin();
-  void update();                                   // call from loop(); non-blocking driver
+  HRSensor();
+  void begin();      // registers NimBLE callbacks; NimBLE init is owned by BLEPower
+  void update();     // call from loop() when HR is the active source
 
   void startScan(int seconds = 6);
   bool isScanning() const { return _scanning; }
-  std::vector<BLEDeviceInfo> getDevices();
+  std::vector<HRDeviceInfo> getDevices();
 
   void connectToAddress(const std::string &addr, const std::string &name);
   void disconnect();
@@ -34,8 +36,8 @@ public:
   void setAutoReconnect(bool v) { _autoReconnect = v; }
 
   bool     isConnected() const { return _connected; }
-  float    getPower()    const { return _power; }
-  uint32_t getPowerTime() const { return _powerTime; }
+  float    getBpm()      const { return _bpm; }
+  uint32_t getBpmTime()  const { return _bpmTime; }
 
   // callbacks invoked from NimBLE tasks / free callbacks
   void onDeviceFound(const std::string &addr, const std::string &name, const std::string &type, int rssi);
@@ -50,19 +52,18 @@ private:
 
   NimBLEClient *_client = nullptr;
 
-  volatile float    _power     = 0;
-  volatile uint32_t _powerTime = 0;
+  volatile float    _bpm     = 0;
+  volatile uint32_t _bpmTime = 0;
 
-  bool _scanning     = false;
-  bool _connected    = false;
-  bool _ftms         = false;   // active source uses FTMS Indoor Bike Data
-  bool _desired      = false;   // user wants a connection to _targetAddr
+  bool _scanning      = false;
+  bool _connected     = false;
+  bool _desired        = false;   // user wants a connection to _targetAddr
   bool _autoReconnect = true;
-  bool _doConnect    = false;   // deferred connect flag (executed in update())
+  bool _doConnect     = false;    // deferred connect flag (executed in update())
 
   std::string _targetAddr;
   std::string _targetName;
 
   uint32_t _lastReconnectAttempt = 0;
-  std::vector<BLEDeviceInfo> _devices;
+  std::vector<HRDeviceInfo> _devices;
 };

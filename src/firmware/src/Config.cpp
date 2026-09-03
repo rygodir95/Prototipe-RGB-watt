@@ -33,6 +33,17 @@ static const RGB COLORS_5[5] = {
   {255,  25,   0}
 };
 
+// Heart-rate zones: lower bounds at 50/60/70/80/90 % of Max HR
+// (Z1 spans everything below 60 %, Z5 everything at or above 90 %).
+static const int HR_PCT[MAX_HR_ZONES]     = { 50, 60, 70, 80, 90 };
+static const char *HR_NAMES[MAX_HR_ZONES] = {
+  "Very Light", "Light", "Moderate", "Hard", "Maximum"
+};
+static const RGB HR_COLORS[MAX_HR_ZONES] = {
+  {120, 130, 255}, {  0, 190, 255}, {  0, 230, 120},
+  {255, 200,   0}, {255,  40,  40}
+};
+
 void configApplyDefaultZones(AppConfig &c) {
   const int *pct;
   const char **names;
@@ -73,9 +84,43 @@ void configSanitizeZones(AppConfig &c) {
   }
 }
 
+void configApplyDefaultHrZones(AppConfig &c) {
+  for (int i = 0; i < MAX_HR_ZONES; i++) {
+    strncpy(c.hrZones[i].name, HR_NAMES[i], sizeof(c.hrZones[i].name) - 1);
+    c.hrZones[i].name[sizeof(c.hrZones[i].name) - 1] = '\0';
+    c.hrZones[i].minBpm = (int)lroundf(HR_PCT[i] / 100.0f * c.hrMax);
+    c.hrZones[i].r = HR_COLORS[i].r;
+    c.hrZones[i].g = HR_COLORS[i].g;
+    c.hrZones[i].b = HR_COLORS[i].b;
+  }
+  configSanitizeHrZones(c);
+}
+
+void configScaleHrZones(AppConfig &c, int oldMax, int newMax) {
+  if (oldMax <= 0 || newMax <= 0) return;
+  float ratio = (float)newMax / (float)oldMax;
+  for (int i = 0; i < MAX_HR_ZONES; i++) {
+    c.hrZones[i].minBpm = (int)lroundf(c.hrZones[i].minBpm * ratio);
+  }
+  configSanitizeHrZones(c);
+}
+
+void configSanitizeHrZones(AppConfig &c) {
+  if (c.hrMax < 100) c.hrMax = 100;
+  if (c.hrMax > 230) c.hrMax = 230;
+  if (c.hrZones[0].minBpm < 0) c.hrZones[0].minBpm = 0;
+  for (int i = 1; i < MAX_HR_ZONES; i++) {
+    if (c.hrZones[i].minBpm <= c.hrZones[i - 1].minBpm) {
+      c.hrZones[i].minBpm = c.hrZones[i - 1].minBpm + 1;
+    }
+  }
+}
+
 void configLoadDefaults(AppConfig &c) {
   memset(&c, 0, sizeof(AppConfig));
   c.version        = CONFIG_VERSION;
+
+  c.controlSource  = SRC_POWER;
 
   c.ftp            = 221;
   c.smoothing      = 45;
@@ -83,6 +128,8 @@ void configLoadDefaults(AppConfig &c) {
   c.hysteresis     = 5;
 
   c.zoneCount      = 7;
+
+  c.hrMax          = 190;
 
   c.ledPin         = 5;
   c.ledCount       = 60;
@@ -92,6 +139,8 @@ void configLoadDefaults(AppConfig &c) {
 
   c.sourceAddr[0]  = '\0';
   c.sourceName[0]  = '\0';
+  c.hrSourceAddr[0]  = '\0';
+  c.hrSourceName[0]  = '\0';
   c.autoReconnect  = true;
 
   c.wifiSsid[0]    = '\0';
@@ -105,4 +154,5 @@ void configLoadDefaults(AppConfig &c) {
 #endif
 
   configApplyDefaultZones(c);
+  configApplyDefaultHrZones(c);
 }

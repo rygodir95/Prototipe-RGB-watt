@@ -17,5 +17,8 @@ private:
 
 // Implemented in main.cpp: re-applies runtime-affecting config to subsystems.
 void applyRuntimeConfig();
+// Implemented in main.cpp: switches the active control source (Power <-> HR),
+// fully tearing down the previously active BLE module (mutual exclusion).
+void setControlSource(uint8_t src);
 // Implemented in main.cpp: schedules a device reboot after `ms`.
 void scheduleReboot(uint32_t ms);

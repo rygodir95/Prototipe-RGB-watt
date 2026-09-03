@@ -140,6 +140,20 @@ void BLEPower::forget() {
   _targetName.clear();
 }
 
+void BLEPower::shutdown() {
+  // Full stop used when switching control source: no scan, no connection,
+  // no reconnect attempts, no cached devices.
+  disconnect();
+  if (_scanning) { NimBLEDevice::getScan()->stop(); _scanning = false; }
+  _doConnect = false;
+  _targetAddr.clear();
+  _targetName.clear();
+  portENTER_CRITICAL(&g_mux);
+  g_addrMap.clear();
+  _devices.clear();
+  portEXIT_CRITICAL(&g_mux);
+}
+
 bool BLEPower::connectInternal(const std::string &addr) {
   portENTER_CRITICAL(&g_mux);
   auto it = g_addrMap.find(addr);

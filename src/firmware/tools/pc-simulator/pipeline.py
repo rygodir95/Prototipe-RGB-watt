@@ -22,7 +22,11 @@ import math
 
 MIN_ZONES = 5
 MAX_ZONES = 7
-CONFIG_VERSION = 0x52474204  # 'RGB' + version 4
+MAX_HR_ZONES = 5
+CONFIG_VERSION = 0x52474205  # 'RGB' + version 5
+
+# ControlSource (include/Config.h): exactly one source active at a time.
+SRC_POWER, SRC_HEART_RATE = 0, 1
 
 LED_WS2812B = 0
 LED_SK6812 = 1
@@ -89,7 +93,42 @@ COLORS_7 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 220, 0),
 COLORS_6 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 220, 0),
             (255, 120, 0), (255, 25, 0)]
 COLORS_5 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 140, 0),
-            (255, 25, 0)]
+             (255, 25, 0)]
+
+# Heart-rate zones: lower bounds at 50/60/70/80/90 % of Max HR
+# (Z1 spans everything below 60 %, Z5 everything at or above 90 %).
+HR_PCT = [50, 60, 70, 80, 90]
+HR_NAMES = ["Very Light", "Light", "Moderate", "Hard", "Maximum"]
+HR_COLORS = [(120, 130, 255), (0, 190, 255), (0, 230, 120),
+             (255, 200, 0), (255, 40, 40)]
+
+
+def parse_hr_measurement(data):
+    """Port of HRSensor::onNotify - Heart Rate Measurement (0x2A37).
+
+    Layout: [flags:1][HR:1|2 LE][optional: energy expended, RR intervals...]
+    flags bit0 = HR value format (0 -> uint8, 1 -> uint16 LE).
+    Returns the bpm value, or None when the packet is invalid/implausible.
+    """
+    if not isinstance(data, (bytes, bytearray)) or len(data) < 2:
+        return None
+    flags = data[0]
+    if flags & 0x01:
+        if len(data) < 3:
+            return None
+        bpm = data[1] | (data[2] << 8)
+    else:
+        bpm = data[1]
+    if bpm == 0 or bpm > 250:
+        return None
+    return bpm
+
+
+class HRZone:
+    def __init__(self, name="", min_bpm=0, r=0, g=0, b=0):
+        self.name = name          # char[24] in firmware (max 23 chars)
+        self.min_bpm = min_bpm
+        self.r, self.g, self.b = r, g, b
 
 
 class Zone:
@@ -113,6 +152,11 @@ class AppConfig:
         self.hysteresis = 5
         self.zone_count = 7
         self.zones = [Zone() for _ in range(MAX_ZONES)]
+        self.control_source = SRC_POWER   # ControlSource
+        self.hr_max = 190
+        self.hr_zones = [HRZone() for _ in range(MAX_HR_ZONES)]
+        self.hr_source_addr = ""  # char[24]
+        self.hr_source_name = ""  # char[40]
         self.led_pin = 5
         self.led_count = 60
         self.brightness = 100
@@ -126,6 +170,7 @@ class AppConfig:
         self.theme = "dark"       # char[8] (max 7 chars)
         self.debug = True         # dev build default
         self.apply_default_zones()
+        self.apply_default_hr_zones()
 
     def apply_default_zones(self):  # configApplyDefaultZones()
         if self.zone_count == 5:
@@ -160,6 +205,32 @@ class AppConfig:
             if self.zones[i].min_watts <= self.zones[i - 1].min_watts:
                 self.zones[i].min_watts = self.zones[i - 1].min_watts + 1
 
+    def apply_default_hr_zones(self):  # configApplyDefaultHrZones()
+        for i in range(MAX_HR_ZONES):
+            self.hr_zones[i].name = HR_NAMES[i][:23]
+            self.hr_zones[i].min_bpm = lround(HR_PCT[i] / 100.0 * self.hr_max)
+            self.hr_zones[i].r, self.hr_zones[i].g, self.hr_zones[i].b = HR_COLORS[i]
+        self.sanitize_hr_zones()
+
+    def scale_hr_zones(self, old_max, new_max):  # configScaleHrZones()
+        if old_max <= 0 or new_max <= 0:
+            return
+        ratio = float(new_max) / float(old_max)
+        for i in range(MAX_HR_ZONES):
+            self.hr_zones[i].min_bpm = lround(self.hr_zones[i].min_bpm * ratio)
+        self.sanitize_hr_zones()
+
+    def sanitize_hr_zones(self):  # configSanitizeHrZones()
+        if self.hr_max < 100:
+            self.hr_max = 100
+        if self.hr_max > 230:
+            self.hr_max = 230
+        if self.hr_zones[0].min_bpm < 0:
+            self.hr_zones[0].min_bpm = 0
+        for i in range(1, MAX_HR_ZONES):
+            if self.hr_zones[i].min_bpm <= self.hr_zones[i - 1].min_bpm:
+                self.hr_zones[i].min_bpm = self.hr_zones[i - 1].min_bpm + 1
+
     # ---- persistence (Storage.cpp equivalent, NVS blob -> JSON file) ----
 
     def to_storage(self):
@@ -167,13 +238,18 @@ class AppConfig:
             "version": CONFIG_VERSION,
             "ftp": self.ftp, "smoothing": self.smoothing,
             "powerTimeoutMs": self.power_timeout_ms, "hysteresis": self.hysteresis,
+            "controlSource": self.control_source,
             "zoneCount": self.zone_count,
             "zones": [{"name": z.name, "minWatts": z.min_watts,
                        "r": z.r, "g": z.g, "b": z.b} for z in self.zones],
+            "hrMax": self.hr_max,
+            "hrZones": [{"name": z.name, "minBpm": z.min_bpm,
+                         "r": z.r, "g": z.g, "b": z.b} for z in self.hr_zones],
             "ledPin": self.led_pin, "ledCount": self.led_count,
             "brightness": self.brightness, "ledType": self.led_type,
             "ledEffect": self.led_effect,
             "sourceAddr": self.source_addr, "sourceName": self.source_name,
+            "hrSourceAddr": self.hr_source_addr, "hrSourceName": self.hr_source_name,
             "autoReconnect": self.auto_reconnect,
             "wifiSsid": self.wifi_ssid, "wifiPass": self.wifi_pass,
             "theme": self.theme, "debug": self.debug,
