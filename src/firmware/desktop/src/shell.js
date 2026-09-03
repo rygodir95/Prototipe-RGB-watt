@@ -10,6 +10,9 @@
 //   forced reload is needed unless the backend URL changed.
 "use strict";
 
+// ZoneGlowTransport is the global defined by transport.js (loaded first).
+/* global ZoneGlowTransport */
+
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var UI_FRAME = $("uiFrame");
