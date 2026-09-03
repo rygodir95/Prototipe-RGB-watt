@@ -53,10 +53,6 @@ const char INDEX_HTML[] = R"rgbwatt(
             <div class="zone-badge" id="zoneBadge" data-testid="zone-badge">
               <span id="zoneNum">Z1</span> — <span id="zoneName">Recovery</span>
             </div>
-            <div class="zonebar" id="zonebar" data-testid="zonebar">
-              <div class="zonebar-track" id="zonebarTrack"></div>
-              <div class="zonebar-marker" id="zonebarMarker"></div>
-            </div>
           </div>
 
           <div class="card source-mini" data-testid="source-mini">
@@ -366,13 +362,6 @@ body {
   display: inline-block; margin-top: 16px; padding: 8px 18px; border-radius: 999px;
   background: var(--bg-elev); border: 1px solid var(--border); font-weight: 700; font-size: 15px; position: relative;
 }
-.zonebar { position: relative; margin-top: 22px; height: 16px; border-radius: 999px; overflow: hidden; }
-.zonebar-track { display: flex; height: 100%; width: 100%; }
-.zonebar-track > span { flex: 1; }
-.zonebar-marker {
-  position: absolute; top: -4px; width: 4px; height: 24px; border-radius: 4px;
-  background: var(--text); box-shadow: 0 0 0 3px var(--card); transition: left .25s ease;
-}
 
 /* Source mini */
 .source-mini { display: flex; flex-direction: column; gap: 8px; }
@@ -582,7 +571,6 @@ function fillForms() {
   $("statZones").textContent = config.zoneCount;
   $("statBright").textContent = config.brightness;
   renderZoneEditor();
-  renderZoneBar();
 }
 
 // ---------------- Zone editor ----------------
@@ -634,17 +622,6 @@ async function resetZones() {
   await postConfig({ zoneCount: +$("zoneCountSel").value, ftp: +$("ftpInput").value });
   fillForms();
   toast("Zones reset to FTP defaults");
-}
-
-function renderZoneBar() {
-  const track = $("zonebarTrack");
-  if (!track || !config) return;
-  track.innerHTML = "";
-  config.zones.forEach((z) => {
-    const s = document.createElement("span");
-    s.style.background = z.color;
-    track.appendChild(s);
-  });
 }
 
 // ---------------- Settings ----------------
@@ -834,27 +811,21 @@ function updateLive(t) {
   pill.className = "status-pill " + s.cls;
   $("statusText").textContent = t.sim ? "Simulation" : s.label;
 
-  // Colour glow + brand
-  $("powerGlow").style.background = "radial-gradient(circle, " + t.color + "cc, transparent 70%)";
-  $("brandDot").style.background = t.color;
-  $("brandDot").style.boxShadow = "0 0 24px " + t.color + "88";
+  // Colour glow + brand: must show the SAME zone as the label. t.color is the
+  // interpolated LED gradient, which leads the hysteresis-stabilised zone
+  // number/name by up to one zone. Use the current zone's configured colour so
+  // zone number = zone name = displayed colour.
+  const zoneColor = (config && config.zones && t.zone >= 0 && t.zone < config.zones.length)
+    ? config.zones[t.zone].color : t.color;
+  $("powerGlow").style.background = "radial-gradient(circle, " + zoneColor + "cc, transparent 70%)";
+  $("brandDot").style.background = zoneColor;
+  $("brandDot").style.boxShadow = "0 0 24px " + zoneColor + "88";
 
   // Dashboard source
   $("dashSourceName").textContent = t.source || (t.sim ? "Simulation" : "—");
   const ds = $("dashSourceState");
   ds.querySelector("span:last-child").textContent = t.sim ? "Simulated" : s.label;
   ds.querySelector(".pill-dot").style.background = s.cls === "live" || s.cls === "ok" ? "var(--ok)" : "var(--muted)";
-
-  // Zone bar marker
-  positionMarker(t.smoothed);
-}
-function positionMarker(watts) {
-  if (!config) return;
-  const zones = config.zones;
-  const last = zones[zones.length - 1].min;
-  const scale = Math.max(last * 1.15, config.ftp * 1.6, 1);
-  let pct = Math.min(100, Math.max(0, (watts / scale) * 100));
-  $("zonebarMarker").style.left = "calc(" + pct + "% - 2px)";
 }
 
 // ---------------- Init ----------------
