@@ -92,9 +92,7 @@ function fillForms() {
   $("statFtp").textContent = config.ftp;
   $("statZones").textContent = config.zoneCount;
   $("statBright").textContent = config.brightness;
-  renderZoneEditor();
-  renderZoneBar();
-}
+
 
 // ---------------- Zone editor ----------------
 function renderZoneEditor() {
@@ -147,18 +145,7 @@ async function resetZones() {
   toast("Zones reset to FTP defaults");
 }
 
-function renderZoneBar() {
-  const track = $("zonebarTrack");
-  if (!track || !config) return;
-  track.innerHTML = "";
-  config.zones.forEach((z) => {
-    const s = document.createElement("span");
-    s.style.background = z.color;
-    track.appendChild(s);
-  });
-}
 
-// ---------------- Settings ----------------
 async function saveSettings() {
   await postConfig({
     smoothing: +$("smoothInput").value,
@@ -361,17 +348,6 @@ function updateLive(t) {
   ds.querySelector("span:last-child").textContent = t.sim ? "Simulated" : s.label;
   ds.querySelector(".pill-dot").style.background = s.cls === "live" || s.cls === "ok" ? "var(--ok)" : "var(--muted)";
 
-  // Zone bar marker
-  positionMarker(t.smoothed);
-}
-function positionMarker(watts) {
-  if (!config) return;
-  const zones = config.zones;
-  const last = zones[zones.length - 1].min;
-  const scale = Math.max(last * 1.15, config.ftp * 1.6, 1);
-  let pct = Math.min(100, Math.max(0, (watts / scale) * 100));
-  $("zonebarMarker").style.left = "calc(" + pct + "% - 2px)";
-}
 
 // ---------------- Init ----------------
 async function init() {
