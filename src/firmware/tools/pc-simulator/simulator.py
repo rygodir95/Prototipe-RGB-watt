@@ -668,6 +668,8 @@ class Simulator:
     def status_json(self):
         eff = self.power_value(time.time())
         base = (self.cfg.brightness / 100.0) * self.fade
+        hr_mode = self.mode() == "hr"
+        saved_addr = self.cfg.hr_source_addr if hr_mode else self.cfg.source_addr
         return {
             "tel": {
                 "mode": self.mode(),
@@ -680,8 +682,11 @@ class Simulator:
                 "hr": fw.lround(self.tel["smoothedBpm"]),
                 "hrRaw": fw.lround(self.tel["rawBpm"]),
                 "zone": self.tel["zone"],
-                "zoneName": self.cfg.zones[self.tel["zone"]].name
-                if 0 <= self.tel["zone"] < self.cfg.zone_count else "",
+                "zoneName": (self.cfg.hr_zones[self.tel["zone"]].name
+                             if 0 <= self.tel["zone"] < fw.MAX_HR_ZONES else "")
+                if self.mode() == "hr" else
+                (self.cfg.zones[self.tel["zone"]].name
+                 if 0 <= self.tel["zone"] < self.cfg.zone_count else ""),
                 "color": fw.hex_from_rgb(self.tel["r"], self.tel["g"], self.tel["b"]),
                 "brightness": self.cfg.brightness,
                 "displayR": fw.lround(self.tel["r"] * base),
@@ -697,7 +702,10 @@ class Simulator:
                 "jump": self.jump, "jumpA": self.jump_a, "jumpB": self.jump_b,
                 "jumpMs": self.jump_ms,
             },
-            "sim": {"enabled": self.sim_enabled, "watts": self.sim_watts},
+            "hr": {"strapBpm": self.base_bpm, "sending": self.hr_sending,
+                   "simBpm": self.sim_bpm},
+            "sim": {"enabled": self.sim_enabled, "watts": self.sim_watts,
+                    "bpm": self.sim_bpm},
             "ble": {
                 "state": self.tel["state"], "connected": self.is_connected(),
                 "bleConnected": self.ble_connected, "hrConnected": self.hr_connected,
@@ -707,11 +715,12 @@ class Simulator:
                 "scanning": self.scanning,
                 "targetAddr": self._target_addr, "targetName": self._target_name,
                 "devicesVisible": self.devices_visible,
+                "savedAddr": saved_addr,
+                "sending": self.sending, "hrSending": self.hr_sending,
                 "devices": [{"address": m["address"], "name": m["name"],
                              "type": m["type"],
                              "rssi": m["rssi"] + random.randint(-3, 3),
-                             "connected": self.ble_connected
-                             and self.cfg.source_addr == m["address"]}
+                             "connected": self.is_connected() and saved_addr == m["address"]}
                             for m in self.found_devices.values()],
             },
             "ws": {"clients": len(self.ws_clients), "paused": self.ws_paused},
@@ -723,6 +732,10 @@ class Simulator:
                 "mode": self.mode(),
                 "ftp": self.cfg.ftp, "zoneCount": self.cfg.zone_count,
                 "hrMax": self.cfg.hr_max,
+                "sourceAddr": self.cfg.source_addr,
+                "sourceName": self.cfg.source_name,
+                "hrSourceAddr": self.cfg.hr_source_addr,
+                "hrSourceName": self.cfg.hr_source_name,
                 "hrZoneMins": [z.min_bpm for z in self.cfg.hr_zones],
                 "hrZoneNames": [z.name for z in self.cfg.hr_zones],
                 "smoothing": self.cfg.smoothing,
@@ -749,10 +762,15 @@ class Simulator:
                 with self.lock:
                     self.script["i"] = i
                     self.sim_enabled = True    # deterministic, GUI-visible
-                    self.sim_watts = float(w)
+                    if self.mode() == "hr":
+                        self.sim_bpm = float(w)   # steps are bpm in HR mode
+                    else:
+                        self.sim_watts = float(w)
                     self.freeze = False
                     self.frozen_value = None
-                self.log("script", "step %d/%d: %g W" % (i + 1, len(steps), w))
+                self.log("script", "step %d/%d: %g %s"
+                         % (i + 1, len(steps), w,
+                            "bpm" if self.mode() == "hr" else "W"))
                 if self._script_stop.wait(delay_ms / 1000.0):
                     break
         finally:
@@ -1142,6 +1160,7 @@ class Handler(BaseHTTPRequestHandler):
             with sim.lock:
                 if doc.get("bpm") is not None:   # virtual strap bpm (HR mode testing)
                     sim.base_bpm = fw.constrain(float(doc["bpm"]), 30, 250)
+                    sim.sim_bpm = sim.base_bpm   # keep Simulation Mode in sync
                     sim.log("hr", "virtual strap bpm set to %g" % sim.base_bpm)
                     self._json(200, {"ok": True})
                     return
@@ -1177,6 +1196,10 @@ class Handler(BaseHTTPRequestHandler):
                     sim.sending = fw.to_bool(doc["sending"])
                     sim.log("power", "meter telemetry %s" %
                             ("started" if sim.sending else "stopped"))
+                if doc.get("hrSending") is not None:
+                    sim.hr_sending = fw.to_bool(doc["hrSending"])
+                    sim.log("hr", "strap telemetry %s" %
+                            ("started" if sim.hr_sending else "stopped"))
                 if doc.get("jump") is not None:
                     sim.jump = fw.to_bool(doc["jump"])
                     sim._jump_t = 0.0
@@ -1193,23 +1216,49 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/dev/api/ble":
             action = doc.get("action", "")
             with sim.lock:
+                # Every action targets the ACTIVE control source's sensor, so
+                # the panel can never drive both modules at once.
+                hr_mode = sim.mode() == "hr"
                 if action == "scan":
                     sim.start_scan(6.0)
                 elif action == "connect":
-                    m = VIRTUAL_METERS[0]
+                    pool = VIRTUAL_HR_SENSORS if hr_mode else VIRTUAL_METERS
+                    m = pool[0]
                     addr = doc.get("address") or m["address"]
-                    meter = next((x for x in VIRTUAL_METERS if x["address"] == addr), m)
-                    sim.cfg.source_addr = meter["address"]
-                    sim.cfg.source_name = meter["name"]
-                    sim.save()
-                    sim.found_devices.setdefault(meter["address"], dict(meter))
-                    sim.connect_to(meter["address"], meter["name"])
+                    dev = next((x for x in pool if x["address"] == addr), m)
+                    if hr_mode:
+                        sim.cfg.hr_source_addr = dev["address"]
+                        sim.cfg.hr_source_name = dev["name"]
+                        sim.save()
+                        sim.found_devices.setdefault(dev["address"], dict(dev))
+                        sim.hr_connect_to(dev["address"], dev["name"])
+                    else:
+                        sim.cfg.source_addr = dev["address"]
+                        sim.cfg.source_name = dev["name"]
+                        sim.save()
+                        sim.found_devices.setdefault(dev["address"], dict(dev))
+                        sim.connect_to(dev["address"], dev["name"])
                 elif action == "disconnect":
-                    sim.disconnect()
+                    if hr_mode:
+                        sim.hr_disconnect()
+                    else:
+                        sim.disconnect()
                 elif action == "lost":
-                    sim.connection_lost()
+                    if hr_mode:
+                        sim.hr_connection_lost()
+                    else:
+                        sim.connection_lost()
                 elif action == "reconnect":
-                    if sim._target_addr:
+                    if hr_mode:
+                        if sim._hr_target_addr:
+                            sim._hr_last_attempt = 0.0
+                            sim.hr_desired = True
+                            if sim._hr_target_addr in sim.found_devices:
+                                sim._hr_start_connecting(time.time())
+                            else:
+                                sim.start_scan(6.0)
+                            sim.log("hr", "manual reconnect requested")
+                    elif sim._target_addr:
                         sim._last_attempt = 0.0
                         sim.desired = True
                         if sim._target_addr in sim.found_devices:
@@ -1218,7 +1267,10 @@ class Handler(BaseHTTPRequestHandler):
                             sim.start_scan(6.0)
                         sim.log("ble", "manual reconnect requested")
                 elif action == "forget":
-                    sim.disconnect(forget=True)
+                    if hr_mode:
+                        sim.hr_disconnect(forget=True)
+                    else:
+                        sim.disconnect(forget=True)
                 elif action == "visible":
                     sim.devices_visible = fw.to_bool(doc.get("on"), True)
                     sim.log("ble", "virtual meters %s in scan results" %
