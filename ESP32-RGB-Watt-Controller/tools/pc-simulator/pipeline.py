@@ -22,7 +22,11 @@ import math
 
 MIN_ZONES = 5
 MAX_ZONES = 7
-CONFIG_VERSION = 0x52474204  # 'RGB' + version 4
+MAX_HR_ZONES = 5
+CONFIG_VERSION = 0x52474205  # 'RGB' + version 5
+
+# ControlSource (include/Config.h): exactly one source active at a time.
+SRC_POWER, SRC_HEART_RATE = 0, 1
 
 LED_WS2812B = 0
 LED_SK6812 = 1
@@ -89,7 +93,42 @@ COLORS_7 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 220, 0),
 COLORS_6 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 220, 0),
             (255, 120, 0), (255, 25, 0)]
 COLORS_5 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 140, 0),
-            (255, 25, 0)]
+             (255, 25, 0)]
+
+# Heart-rate zones: lower bounds at 50/60/70/80/90 % of Max HR
+# (Z1 spans everything below 60 %, Z5 everything at or above 90 %).
+HR_PCT = [50, 60, 70, 80, 90]
+HR_NAMES = ["Very Light", "Light", "Moderate", "Hard", "Maximum"]
+HR_COLORS = [(120, 130, 255), (0, 190, 255), (0, 230, 120),
+             (255, 200, 0), (255, 40, 40)]
+
+
+def parse_hr_measurement(data):
+    """Port of HRSensor::onNotify - Heart Rate Measurement (0x2A37).
+
+    Layout: [flags:1][HR:1|2 LE][optional: energy expended, RR intervals...]
+    flags bit0 = HR value format (0 -> uint8, 1 -> uint16 LE).
+    Returns the bpm value, or None when the packet is invalid/implausible.
+    """
+    if not isinstance(data, (bytes, bytearray)) or len(data) < 2:
+        return None
+    flags = data[0]
+    if flags & 0x01:
+        if len(data) < 3:
+            return None
+        bpm = data[1] | (data[2] << 8)
+    else:
+        bpm = data[1]
+    if bpm == 0 or bpm > 250:
+        return None
+    return bpm
+
+
+class HRZone:
+    def __init__(self, name="", min_bpm=0, r=0, g=0, b=0):
+        self.name = name          # char[24] in firmware (max 23 chars)
+        self.min_bpm = min_bpm
+        self.r, self.g, self.b = r, g, b
 
 
 class Zone:
@@ -113,6 +152,11 @@ class AppConfig:
         self.hysteresis = 5
         self.zone_count = 7
         self.zones = [Zone() for _ in range(MAX_ZONES)]
+        self.control_source = SRC_POWER   # ControlSource
+        self.hr_max = 190
+        self.hr_zones = [HRZone() for _ in range(MAX_HR_ZONES)]
+        self.hr_source_addr = ""  # char[24]
+        self.hr_source_name = ""  # char[40]
         self.led_pin = 5
         self.led_count = 60
         self.brightness = 100
@@ -126,6 +170,7 @@ class AppConfig:
         self.theme = "dark"       # char[8] (max 7 chars)
         self.debug = True         # dev build default
         self.apply_default_zones()
+        self.apply_default_hr_zones()
 
     def apply_default_zones(self):  # configApplyDefaultZones()
         if self.zone_count == 5:
@@ -160,6 +205,32 @@ class AppConfig:
             if self.zones[i].min_watts <= self.zones[i - 1].min_watts:
                 self.zones[i].min_watts = self.zones[i - 1].min_watts + 1
 
+    def apply_default_hr_zones(self):  # configApplyDefaultHrZones()
+        for i in range(MAX_HR_ZONES):
+            self.hr_zones[i].name = HR_NAMES[i][:23]
+            self.hr_zones[i].min_bpm = lround(HR_PCT[i] / 100.0 * self.hr_max)
+            self.hr_zones[i].r, self.hr_zones[i].g, self.hr_zones[i].b = HR_COLORS[i]
+        self.sanitize_hr_zones()
+
+    def scale_hr_zones(self, old_max, new_max):  # configScaleHrZones()
+        if old_max <= 0 or new_max <= 0:
+            return
+        ratio = float(new_max) / float(old_max)
+        for i in range(MAX_HR_ZONES):
+            self.hr_zones[i].min_bpm = lround(self.hr_zones[i].min_bpm * ratio)
+        self.sanitize_hr_zones()
+
+    def sanitize_hr_zones(self):  # configSanitizeHrZones()
+        if self.hr_max < 100:
+            self.hr_max = 100
+        if self.hr_max > 230:
+            self.hr_max = 230
+        if self.hr_zones[0].min_bpm < 0:
+            self.hr_zones[0].min_bpm = 0
+        for i in range(1, MAX_HR_ZONES):
+            if self.hr_zones[i].min_bpm <= self.hr_zones[i - 1].min_bpm:
+                self.hr_zones[i].min_bpm = self.hr_zones[i - 1].min_bpm + 1
+
     # ---- persistence (Storage.cpp equivalent, NVS blob -> JSON file) ----
 
     def to_storage(self):
@@ -167,13 +238,18 @@ class AppConfig:
             "version": CONFIG_VERSION,
             "ftp": self.ftp, "smoothing": self.smoothing,
             "powerTimeoutMs": self.power_timeout_ms, "hysteresis": self.hysteresis,
+            "controlSource": self.control_source,
             "zoneCount": self.zone_count,
             "zones": [{"name": z.name, "minWatts": z.min_watts,
                        "r": z.r, "g": z.g, "b": z.b} for z in self.zones],
+            "hrMax": self.hr_max,
+            "hrZones": [{"name": z.name, "minBpm": z.min_bpm,
+                         "r": z.r, "g": z.g, "b": z.b} for z in self.hr_zones],
             "ledPin": self.led_pin, "ledCount": self.led_count,
             "brightness": self.brightness, "ledType": self.led_type,
             "ledEffect": self.led_effect,
             "sourceAddr": self.source_addr, "sourceName": self.source_name,
+            "hrSourceAddr": self.hr_source_addr, "hrSourceName": self.hr_source_name,
             "autoReconnect": self.auto_reconnect,
             "wifiSsid": self.wifi_ssid, "wifiPass": self.wifi_pass,
             "theme": self.theme, "debug": self.debug,
@@ -211,7 +287,23 @@ class AppConfig:
         self.wifi_pass = str(data.get("wifiPass", ""))[:64]
         self.theme = str(data.get("theme", "dark"))[:7]
         self.debug = to_bool(data.get("debug"), True)
+        src = to_int(data.get("controlSource"), SRC_POWER)
+        self.control_source = SRC_HEART_RATE if src == SRC_HEART_RATE else SRC_POWER
+        self.hr_max = constrain(to_int(data.get("hrMax"), 190), 100, 230)
+        hr_zones = data.get("hrZones")
+        if isinstance(hr_zones, list):
+            for i, z in enumerate(hr_zones[:MAX_HR_ZONES]):
+                if not isinstance(z, dict):
+                    continue
+                self.hr_zones[i].name = str(z.get("name", ""))[:23]
+                self.hr_zones[i].min_bpm = to_int(z.get("minBpm"), 0)
+                self.hr_zones[i].r = constrain(to_int(z.get("r")), 0, 255)
+                self.hr_zones[i].g = constrain(to_int(z.get("g")), 0, 255)
+                self.hr_zones[i].b = constrain(to_int(z.get("b")), 0, 255)
+        self.hr_source_addr = str(data.get("hrSourceAddr", ""))[:23]
+        self.hr_source_name = str(data.get("hrSourceName", ""))[:39]
         self.sanitize_zones()
+        self.sanitize_hr_zones()
         return True
 
 
@@ -234,6 +326,7 @@ def rgb_from_hex(hexstr):  # rgbFromHex() - strict (see module docstring)
 
 def build_config_json(cfg):  # buildConfigJson()
     doc = {
+        "controlSource": "hr" if cfg.control_source == SRC_HEART_RATE else "power",
         "ftp": cfg.ftp,
         "smoothing": cfg.smoothing,
         "powerTimeout": cfg.power_timeout_ms,
@@ -260,11 +353,33 @@ def build_config_json(cfg):  # buildConfigJson()
             "max": (cfg.zones[i + 1].min_watts - 1) if i < cfg.zone_count - 1 else -1,
             "color": hex_from_rgb(z.r, z.g, z.b),
         })
+
+    doc["hrMax"]        = cfg.hr_max
+    doc["hrSourceAddr"] = cfg.hr_source_addr
+    doc["hrSourceName"] = cfg.hr_source_name
+
+    doc["hrZones"] = []
+    for i in range(MAX_HR_ZONES):
+        z = cfg.hr_zones[i]
+        doc["hrZones"].append({
+            "name": z.name,
+            "min": z.min_bpm,
+            "max": (cfg.hr_zones[i + 1].min_bpm - 1) if i < MAX_HR_ZONES - 1 else -1,
+            "color": hex_from_rgb(z.r, z.g, z.b),
+        })
     return doc
 
 
 def apply_config_patch(cfg, doc):  # applyConfigPatch()
-    """doc is the parsed JSON body. Mirrors the firmware exactly."""
+    """doc is the parsed JSON body. Mirrors the firmware exactly.
+
+    The control-source switch (which tears down the active BLE module) is
+    performed by the caller BEFORE this runs, mirroring applyConfigPatch()
+    calling setControlSource() first in src/WebInterface.cpp.
+    """
+    if doc.get("controlSource") is not None:
+        cfg.control_source = SRC_HEART_RATE if doc["controlSource"] == "hr" else SRC_POWER
+
     old_ftp = cfg.ftp
     has_zone_count = doc.get("zoneCount") is not None
     has_ftp = doc.get("ftp") is not None
@@ -298,6 +413,30 @@ def apply_config_patch(cfg, doc):  # applyConfigPatch()
                         cfg.zones[i].r, cfg.zones[i].g, cfg.zones[i].b = rgb
             i += 1
         cfg.sanitize_zones()
+
+    # --- Heart Rate configuration (kept separate from Power) ---
+    hr_reset = to_bool(doc.get("hrZonesReset"), False)
+    if doc.get("hrMax") is not None:
+        old_max = cfg.hr_max
+        new_max = constrain(to_int(doc["hrMax"]), 100, 230)
+        if not isinstance(doc.get("hrZones"), list) and not hr_reset:
+            cfg.scale_hr_zones(old_max, new_max)   # rescale custom boundaries
+        cfg.hr_max = new_max
+    if isinstance(doc.get("hrZones"), list):
+        arr = doc["hrZones"]
+        for i, z in enumerate(arr[:MAX_HR_ZONES]):
+            if isinstance(z, dict):
+                if z.get("name") is not None:
+                    cfg.hr_zones[i].name = str(z["name"])[:23]
+                if z.get("min") is not None:
+                    cfg.hr_zones[i].min_bpm = to_int(z["min"])
+                if z.get("color") is not None:
+                    rgb = rgb_from_hex(z["color"])
+                    if rgb is not None:
+                        cfg.hr_zones[i].r, cfg.hr_zones[i].g, cfg.hr_zones[i].b = rgb
+        cfg.sanitize_hr_zones()
+    if hr_reset:
+        cfg.apply_default_hr_zones()
 
     if doc.get("smoothing") is not None:
         cfg.smoothing = constrain(to_int(doc["smoothing"]), 0, 100)
@@ -408,3 +547,52 @@ def color_for(cfg, watts):
     return (_lerp8(cfg.zones[i].r, cfg.zones[i + 1].r, t),
             _lerp8(cfg.zones[i].g, cfg.zones[i + 1].g, t),
             _lerp8(cfg.zones[i].b, cfg.zones[i + 1].b, t))
+
+
+# ---------------------------------------------------------------------------
+# HRZones (src/PowerZones.cpp, HRZones namespace)
+# ---------------------------------------------------------------------------
+
+def hr_zone_index(cfg, bpm, prev_zone, use_hysteresis=True):
+    n = MAX_HR_ZONES
+    z = 0
+    for i in range(n):
+        if bpm >= cfg.hr_zones[i].min_bpm:
+            z = i
+    if use_hysteresis and 0 <= prev_zone < n and z != prev_zone:
+        hys = float(cfg.hysteresis)
+        if z > prev_zone:
+            # moving up: require clearing the entered zone's lower bound by margin
+            if bpm < cfg.hr_zones[z].min_bpm + hys:
+                z = prev_zone
+        else:
+            # moving down: require dropping below current zone's lower bound by margin
+            if bpm > cfg.hr_zones[prev_zone].min_bpm - hys:
+                z = prev_zone
+    return z
+
+
+def hr_color_for(cfg, bpm):
+    n = MAX_HR_ZONES
+    if n <= 0:
+        return 0, 0, 0
+    if bpm <= cfg.hr_zones[0].min_bpm:   # below first boundary -> first colour
+        z = cfg.hr_zones[0]
+        return z.r, z.g, z.b
+    i = 0
+    for k in range(n):
+        if bpm >= cfg.hr_zones[k].min_bpm:
+            i = k
+    if i >= n - 1:                        # last (open-ended) zone: solid colour
+        z = cfg.hr_zones[n - 1]
+        return z.r, z.g, z.b
+    lo = float(cfg.hr_zones[i].min_bpm)
+    hi = float(cfg.hr_zones[i + 1].min_bpm)
+    t = (bpm - lo) / (hi - lo) if hi > lo else 0.0
+    if t < 0:
+        t = 0.0
+    if t > 1:
+        t = 1.0
+    return (_lerp8(cfg.hr_zones[i].r, cfg.hr_zones[i + 1].r, t),
+            _lerp8(cfg.hr_zones[i].g, cfg.hr_zones[i + 1].g, t),
+            _lerp8(cfg.hr_zones[i].b, cfg.hr_zones[i + 1].b, t))

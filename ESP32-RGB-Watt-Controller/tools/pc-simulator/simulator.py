@@ -52,6 +52,14 @@ VIRTUAL_METERS = [
      "rssi": -66, "reveal": 2.9},
 ]
 
+# Virtual BLE heart rate sensors (Heart Rate Service 0x180D devices).
+VIRTUAL_HR_SENSORS = [
+    {"address": "02:00:00:00:55:66", "name": "Virtual HR Strap", "type": "HRS",
+     "rssi": -59, "reveal": 1.2},
+    {"address": "02:00:00:00:77:88", "name": "Virtual Watch HR", "type": "HRS",
+     "rssi": -71, "reveal": 2.4},
+]
+
 MAX_EVENTS = 300
 
 
@@ -68,11 +76,13 @@ class Simulator:
         self.tel = {
             "state": "STARTING", "connected": False, "hasData": False,
             "simMode": False, "rawPower": 0.0, "smoothedPower": 0.0,
+            "rawBpm": 0.0, "smoothedBpm": 0.0,
             "zone": 0, "r": 0, "g": 0, "b": 0, "sourceName": "",
         }
         # Simulation mode (include/Simulation.h)
         self.sim_enabled = False
         self.sim_watts = 0.0
+        self.sim_bpm = 120.0
 
         # Virtual power source (dev panel controls)
         self.base_watts = 150.0
@@ -104,6 +114,19 @@ class Simulator:
         self._last_power = 0.0       # last meter "notification" time
         self._last_power_value = 0.0
 
+        # Virtual BLE HR sensor (state machine mirroring src/HRSensor.cpp flow)
+        self.hr_connected = False
+        self.hr_desired = False
+        self._hr_target_addr = ""
+        self._hr_target_name = ""
+        self._hr_connecting = False
+        self._hr_connect_end = 0.0
+        self._hr_last_attempt = 0.0
+        self._hr_last_notify = 0.0   # last strap "notification" time
+        self._hr_value = 0.0
+        self.hr_sending = True       # strap notifications on/off
+        self.base_bpm = 120.0         # bpm the virtual strap reports
+
         # LED preview (fade from LEDController.cpp, scaled by brightness)
         self.fade = 0.0
         self._fade_target = 0.0
@@ -112,6 +135,7 @@ class Simulator:
         self.processor = fw.PowerProcessor()
         self.processor.set_smoothing(self.cfg.smoothing)
         self.prev_zone = 0
+        self.prev_zone_hr = 0
         self._had_data = False
         self._boot_done = False
 
@@ -174,21 +198,36 @@ class Simulator:
     # ---- telemetry JSON (broadcastTelemetry) ----------------------------
 
     def telemetry_json(self):
+        """broadcastTelemetry() from src/WebInterface.cpp - faithful port."""
         t = self.tel
-        zone_name = ""
-        if 0 <= t["zone"] < self.cfg.zone_count:
-            zone_name = self.cfg.zones[t["zone"]].name
+        hr = self.mode() == "hr"
+        if hr:
+            zone_name = self.cfg.hr_zones[t["zone"]].name \
+                if 0 <= t["zone"] < fw.MAX_HR_ZONES else ""
+            zone_count = fw.MAX_HR_ZONES
+            raw, smoothed = t["rawBpm"], t["smoothedBpm"]
+        else:
+            zone_name = self.cfg.zones[t["zone"]].name \
+                if 0 <= t["zone"] < self.cfg.zone_count else ""
+            zone_count = self.cfg.zone_count
+            raw, smoothed = t["rawPower"], t["smoothedPower"]
         return {
+            "mode": "hr" if hr else "power",
             "state": t["state"],
             "connected": t["connected"],
             "hasData": t["hasData"],
             "sim": t["simMode"],
-            "raw": fw.lround(t["rawPower"]),
-            "smoothed": fw.lround(t["smoothedPower"]),
+            # raw/smoothed always carry the ACTIVE source's measurement (W or bpm)
+            "raw": fw.lround(raw),
+            "smoothed": fw.lround(smoothed),
+            # explicit HR fields for clients/tests
+            "hr": fw.lround(t["smoothedBpm"]),
+            "hrRaw": fw.lround(t["rawBpm"]),
+            "hrMax": self.cfg.hr_max,
             "zone": t["zone"],
             "zoneName": zone_name,
             "ftp": self.cfg.ftp,
-            "zoneCount": self.cfg.zone_count,
+            "zoneCount": zone_count,
             "brightness": self.cfg.brightness,
             "source": t["sourceName"],
             "color": fw.hex_from_rgb(t["r"], t["g"], t["b"]),
@@ -211,6 +250,83 @@ class Simulator:
             w += random.uniform(-self.noise_amp, self.noise_amp)
         return max(0.0, w)
 
+    # ---- control source (main.cpp setControlSource - mutual exclusion) ----
+
+    def mode(self):
+        """Active control source: "hr" or "power". Exactly one is ever active."""
+        return "hr" if self.cfg.control_source == fw.SRC_HEART_RATE else "power"
+
+    def is_connected(self):
+        """Connected state of the ACTIVE control source's sensor."""
+        return self.hr_connected if self.mode() == "hr" else self.ble_connected
+
+    def ble_shutdown(self):
+        """Power module teardown: disconnect, stop scan/connect/reconnect,
+        drop its cached device list."""
+        self.desired = False
+        self.ble_connected = False
+        self._connecting = False
+        self.scanning = False
+        self.found_devices = {}
+
+    def hr_shutdown(self):
+        """Heart Rate module teardown (mirror of ble_shutdown)."""
+        self.hr_desired = False
+        self.hr_connected = False
+        self._hr_connecting = False
+        self.scanning = False
+        self.found_devices = {}
+
+    def switch_source(self, src):
+        """main.cpp setControlSource(): disconnect the currently active sensor
+        BEFORE swapping to the new input. Only one module is ever
+        scanning/connecting/processing at a time, and each mode keeps its own
+        saved sensor, zones and live state."""
+        if src != fw.SRC_POWER and src != fw.SRC_HEART_RATE:
+            src = fw.SRC_POWER
+        if src == self.cfg.control_source:
+            return
+
+        # 1. Fully tear down the currently active BLE module.
+        if self.cfg.control_source == fw.SRC_HEART_RATE:
+            self.hr_shutdown()
+        else:
+            self.ble_shutdown()
+
+        # 2. Clear the shared live measurement state and the LED pipeline.
+        self.processor.reset()
+        self.prev_zone = 0
+        self.prev_zone_hr = 0
+        t = self.tel
+        t["rawPower"] = 0.0
+        t["smoothedPower"] = 0.0
+        t["rawBpm"] = 0.0
+        t["smoothedBpm"] = 0.0
+        t["zone"] = 0
+        t["r"] = t["g"] = t["b"] = 0
+        t["hasData"] = False
+        t["sourceName"] = ""
+        self._fade_target = 0.0
+
+        # 3. Activate only the selected source and persist the mode.
+        self.cfg.control_source = src
+        self.save()
+        self.log("src", "control source switched to %s"
+                 % ("Heart Rate" if src == fw.SRC_HEART_RATE else "Power"))
+
+        # 4. Restore the selected source's own saved sensor (kept per mode).
+        if self.cfg.auto_reconnect:
+            if src == fw.SRC_HEART_RATE and self.cfg.hr_source_addr:
+                self.log("hr", "restoring saved source: %s" % self.cfg.hr_source_name)
+                self.hr_connect_to(self.cfg.hr_source_addr, self.cfg.hr_source_name)
+            elif src == fw.SRC_POWER and self.cfg.source_addr:
+                self.log("ble", "restoring saved source: %s" % self.cfg.source_name)
+                self.connect_to(self.cfg.source_addr, self.cfg.source_name)
+            else:
+                self.set_state("DISCONNECTED")
+        else:
+            self.set_state("DISCONNECTED")
+
     # ---- BLE simulation ----------------------------------------------------
 
     def start_scan(self, seconds, now=None):
@@ -221,12 +337,14 @@ class Simulator:
         self._scan_start = now
         self._scan_end = now + seconds
         self.found_devices = {}
-        if not self.ble_connected:
+        if not self.is_connected():
             self.set_state("SCANNING")
         self.log("ble", "scan started (%ds)" % seconds)
 
     def connect_to(self, addr, name, now=None):
-        """Firmware BLEPower::connectToAddress equivalent."""
+        """Firmware BLEPower::connectToAddress equivalent (Power mode only)."""
+        if self.mode() == "hr":
+            return   # mutual exclusion: only the active module connects
         now = now or time.time()
         self._target_addr = addr
         self._target_name = name
@@ -267,6 +385,52 @@ class Simulator:
         self._last_attempt = time.time()
         self.log("ble", "connection lost")
 
+    # ---- Heart Rate sensor simulation (HRSensor.cpp) -------------------------
+
+    def hr_connect_to(self, addr, name, now=None):
+        """HRSensor::connectToAddress equivalent (Heart Rate mode only)."""
+        if self.mode() != "hr":
+            return   # mutual exclusion: only the active module connects
+        now = now or time.time()
+        self._hr_target_addr = addr
+        self._hr_target_name = name
+        self.hr_desired = True
+        if self.scanning:
+            self.scanning = False
+        if addr in self.found_devices:
+            self._hr_start_connecting(now)
+        else:
+            self.start_scan(6.0, now)   # not seen yet -> scan then connect
+
+    def _hr_start_connecting(self, now):
+        self._hr_connecting = True
+        self._hr_connect_end = now + 1.2
+        if not self.hr_connected:
+            self.set_state("CONNECTING")
+
+    def hr_disconnect(self, forget=False):
+        self.hr_desired = False
+        self.hr_connected = False
+        self._hr_connecting = False
+        self.tel["sourceName"] = ""
+        self.set_state("DISCONNECTED")
+        self.log("hr", "disconnected")
+        if forget:
+            self._hr_target_addr = ""
+            self._hr_target_name = ""
+            self.cfg.hr_source_addr = ""
+            self.cfg.hr_source_name = ""
+            self.save()
+
+    def hr_connection_lost(self):
+        """Strap drops out unexpectedly; auto-reconnect (if enabled) kicks in."""
+        self.hr_connected = False
+        self._hr_connecting = False
+        self.set_state("RECONNECTING" if (self.hr_desired and self.cfg.auto_reconnect)
+                       else "DISCONNECTED")
+        self._hr_last_attempt = time.time()
+        self.log("hr", "connection lost")
+
     def set_state(self, s):
         if self.tel["state"] != s:
             self.tel["state"] = s
@@ -275,6 +439,13 @@ class Simulator:
     # ---- per-tick state machines -------------------------------------------
 
     def _tick_ble(self, now):
+        # Only the active control source's BLE machine is ever serviced (loop()).
+        if self.mode() == "hr":
+            self._tick_ble_hr(now)
+        else:
+            self._tick_ble_power(now)
+
+    def _tick_ble_power(self, now):
         # Connecting completes -> CONNECTED (data flow then promotes to RECEIVING_POWER)
         if self._connecting and now >= self._connect_end:
             self._connecting = False
@@ -309,48 +480,108 @@ class Simulator:
                 self.log("ble", "attempting reconnect...")
                 self.start_scan(6.0, now)
 
+    def _tick_ble_hr(self, now):
+        # Strap connect completes -> CONNECTED (data flow then promotes to RECEIVING_POWER)
+        if self._hr_connecting and now >= self._hr_connect_end:
+            self._hr_connecting = False
+            self.hr_connected = True
+            self._hr_value = self.base_bpm
+            self._hr_last_notify = now
+            self.tel["sourceName"] = self._hr_target_name
+            self.set_state("CONNECTED")
+            self.log("hr", "connected to %s" % (self._hr_target_name or self._hr_target_addr))
+
+        # Scan results appear staggered (HR sensors only)
+        if self.scanning:
+            if self.devices_visible:
+                for m in VIRTUAL_HR_SENSORS:
+                    if (now - self._scan_start) >= m["reveal"] \
+                            and m["address"] not in self.found_devices:
+                        self.found_devices[m["address"]] = dict(m)
+                        self.log("hr", "device found: %s [%s]" % (m["name"], m["type"]))
+            if now >= self._scan_end:   # onScanEnd
+                self.scanning = False
+                self.log("hr", "scan complete (%d devices)" % len(self.found_devices))
+                if self.hr_desired and not self.hr_connected and self._hr_target_addr:
+                    if self._hr_target_addr in self.found_devices:
+                        self._hr_start_connecting(now)
+                    else:
+                        self.set_state("DISCONNECTED")
+
+        # Auto-reconnect loop (HRSensor::update equivalent)
+        if (self.hr_desired and self.cfg.auto_reconnect and not self.hr_connected
+                and not self.scanning and not self._hr_connecting and self._hr_target_addr):
+            if now - self._hr_last_attempt > 7.0:
+                self._hr_last_attempt = now
+                self.set_state("RECONNECTING")
+                self.log("hr", "attempting reconnect...")
+                self.start_scan(6.0, now)
+
     def _tick_pipeline(self, now, dt):
-        """processPipeline() from src/main.cpp - faithful port."""
+        """processPipeline() from src/main.cpp - faithful port. The branch is
+        taken once per tick based on the persisted control source."""
         have_data = False
         raw = 0.0
+        hr = self.mode() == "hr"
 
         # Virtual meter "notifications" (10 Hz while connected + sending)
-        if self.ble_connected and self.sending:
+        if not hr and self.ble_connected and self.sending:
             self._last_power_value = self.power_value(now)
             self._last_power = now
+        # Virtual strap "notifications" (~1 Hz while connected, like real HRS)
+        if hr and self.hr_connected and self.hr_sending \
+                and now - self._hr_last_notify >= 1.0:
+            self._hr_value = self.base_bpm
+            self._hr_last_notify = now
 
         if self.sim_enabled:
-            raw = self.sim_watts
+            raw = self.sim_bpm if hr else self.sim_watts
             have_data = True
             self.tel["simMode"] = True
         else:
             self.tel["simMode"] = False
-            if self.ble_connected and \
+            if hr:
+                if self.hr_connected and \
+                        (now - self._hr_last_notify) < self.cfg.power_timeout_ms / 1000.0:
+                    raw = self._hr_value
+                    have_data = True
+            elif self.ble_connected and \
                     (now - self._last_power) < self.cfg.power_timeout_ms / 1000.0:
                 raw = self._last_power_value
                 have_data = True
 
-        self.tel["connected"] = self.ble_connected
+        connected = self.hr_connected if hr else self.ble_connected
+        self.tel["connected"] = connected
         self.tel["hasData"] = have_data
 
         if have_data:
             smoothed = self.processor.update(raw)
-            zone = fw.zone_index(self.cfg, smoothed, self.prev_zone, True)
-            self.prev_zone = zone
-            r, g, b = fw.color_for(self.cfg, smoothed)
-
-            self.tel["rawPower"] = raw
-            self.tel["smoothedPower"] = smoothed
+            if hr:
+                zone = fw.hr_zone_index(self.cfg, smoothed, self.prev_zone_hr, True)
+                self.prev_zone_hr = zone
+                r, g, b = fw.hr_color_for(self.cfg, smoothed)
+                self.tel["rawBpm"] = raw
+                self.tel["smoothedBpm"] = smoothed
+                zone_name = self.cfg.hr_zones[zone].name
+                unit = "bpm"
+            else:
+                zone = fw.zone_index(self.cfg, smoothed, self.prev_zone, True)
+                self.prev_zone = zone
+                r, g, b = fw.color_for(self.cfg, smoothed)
+                self.tel["rawPower"] = raw
+                self.tel["smoothedPower"] = smoothed
+                zone_name = self.cfg.zones[zone].name
+                unit = "W"
             self.tel["zone"] = zone
             self.tel["r"], self.tel["g"], self.tel["b"] = r, g, b
             self._fade_target = 1.0
 
-            if self.sim_enabled or self.ble_connected:
+            if self.sim_enabled or connected:
                 self.set_state("RECEIVING_POWER")
 
             if zone != getattr(self, "_last_zone_logged", None):
                 self._last_zone_logged = zone
-                self.log("zone", "zone %d (%s)" % (zone + 1, self.cfg.zones[zone].name))
+                self.log("zone", "zone %d (%s)" % (zone + 1, zone_name))
             rgb_hex = fw.hex_from_rgb(r, g, b)
             if rgb_hex != self._last_rgb and now - self._last_rgb_log > 0.4:
                 self._last_rgb = rgb_hex
@@ -361,17 +592,22 @@ class Simulator:
                     and now - self._last_power_log > 0.4 and not self.freeze:
                 self._last_power_logged = eff
                 self._last_power_log = now
-                self.log("power", "power update: %d W (smoothed %d W)"
-                         % (eff, fw.lround(smoothed)))
+                self.log("hr" if hr else "power",
+                         "%s update: %d %s (smoothed %d %s)"
+                         % ("hr" if hr else "power", eff, unit,
+                            fw.lround(smoothed), unit))
         else:
             # No fresh data -> fade LEDs out; keep last smoothed for display.
             self._fade_target = 0.0
-            self.tel["rawPower"] = 0.0
-            if self.ble_connected and self.tel["state"] == "RECEIVING_POWER":
+            if hr:
+                self.tel["rawBpm"] = 0.0
+            else:
+                self.tel["rawPower"] = 0.0
+            if connected and self.tel["state"] == "RECEIVING_POWER":
                 self.set_state("CONNECTED")
-            if self._had_data and self.ble_connected:
-                self.log("timeout", "power data stale after %d ms - fading out"
-                         % self.cfg.power_timeout_ms)
+            if self._had_data and connected:
+                self.log("timeout", "%s data stale after %d ms - fading out"
+                         % ("heart rate" if hr else "power", self.cfg.power_timeout_ms))
             self.processor.reset()
 
         self._had_data = have_data
@@ -432,15 +668,25 @@ class Simulator:
     def status_json(self):
         eff = self.power_value(time.time())
         base = (self.cfg.brightness / 100.0) * self.fade
+        hr_mode = self.mode() == "hr"
+        saved_addr = self.cfg.hr_source_addr if hr_mode else self.cfg.source_addr
         return {
             "tel": {
+                "mode": self.mode(),
                 "state": self.tel["state"], "connected": self.tel["connected"],
                 "hasData": self.tel["hasData"], "simMode": self.tel["simMode"],
-                "raw": fw.lround(self.tel["rawPower"]),
-                "smoothed": fw.lround(self.tel["smoothedPower"]),
+                "raw": fw.lround(self.tel["rawBpm"] if self.mode() == "hr"
+                                 else self.tel["rawPower"]),
+                "smoothed": fw.lround(self.tel["smoothedBpm"] if self.mode() == "hr"
+                                      else self.tel["smoothedPower"]),
+                "hr": fw.lround(self.tel["smoothedBpm"]),
+                "hrRaw": fw.lround(self.tel["rawBpm"]),
                 "zone": self.tel["zone"],
-                "zoneName": self.cfg.zones[self.tel["zone"]].name
-                if 0 <= self.tel["zone"] < self.cfg.zone_count else "",
+                "zoneName": (self.cfg.hr_zones[self.tel["zone"]].name
+                             if 0 <= self.tel["zone"] < fw.MAX_HR_ZONES else "")
+                if self.mode() == "hr" else
+                (self.cfg.zones[self.tel["zone"]].name
+                 if 0 <= self.tel["zone"] < self.cfg.zone_count else ""),
                 "color": fw.hex_from_rgb(self.tel["r"], self.tel["g"], self.tel["b"]),
                 "brightness": self.cfg.brightness,
                 "displayR": fw.lround(self.tel["r"] * base),
@@ -456,17 +702,25 @@ class Simulator:
                 "jump": self.jump, "jumpA": self.jump_a, "jumpB": self.jump_b,
                 "jumpMs": self.jump_ms,
             },
-            "sim": {"enabled": self.sim_enabled, "watts": self.sim_watts},
+            "hr": {"strapBpm": self.base_bpm, "sending": self.hr_sending,
+                   "simBpm": self.sim_bpm},
+            "sim": {"enabled": self.sim_enabled, "watts": self.sim_watts,
+                    "bpm": self.sim_bpm},
             "ble": {
-                "state": self.tel["state"], "connected": self.ble_connected,
-                "desired": self.desired, "scanning": self.scanning,
+                "state": self.tel["state"], "connected": self.is_connected(),
+                "bleConnected": self.ble_connected, "hrConnected": self.hr_connected,
+                "desired": self.desired, "hrDesired": self.hr_desired,
+                "hrTargetAddr": self._hr_target_addr,
+                "hrTargetName": self._hr_target_name,
+                "scanning": self.scanning,
                 "targetAddr": self._target_addr, "targetName": self._target_name,
                 "devicesVisible": self.devices_visible,
+                "savedAddr": saved_addr,
+                "sending": self.sending, "hrSending": self.hr_sending,
                 "devices": [{"address": m["address"], "name": m["name"],
                              "type": m["type"],
                              "rssi": m["rssi"] + random.randint(-3, 3),
-                             "connected": self.ble_connected
-                             and self.cfg.source_addr == m["address"]}
+                             "connected": self.is_connected() and saved_addr == m["address"]}
                             for m in self.found_devices.values()],
             },
             "ws": {"clients": len(self.ws_clients), "paused": self.ws_paused},
@@ -475,7 +729,15 @@ class Simulator:
                        "delayMs": self.script["delayMs"] if self.script else 0,
                        "step": self.script["i"] if self.script else -1},
             "cfg": {
+                "mode": self.mode(),
                 "ftp": self.cfg.ftp, "zoneCount": self.cfg.zone_count,
+                "hrMax": self.cfg.hr_max,
+                "sourceAddr": self.cfg.source_addr,
+                "sourceName": self.cfg.source_name,
+                "hrSourceAddr": self.cfg.hr_source_addr,
+                "hrSourceName": self.cfg.hr_source_name,
+                "hrZoneMins": [z.min_bpm for z in self.cfg.hr_zones],
+                "hrZoneNames": [z.name for z in self.cfg.hr_zones],
                 "smoothing": self.cfg.smoothing,
                 "hysteresis": self.cfg.hysteresis,
                 "powerTimeout": self.cfg.power_timeout_ms,
@@ -500,10 +762,15 @@ class Simulator:
                 with self.lock:
                     self.script["i"] = i
                     self.sim_enabled = True    # deterministic, GUI-visible
-                    self.sim_watts = float(w)
+                    if self.mode() == "hr":
+                        self.sim_bpm = float(w)   # steps are bpm in HR mode
+                    else:
+                        self.sim_watts = float(w)
                     self.freeze = False
                     self.frozen_value = None
-                self.log("script", "step %d/%d: %g W" % (i + 1, len(steps), w))
+                self.log("script", "step %d/%d: %g %s"
+                         % (i + 1, len(steps), w,
+                            "bpm" if self.mode() == "hr" else "W"))
                 if self._script_stop.wait(delay_ms / 1000.0):
                     break
         finally:
@@ -517,8 +784,15 @@ class Simulator:
         time.sleep(1.0)
         with self.lock:
             self._boot_done = True
-            if self.cfg.source_addr and self.cfg.auto_reconnect:
-                # Auto-reconnect to saved source on boot (main.cpp setup())
+            # Auto-reconnect to the saved source of the ACTIVE control source
+            # on boot (main.cpp setup()).
+            if self.mode() == "hr":
+                if self.cfg.hr_source_addr and self.cfg.auto_reconnect:
+                    self.log("hr", "restoring saved source: %s" % self.cfg.hr_source_name)
+                    self.hr_connect_to(self.cfg.hr_source_addr, self.cfg.hr_source_name)
+                else:
+                    self.set_state("DISCONNECTED")
+            elif self.cfg.source_addr and self.cfg.auto_reconnect:
                 self.log("ble", "restoring saved source: %s" % self.cfg.source_name)
                 self.connect_to(self.cfg.source_addr, self.cfg.source_name)
             else:
@@ -736,13 +1010,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/devices":
             with sim.lock:
+                hr = sim.mode() == "hr"
+                saved = sim.cfg.hr_source_addr if hr else sim.cfg.source_addr
                 doc = {
                     "scanning": sim.scanning,
                     "devices": [
                         {"address": a, "name": m["name"], "type": m["type"],
                          "rssi": m["rssi"] + random.randint(-3, 3),
-                         "connected": sim.ble_connected
-                         and sim.cfg.source_addr == a}
+                         "connected": sim.is_connected() and saved == a}
                         for a, m in sim.found_devices.items()],
                 }
             self._json(200, doc)
@@ -786,6 +1061,11 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/config":
             with sim.lock:
+                if doc.get("controlSource") is not None:
+                    # setControlSource() runs FIRST: fully disconnect the
+                    # active sensor before swapping to the new input.
+                    sim.switch_source(fw.SRC_HEART_RATE
+                                      if doc["controlSource"] == "hr" else fw.SRC_POWER)
                 fw.apply_config_patch(sim.cfg, doc)
                 sim.save()
                 sim.processor.set_smoothing(sim.cfg.smoothing)
@@ -805,34 +1085,56 @@ class Handler(BaseHTTPRequestHandler):
                 return
             name = doc.get("name") or ""
             with sim.lock:
-                sim.cfg.source_addr = str(addr)[:23]
-                sim.cfg.source_name = str(name)[:39]
-                sim.save()
-                sim.connect_to(str(addr), str(name))
+                if sim.mode() == "hr":
+                    sim.cfg.hr_source_addr = str(addr)[:23]
+                    sim.cfg.hr_source_name = str(name)[:39]
+                    sim.save()
+                    sim.hr_connect_to(str(addr), str(name))
+                else:
+                    sim.cfg.source_addr = str(addr)[:23]
+                    sim.cfg.source_name = str(name)[:39]
+                    sim.save()
+                    sim.connect_to(str(addr), str(name))
             self._json(200, {"ok": True})
             return
         if path == "/api/disconnect":
             with sim.lock:
-                sim.disconnect()
+                if sim.mode() == "hr":
+                    sim.hr_disconnect()
+                else:
+                    sim.disconnect()
             self._json(200, {"ok": True})
             return
         if path == "/api/forget":
             with sim.lock:
-                sim.disconnect(forget=True)
+                if sim.mode() == "hr":
+                    sim.hr_disconnect(forget=True)
+                else:
+                    sim.disconnect(forget=True)
             self._json(200, {"ok": True})
             return
         if path == "/api/simulation":
             with sim.lock:
                 en = sim.sim_enabled if doc.get("enabled") is None \
                     else fw.to_bool(doc["enabled"])
-                w = sim.sim_watts if doc.get("watts") is None else float(doc["watts"])
-                if doc.get("watts") is not None:
-                    sim.base_watts = float(w)   # keep virtual meter in sync
-                sim.sim_enabled = en
-                sim.sim_watts = w
-                sim.log("sim", "simulation %s at %g W" % ("ON" if en else "OFF", w)
-                        if doc.get("enabled") is not None or doc.get("watts") is not None
-                        else "simulation queried")
+                if sim.mode() == "hr":
+                    b = sim.sim_bpm if doc.get("bpm") is None else float(doc["bpm"])
+                    if doc.get("bpm") is not None:
+                        sim.base_bpm = float(b)   # keep virtual strap in sync
+                    sim.sim_enabled = en
+                    sim.sim_bpm = b
+                    if doc.get("enabled") is not None or doc.get("bpm") is not None:
+                        sim.log("sim", "simulation %s at %g bpm"
+                                % ("ON" if en else "OFF", b))
+                else:
+                    w = sim.sim_watts if doc.get("watts") is None else float(doc["watts"])
+                    if doc.get("watts") is not None:
+                        sim.base_watts = float(w)   # keep virtual meter in sync
+                    sim.sim_enabled = en
+                    sim.sim_watts = w
+                    if doc.get("enabled") is not None or doc.get("watts") is not None:
+                        sim.log("sim", "simulation %s at %g W"
+                                % ("ON" if en else "OFF", w))
             self._json(200, {"ok": True})
             return
         if path == "/api/wifi":
@@ -856,6 +1158,12 @@ class Handler(BaseHTTPRequestHandler):
         # ---- developer panel API ----
         if path == "/dev/api/power":
             with sim.lock:
+                if doc.get("bpm") is not None:   # virtual strap bpm (HR mode testing)
+                    sim.base_bpm = fw.constrain(float(doc["bpm"]), 30, 250)
+                    sim.sim_bpm = sim.base_bpm   # keep Simulation Mode in sync
+                    sim.log("hr", "virtual strap bpm set to %g" % sim.base_bpm)
+                    self._json(200, {"ok": True})
+                    return
                 w = fw.constrain(float(doc.get("watts", sim.base_watts)), 0, 9999)
                 sim.base_watts = w
                 sim.sim_watts = w
@@ -888,6 +1196,10 @@ class Handler(BaseHTTPRequestHandler):
                     sim.sending = fw.to_bool(doc["sending"])
                     sim.log("power", "meter telemetry %s" %
                             ("started" if sim.sending else "stopped"))
+                if doc.get("hrSending") is not None:
+                    sim.hr_sending = fw.to_bool(doc["hrSending"])
+                    sim.log("hr", "strap telemetry %s" %
+                            ("started" if sim.hr_sending else "stopped"))
                 if doc.get("jump") is not None:
                     sim.jump = fw.to_bool(doc["jump"])
                     sim._jump_t = 0.0
@@ -904,23 +1216,49 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/dev/api/ble":
             action = doc.get("action", "")
             with sim.lock:
+                # Every action targets the ACTIVE control source's sensor, so
+                # the panel can never drive both modules at once.
+                hr_mode = sim.mode() == "hr"
                 if action == "scan":
                     sim.start_scan(6.0)
                 elif action == "connect":
-                    m = VIRTUAL_METERS[0]
+                    pool = VIRTUAL_HR_SENSORS if hr_mode else VIRTUAL_METERS
+                    m = pool[0]
                     addr = doc.get("address") or m["address"]
-                    meter = next((x for x in VIRTUAL_METERS if x["address"] == addr), m)
-                    sim.cfg.source_addr = meter["address"]
-                    sim.cfg.source_name = meter["name"]
-                    sim.save()
-                    sim.found_devices.setdefault(meter["address"], dict(meter))
-                    sim.connect_to(meter["address"], meter["name"])
+                    dev = next((x for x in pool if x["address"] == addr), m)
+                    if hr_mode:
+                        sim.cfg.hr_source_addr = dev["address"]
+                        sim.cfg.hr_source_name = dev["name"]
+                        sim.save()
+                        sim.found_devices.setdefault(dev["address"], dict(dev))
+                        sim.hr_connect_to(dev["address"], dev["name"])
+                    else:
+                        sim.cfg.source_addr = dev["address"]
+                        sim.cfg.source_name = dev["name"]
+                        sim.save()
+                        sim.found_devices.setdefault(dev["address"], dict(dev))
+                        sim.connect_to(dev["address"], dev["name"])
                 elif action == "disconnect":
-                    sim.disconnect()
+                    if hr_mode:
+                        sim.hr_disconnect()
+                    else:
+                        sim.disconnect()
                 elif action == "lost":
-                    sim.connection_lost()
+                    if hr_mode:
+                        sim.hr_connection_lost()
+                    else:
+                        sim.connection_lost()
                 elif action == "reconnect":
-                    if sim._target_addr:
+                    if hr_mode:
+                        if sim._hr_target_addr:
+                            sim._hr_last_attempt = 0.0
+                            sim.hr_desired = True
+                            if sim._hr_target_addr in sim.found_devices:
+                                sim._hr_start_connecting(time.time())
+                            else:
+                                sim.start_scan(6.0)
+                            sim.log("hr", "manual reconnect requested")
+                    elif sim._target_addr:
                         sim._last_attempt = 0.0
                         sim.desired = True
                         if sim._target_addr in sim.found_devices:
@@ -929,7 +1267,10 @@ class Handler(BaseHTTPRequestHandler):
                             sim.start_scan(6.0)
                         sim.log("ble", "manual reconnect requested")
                 elif action == "forget":
-                    sim.disconnect(forget=True)
+                    if hr_mode:
+                        sim.hr_disconnect(forget=True)
+                    else:
+                        sim.disconnect(forget=True)
                 elif action == "visible":
                     sim.devices_visible = fw.to_bool(doc.get("on"), True)
                     sim.log("ble", "virtual meters %s in scan results" %
