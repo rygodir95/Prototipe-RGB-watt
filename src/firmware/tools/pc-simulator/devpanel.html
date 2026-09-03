@@ -131,9 +131,11 @@
       <div class="btns">
         <button id="btnHrSending" class="primary">Stop strap telemetry (timeout)</button>
       </div>
-      <p class="muted" style="margin-bottom:0">MaxHR buttons rescale custom zone
-        boundaries; Reset restores the 50/60/70/80/90 % defaults. The strap button
-        pauses notifications so the data timeout / fade-out can be observed.</p>
+      <p class="muted" style="margin-bottom:0">MaxHR buttons recalculate the zone
+        boundaries from the new Max HR (a manual edit above makes them custom:
+        then Max HR changes keep them; Reset restores the 50/60/70/80/90 %
+        defaults). The strap button pauses notifications so the data timeout /
+        fade-out can be observed.</p>
     </div>
   </div>
 
@@ -144,14 +146,17 @@
         <button id="btnScan">Scan 6s</button>
         <button id="btnConnect0" class="primary">Connect Trainer</button>
         <button id="btnConnect1" class="primary">Connect Meter</button>
-        <button id="btnConnectHr0" class="primary" style="display:none">Connect Strap</button>
-        <button id="btnConnectHr1" class="primary" style="display:none">Connect Watch</button>
+        <button id="btnConnectHr0" class="primary">Connect Strap</button>
+        <button id="btnConnectHr1" class="primary">Connect Watch</button>
         <button id="btnDisconnect">Disconnect</button>
         <button id="btnLost">Connection lost</button>
         <button id="btnReconnect">Reconnect now</button>
         <button id="btnForget" class="danger">Forget</button>
       </div>
-      <div class="btns"><button id="btnVisible">Meters hidden from scan: off</button></div>
+      <div class="btns"><button id="btnVisible">Sensors hidden from scan: off</button></div>
+      <p class="muted" style="margin-top:6px">Connect buttons carry the device's category: connecting a
+        Power sensor activates Power mode, an HR sensor activates Heart Rate mode
+        (the other source's sensor is disconnected first) - same as the Devices page.</p>
       <div class="kv">
         <div><div class="k">Sensor state</div><div class="v" id="bState">-</div></div>
         <div><div class="k">Target</div><div class="v" id="bTarget">-</div></div>
@@ -200,7 +205,7 @@
     </span>
     <span id="cfgHrMaxRow" style="display:none">
       <label>Max HR (bpm, 100-230) <input type="number" id="cHrMax" value="190" style="width:70px" /></label>
-      <div class="btns"><button id="btnHrMax">Apply Max HR (scales zone boundaries)</button></div>
+      <div class="btns"><button id="btnHrMax">Apply Max HR (recalculates zone boundaries)</button></div>
     </span>
     <label>Hysteresis (<span id="cHysUnit">W</span>) <input type="number" id="cHys" value="5" style="width:60px" />
       &nbsp; Smoothing (0-100) <input type="number" id="cSmooth" value="45" style="width:60px" />
@@ -323,10 +328,10 @@ $("btnHrSending").addEventListener("click", async () => {
 
 // ---- sensor state machine wiring (actions target the ACTIVE source) ----
 $("btnScan").addEventListener("click", () => post("/dev/api/ble", { action: "scan" }));
-$("btnConnect0").addEventListener("click", () => post("/dev/api/ble", { action: "connect" }));
-$("btnConnect1").addEventListener("click", () => post("/dev/api/ble", { action: "connect", address: "02:00:00:00:33:44" }));
-$("btnConnectHr0").addEventListener("click", () => post("/dev/api/ble", { action: "connect" }));
-$("btnConnectHr1").addEventListener("click", () => post("/dev/api/ble", { action: "connect", address: "02:00:00:00:77:88" }));
+$("btnConnect0").addEventListener("click", () => post("/dev/api/ble", { action: "connect", category: "power" }));
+$("btnConnect1").addEventListener("click", () => post("/dev/api/ble", { action: "connect", category: "power", address: "02:00:00:00:33:44" }));
+$("btnConnectHr0").addEventListener("click", () => post("/dev/api/ble", { action: "connect", category: "hr" }));
+$("btnConnectHr1").addEventListener("click", () => post("/dev/api/ble", { action: "connect", category: "hr", address: "02:00:00:00:77:88" }));
 $("btnDisconnect").addEventListener("click", () => post("/dev/api/ble", { action: "disconnect" }));
 $("btnLost").addEventListener("click", () => post("/dev/api/ble", { action: "lost" }));
 $("btnReconnect").addEventListener("click", () => post("/dev/api/ble", { action: "reconnect" }));
@@ -446,11 +451,8 @@ function render(s) {
     if (document.activeElement !== $("cHrMax")) $("cHrMax").value = s.cfg.hrMax;
   }
 
-  // sensor state machine card - buttons follow the ACTIVE source
-  $("btnConnect0").style.display = hr ? "none" : "";
-  $("btnConnect1").style.display = hr ? "none" : "";
-  $("btnConnectHr0").style.display = hr ? "" : "none";
-  $("btnConnectHr1").style.display = hr ? "" : "none";
+  // sensor state machine card - all four connect buttons stay visible: their
+  // category activates that source (auto mode switch), like the Devices page.
   $("bState").textContent = s.ble.state;
   $("bTarget").textContent = (hr ? (s.ble.hrTargetName || s.ble.hrTargetAddr)
                                  : (s.ble.targetName || s.ble.targetAddr)) || "-";
@@ -461,10 +463,9 @@ function render(s) {
   $("bSendingK").textContent = hr ? "Strap telemetry" : "Meter telemetry";
   $("bSending").textContent = (hr ? s.ble.hrSending : s.ble.sending) ? "on" : "off";
   $("bDevices").textContent = s.ble.devices.length
-    ? s.ble.devices.map((d) => d.name + " (" + d.address + ", " + d.rssi + " dBm" + (d.connected ? ", CONNECTED" : "") + ")").join("  |  ")
-    : "No devices found yet - tap Scan.";
-  $("btnVisible").textContent = (hr ? "HR sensors" : "Meters") +
-    " hidden from scan: " + (s.ble.devicesVisible ? "off" : "on");
+    ? s.ble.devices.map((d) => d.name + " [" + d.category + "] (" + d.address + ", " + d.rssi + " dBm" + (d.connected ? ", CONNECTED" : "") + ")").join("  |  ")
+    : "No devices found yet - tap Scan (finds power AND heart rate sensors).";
+  $("btnVisible").textContent = "Sensors hidden from scan: " + (s.ble.devicesVisible ? "off" : "on");
 
   $("wsClients").textContent = s.ws.clients;
   $("wsState").textContent = s.ws.paused ? "paused" : "active";

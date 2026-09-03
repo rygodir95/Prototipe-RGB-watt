@@ -23,7 +23,7 @@ import math
 MIN_ZONES = 5
 MAX_ZONES = 7
 MAX_HR_ZONES = 5
-CONFIG_VERSION = 0x52474205  # 'RGB' + version 5
+CONFIG_VERSION = 0x52474206  # 'RGB' + version 6
 
 # ControlSource (include/Config.h): exactly one source active at a time.
 SRC_POWER, SRC_HEART_RATE = 0, 1
@@ -155,6 +155,7 @@ class AppConfig:
         self.control_source = SRC_POWER   # ControlSource
         self.hr_max = 190
         self.hr_zones = [HRZone() for _ in range(MAX_HR_ZONES)]
+        self.hr_zones_custom = False   # user edited boundaries: Max HR keeps them
         self.hr_source_addr = ""  # char[24]
         self.hr_source_name = ""  # char[40]
         self.led_pin = 5
@@ -206,18 +207,18 @@ class AppConfig:
                 self.zones[i].min_watts = self.zones[i - 1].min_watts + 1
 
     def apply_default_hr_zones(self):  # configApplyDefaultHrZones()
+        # Zone i spans [HR_PCT[i] %, HR_PCT[i+1] %] of Max HR. The lower bound is
+        # the rounded percentage edge; each subsequent zone starts one bpm above
+        # the previous zone's inclusive upper edge so the ranges are contiguous,
+        # e.g. Max HR 190 -> Z1 95-114, Z2 115-133, Z3 134-152, Z4 153-171,
+        # Z5 172-190.
         for i in range(MAX_HR_ZONES):
             self.hr_zones[i].name = HR_NAMES[i][:23]
-            self.hr_zones[i].min_bpm = lround(HR_PCT[i] / 100.0 * self.hr_max)
+            if i == 0:
+                self.hr_zones[i].min_bpm = lround(HR_PCT[0] / 100.0 * self.hr_max)
+            else:
+                self.hr_zones[i].min_bpm = lround(HR_PCT[i] / 100.0 * self.hr_max) + 1
             self.hr_zones[i].r, self.hr_zones[i].g, self.hr_zones[i].b = HR_COLORS[i]
-        self.sanitize_hr_zones()
-
-    def scale_hr_zones(self, old_max, new_max):  # configScaleHrZones()
-        if old_max <= 0 or new_max <= 0:
-            return
-        ratio = float(new_max) / float(old_max)
-        for i in range(MAX_HR_ZONES):
-            self.hr_zones[i].min_bpm = lround(self.hr_zones[i].min_bpm * ratio)
         self.sanitize_hr_zones()
 
     def sanitize_hr_zones(self):  # configSanitizeHrZones()
@@ -243,6 +244,7 @@ class AppConfig:
             "zones": [{"name": z.name, "minWatts": z.min_watts,
                        "r": z.r, "g": z.g, "b": z.b} for z in self.zones],
             "hrMax": self.hr_max,
+            "hrZonesCustom": self.hr_zones_custom,
             "hrZones": [{"name": z.name, "minBpm": z.min_bpm,
                          "r": z.r, "g": z.g, "b": z.b} for z in self.hr_zones],
             "ledPin": self.led_pin, "ledCount": self.led_count,
@@ -290,6 +292,7 @@ class AppConfig:
         src = to_int(data.get("controlSource"), SRC_POWER)
         self.control_source = SRC_HEART_RATE if src == SRC_HEART_RATE else SRC_POWER
         self.hr_max = constrain(to_int(data.get("hrMax"), 190), 100, 230)
+        self.hr_zones_custom = to_bool(data.get("hrZonesCustom"), False)
         hr_zones = data.get("hrZones")
         if isinstance(hr_zones, list):
             for i, z in enumerate(hr_zones[:MAX_HR_ZONES]):
@@ -355,6 +358,7 @@ def build_config_json(cfg):  # buildConfigJson()
         })
 
     doc["hrMax"]        = cfg.hr_max
+    doc["hrZonesCustom"] = cfg.hr_zones_custom
     doc["hrSourceAddr"] = cfg.hr_source_addr
     doc["hrSourceName"] = cfg.hr_source_name
 
@@ -364,7 +368,8 @@ def build_config_json(cfg):  # buildConfigJson()
         doc["hrZones"].append({
             "name": z.name,
             "min": z.min_bpm,
-            "max": (cfg.hr_zones[i + 1].min_bpm - 1) if i < MAX_HR_ZONES - 1 else -1,
+            # Z5 ends at Max HR (displayed 90-100 %); everything above stays in Z5.
+            "max": (cfg.hr_zones[i + 1].min_bpm - 1) if i < MAX_HR_ZONES - 1 else cfg.hr_max,
             "color": hex_from_rgb(z.r, z.g, z.b),
         })
     return doc
@@ -416,13 +421,14 @@ def apply_config_patch(cfg, doc):  # applyConfigPatch()
 
     # --- Heart Rate configuration (kept separate from Power) ---
     hr_reset = to_bool(doc.get("hrZonesReset"), False)
+    has_hr_zones = isinstance(doc.get("hrZones"), list)
     if doc.get("hrMax") is not None:
-        old_max = cfg.hr_max
-        new_max = constrain(to_int(doc["hrMax"]), 100, 230)
-        if not isinstance(doc.get("hrZones"), list) and not hr_reset:
-            cfg.scale_hr_zones(old_max, new_max)   # rescale custom boundaries
-        cfg.hr_max = new_max
-    if isinstance(doc.get("hrZones"), list):
+        cfg.hr_max = constrain(to_int(doc["hrMax"]), 100, 230)
+        # Recalculate the zone table from the new Max HR unless the user has
+        # explicitly customised the boundaries (then leave them untouched).
+        if not cfg.hr_zones_custom and not has_hr_zones and not hr_reset:
+            cfg.apply_default_hr_zones()
+    if has_hr_zones:
         arr = doc["hrZones"]
         for i, z in enumerate(arr[:MAX_HR_ZONES]):
             if isinstance(z, dict):
@@ -434,8 +440,10 @@ def apply_config_patch(cfg, doc):  # applyConfigPatch()
                     rgb = rgb_from_hex(z["color"])
                     if rgb is not None:
                         cfg.hr_zones[i].r, cfg.hr_zones[i].g, cfg.hr_zones[i].b = rgb
+        cfg.hr_zones_custom = True   # explicit edit: Max HR changes keep these
         cfg.sanitize_hr_zones()
     if hr_reset:
+        cfg.hr_zones_custom = False
         cfg.apply_default_hr_zones()
 
     if doc.get("smoothing") is not None:

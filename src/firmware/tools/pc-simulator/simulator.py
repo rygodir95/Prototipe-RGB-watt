@@ -277,11 +277,12 @@ class Simulator:
         self.scanning = False
         self.found_devices = {}
 
-    def switch_source(self, src):
+    def switch_source(self, src, restore=True):
         """main.cpp setControlSource(): disconnect the currently active sensor
         BEFORE swapping to the new input. Only one module is ever
         scanning/connecting/processing at a time, and each mode keeps its own
-        saved sensor, zones and live state."""
+        saved sensor, zones and live state. restore=False skips auto-restoring
+        the new source's saved sensor (an explicit connect follows)."""
         if src != fw.SRC_POWER and src != fw.SRC_HEART_RATE:
             src = fw.SRC_POWER
         if src == self.cfg.control_source:
@@ -314,8 +315,9 @@ class Simulator:
         self.log("src", "control source switched to %s"
                  % ("Heart Rate" if src == fw.SRC_HEART_RATE else "Power"))
 
-        # 4. Restore the selected source's own saved sensor (kept per mode).
-        if self.cfg.auto_reconnect:
+        # 4. Restore the selected source's own saved sensor (kept per mode),
+        #    unless an explicit device connect follows the switch right away.
+        if restore and self.cfg.auto_reconnect:
             if src == fw.SRC_HEART_RATE and self.cfg.hr_source_addr:
                 self.log("hr", "restoring saved source: %s" % self.cfg.hr_source_name)
                 self.hr_connect_to(self.cfg.hr_source_addr, self.cfg.hr_source_name)
@@ -431,6 +433,28 @@ class Simulator:
         self._hr_last_attempt = time.time()
         self.log("hr", "connection lost")
 
+    def connect_device(self, addr, name, category=None):
+        """Devices-page connect (WebInterface.cpp /api/connect): activate the
+        device's control source first (mutual exclusion - the other source's
+        sensor is fully disconnected), then remember it as that source's own
+        saved device and connect."""
+        if category not in ("power", "hr"):
+            dev = self.found_devices.get(addr)
+            category = "hr" if (dev and dev["type"] == "HRS") else "power"
+        target = fw.SRC_HEART_RATE if category == "hr" else fw.SRC_POWER
+        if self.cfg.control_source != target:
+            self.switch_source(target, restore=False)
+        if target == fw.SRC_HEART_RATE:
+            self.cfg.hr_source_addr = addr[:23]
+            self.cfg.hr_source_name = name[:39]
+            self.save()
+            self.hr_connect_to(addr, name)
+        else:
+            self.cfg.source_addr = addr[:23]
+            self.cfg.source_name = name[:39]
+            self.save()
+            self.connect_to(addr, name)
+
     def set_state(self, s):
         if self.tel["state"] != s:
             self.tel["state"] = s
@@ -439,13 +463,38 @@ class Simulator:
     # ---- per-tick state machines -------------------------------------------
 
     def _tick_ble(self, now):
-        # Only the active control source's BLE machine is ever serviced (loop()).
+        # One shared scan (like the firmware's DeviceScan.cpp) reveals BOTH
+        # power meters and HR sensors, regardless of the active control
+        # source; only the active module acts on the results.
+        if self.scanning:
+            if self.devices_visible:
+                for m in VIRTUAL_METERS + VIRTUAL_HR_SENSORS:
+                    if (now - self._scan_start) >= m["reveal"] \
+                            and m["address"] not in self.found_devices:
+                        self.found_devices[m["address"]] = dict(m)
+                        self.log("hr" if m["type"] == "HRS" else "ble",
+                                 "device found: %s [%s]" % (m["name"], m["type"]))
+            if now >= self._scan_end:   # onScanEnd
+                self.scanning = False
+                self.log("ble", "scan complete (%d devices)" % len(self.found_devices))
+                if self.mode() == "hr":
+                    if self.hr_desired and not self.hr_connected and self._hr_target_addr:
+                        if self._hr_target_addr in self.found_devices:
+                            self._hr_start_connecting(now)
+                        else:
+                            self.set_state("DISCONNECTED")
+                elif self.desired and not self.ble_connected and self._target_addr:
+                    if self._target_addr in self.found_devices:
+                        self._start_connecting(now)
+                    else:
+                        self.set_state("DISCONNECTED")
+        # Only the ACTIVE control source's module is serviced further (loop()).
         if self.mode() == "hr":
-            self._tick_ble_hr(now)
+            self._tick_module_hr(now)
         else:
-            self._tick_ble_power(now)
+            self._tick_module_power(now)
 
-    def _tick_ble_power(self, now):
+    def _tick_module_power(self, now):
         # Connecting completes -> CONNECTED (data flow then promotes to RECEIVING_POWER)
         if self._connecting and now >= self._connect_end:
             self._connecting = False
@@ -453,23 +502,6 @@ class Simulator:
             self.tel["sourceName"] = self._target_name
             self.set_state("CONNECTED")
             self.log("ble", "connected to %s" % (self._target_name or self._target_addr))
-
-        # Scan results appear staggered
-        if self.scanning:
-            if self.devices_visible:
-                for m in VIRTUAL_METERS:
-                    if (now - self._scan_start) >= m["reveal"] \
-                            and m["address"] not in self.found_devices:
-                        self.found_devices[m["address"]] = dict(m)
-                        self.log("ble", "device found: %s [%s]" % (m["name"], m["type"]))
-            if now >= self._scan_end:   # onScanEnd
-                self.scanning = False
-                self.log("ble", "scan complete (%d devices)" % len(self.found_devices))
-                if self.desired and not self.ble_connected and self._target_addr:
-                    if self._target_addr in self.found_devices:
-                        self._start_connecting(now)
-                    else:
-                        self.set_state("DISCONNECTED")
 
         # Auto-reconnect loop (BLEPower::update equivalent)
         if (self.desired and self.cfg.auto_reconnect and not self.ble_connected
@@ -480,7 +512,7 @@ class Simulator:
                 self.log("ble", "attempting reconnect...")
                 self.start_scan(6.0, now)
 
-    def _tick_ble_hr(self, now):
+    def _tick_module_hr(self, now):
         # Strap connect completes -> CONNECTED (data flow then promotes to RECEIVING_POWER)
         if self._hr_connecting and now >= self._hr_connect_end:
             self._hr_connecting = False
@@ -490,23 +522,6 @@ class Simulator:
             self.tel["sourceName"] = self._hr_target_name
             self.set_state("CONNECTED")
             self.log("hr", "connected to %s" % (self._hr_target_name or self._hr_target_addr))
-
-        # Scan results appear staggered (HR sensors only)
-        if self.scanning:
-            if self.devices_visible:
-                for m in VIRTUAL_HR_SENSORS:
-                    if (now - self._scan_start) >= m["reveal"] \
-                            and m["address"] not in self.found_devices:
-                        self.found_devices[m["address"]] = dict(m)
-                        self.log("hr", "device found: %s [%s]" % (m["name"], m["type"]))
-            if now >= self._scan_end:   # onScanEnd
-                self.scanning = False
-                self.log("hr", "scan complete (%d devices)" % len(self.found_devices))
-                if self.hr_desired and not self.hr_connected and self._hr_target_addr:
-                    if self._hr_target_addr in self.found_devices:
-                        self._hr_start_connecting(now)
-                    else:
-                        self.set_state("DISCONNECTED")
 
         # Auto-reconnect loop (HRSensor::update equivalent)
         if (self.hr_desired and self.cfg.auto_reconnect and not self.hr_connected
@@ -719,8 +734,11 @@ class Simulator:
                 "sending": self.sending, "hrSending": self.hr_sending,
                 "devices": [{"address": m["address"], "name": m["name"],
                              "type": m["type"],
+                             "category": "hr" if m["type"] == "HRS" else "power",
                              "rssi": m["rssi"] + random.randint(-3, 3),
-                             "connected": self.is_connected() and saved_addr == m["address"]}
+                             "connected": (self.hr_connected and self.cfg.hr_source_addr == m["address"])
+                             if m["type"] == "HRS"
+                             else (self.ble_connected and self.cfg.source_addr == m["address"])}
                             for m in self.found_devices.values()],
             },
             "ws": {"clients": len(self.ws_clients), "paused": self.ws_paused},
@@ -1010,14 +1028,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/devices":
             with sim.lock:
-                hr = sim.mode() == "hr"
-                saved = sim.cfg.hr_source_addr if hr else sim.cfg.source_addr
                 doc = {
                     "scanning": sim.scanning,
                     "devices": [
                         {"address": a, "name": m["name"], "type": m["type"],
+                         "category": "hr" if m["type"] == "HRS" else "power",
                          "rssi": m["rssi"] + random.randint(-3, 3),
-                         "connected": sim.is_connected() and saved == a}
+                         "connected": (sim.hr_connected and sim.cfg.hr_source_addr == a)
+                         if m["type"] == "HRS"
+                         else (sim.ble_connected and sim.cfg.source_addr == a)}
                         for a, m in sim.found_devices.items()],
                 }
             self._json(200, doc)
@@ -1084,18 +1103,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400, {"ok": False})
                 return
             name = doc.get("name") or ""
+            cat = doc.get("category")
             with sim.lock:
-                if sim.mode() == "hr":
-                    sim.cfg.hr_source_addr = str(addr)[:23]
-                    sim.cfg.hr_source_name = str(name)[:39]
-                    sim.save()
-                    sim.hr_connect_to(str(addr), str(name))
-                else:
-                    sim.cfg.source_addr = str(addr)[:23]
-                    sim.cfg.source_name = str(name)[:39]
-                    sim.save()
-                    sim.connect_to(str(addr), str(name))
-            self._json(200, {"ok": True})
+                if cat not in ("power", "hr"):
+                    # Category inferred from the discovered list, falling back
+                    # to the active control source for unknown addresses.
+                    dev = sim.found_devices.get(str(addr))
+                    if dev is not None:
+                        cat = "hr" if dev["type"] == "HRS" else "power"
+                    else:
+                        cat = "hr" if sim.mode() == "hr" else "power"
+                sim.connect_device(str(addr), str(name), cat)
+            self._json(200, {"ok": True, "mode": cat})
             return
         if path == "/api/disconnect":
             with sim.lock:
@@ -1222,22 +1241,14 @@ class Handler(BaseHTTPRequestHandler):
                 if action == "scan":
                     sim.start_scan(6.0)
                 elif action == "connect":
-                    pool = VIRTUAL_HR_SENSORS if hr_mode else VIRTUAL_METERS
-                    m = pool[0]
-                    addr = doc.get("address") or m["address"]
-                    dev = next((x for x in pool if x["address"] == addr), m)
-                    if hr_mode:
-                        sim.cfg.hr_source_addr = dev["address"]
-                        sim.cfg.hr_source_name = dev["name"]
-                        sim.save()
-                        sim.found_devices.setdefault(dev["address"], dict(dev))
-                        sim.hr_connect_to(dev["address"], dev["name"])
-                    else:
-                        sim.cfg.source_addr = dev["address"]
-                        sim.cfg.source_name = dev["name"]
-                        sim.save()
-                        sim.found_devices.setdefault(dev["address"], dict(dev))
-                        sim.connect_to(dev["address"], dev["name"])
+                    # Category defaults to the first device of the ACTIVE
+                    # source's pool; an explicit category auto-switches the
+                    # control source (mirrors the Devices page connect).
+                    cat = doc.get("category") or ("hr" if hr_mode else "power")
+                    pool = VIRTUAL_HR_SENSORS if cat == "hr" else VIRTUAL_METERS
+                    addr = doc.get("address") or pool[0]["address"]
+                    dev = next((x for x in pool if x["address"] == addr), pool[0])
+                    sim.connect_device(dev["address"], dev["name"], cat)
                 elif action == "disconnect":
                     if hr_mode:
                         sim.hr_disconnect()

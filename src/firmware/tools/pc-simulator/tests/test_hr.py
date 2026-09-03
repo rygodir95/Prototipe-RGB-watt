@@ -69,19 +69,38 @@ class TestHrPacketParsing(unittest.TestCase):
 
 
 class TestHrZones(unittest.TestCase):
-    def test_defaults_scale_with_hr_max(self):
+    def test_defaults_generated_from_hr_max(self):
         c = fw.AppConfig()
         self.assertEqual(c.hr_max, 190)
-        self.assertEqual([z.min_bpm for z in c.hr_zones], [95, 114, 133, 152, 171])
+        # 50/60/70/80/90 % of 190, contiguous: Z1 95-114, Z2 115-133, Z3 134-152,
+        # Z4 153-171, Z5 172-190
+        self.assertEqual([z.min_bpm for z in c.hr_zones], [95, 115, 134, 153, 172])
         self.assertEqual(fw.hr_zone_index(c, 100, 0, False), 0)   # Very Light (>=95)
-        self.assertEqual(fw.hr_zone_index(c, 120, 0, False), 1)   # Light (>=114)
-        self.assertEqual(fw.hr_zone_index(c, 175, 0, False), 4)   # Maximum (>=171)
+        self.assertEqual(fw.hr_zone_index(c, 114, 0, False), 0)   # upper edge of Z1
+        self.assertEqual(fw.hr_zone_index(c, 115, 0, False), 1)   # lower edge of Z2
+        self.assertEqual(fw.hr_zone_index(c, 120, 0, False), 1)   # Light (>=115)
+        self.assertEqual(fw.hr_zone_index(c, 175, 0, False), 4)   # Maximum (>=172)
         self.assertEqual(fw.hr_zone_index(c, 60, 0, False), 0)    # below 95 -> Z1
+        self.assertEqual(fw.hr_zone_index(c, 999, 0, False), 4)   # Z5 ends at Max HR
 
-    def test_hrmax_patch_scales_zones(self):
+    def test_hrmax_patch_recalculates_zones(self):
         c = fw.AppConfig()
         fw.apply_config_patch(c, {"hrMax": 200})
-        self.assertEqual([z.min_bpm for z in c.hr_zones], [100, 120, 140, 160, 180])
+        # 50/60/70/80/90 % of 200: 100, 120+1, 140+1, 160+1, 180+1
+        self.assertEqual([z.min_bpm for z in c.hr_zones], [100, 121, 141, 161, 181])
+
+    def test_custom_zones_survive_hrmax_change(self):
+        c = fw.AppConfig()
+        fw.apply_config_patch(c, {"hrZones": [{"min": 100}, {"min": 120},
+                                              {"min": 140}, {"min": 160}, {"min": 180}]})
+        self.assertTrue(c.hr_zones_custom)                       # explicit edit
+        mins = [z.min_bpm for z in c.hr_zones]
+        fw.apply_config_patch(c, {"hrMax": 210})
+        self.assertEqual([z.min_bpm for z in c.hr_zones], mins)  # kept untouched
+        # Reset restores the generated defaults and clears the custom flag.
+        fw.apply_config_patch(c, {"hrZonesReset": True})
+        self.assertFalse(c.hr_zones_custom)
+        self.assertEqual([z.min_bpm for z in c.hr_zones], [105, 127, 148, 169, 190])
 
     def test_hrmax_clamped(self):
         c = fw.AppConfig()
@@ -101,7 +120,9 @@ class TestHrZones(unittest.TestCase):
         doc = fw.build_config_json(fw.AppConfig())
         self.assertEqual(len(doc["hrZones"]), fw.MAX_HR_ZONES)
         self.assertEqual(doc["hrZones"][0]["name"], "Very Light")
-        self.assertEqual(doc["hrZones"][4]["max"], -1)            # open-ended
+        self.assertFalse(doc["hrZonesCustom"])                   # generated, not custom
+        self.assertEqual(doc["hrZones"][0]["max"], 114)          # contiguous ranges
+        self.assertEqual(doc["hrZones"][4]["max"], 190)          # Z5 ends at Max HR
 
 
 class TestSourceSwitching(unittest.TestCase):
@@ -170,21 +191,22 @@ class TestMutualExclusion(unittest.TestCase):
         self.assertFalse(s.hr_desired)
         self.assertFalse(s.scanning)
 
-    def test_hr_scan_finds_only_hr_sensors(self):
-        s = make_sim()
-        s.switch_source(fw.SRC_HEART_RATE)
-        now = time.time()
-        s.start_scan(6.0, now)
-        s._tick_ble(now + 6.5)
-        self.assertEqual({m["type"] for m in s.found_devices.values()}, {"HRS"})
-
-    def test_power_scan_finds_only_meters(self):
+    def test_scan_discovers_both_sensor_types_in_power_mode(self):
         s = make_sim()
         now = time.time()
         s.start_scan(6.0, now)
         s._tick_ble(now + 6.5)
         self.assertEqual({m["type"] for m in s.found_devices.values()},
-                         {"FTMS", "CPS"})
+                         {"FTMS", "CPS", "HRS"})     # one shared scan: all sensors
+
+    def test_scan_discovers_both_sensor_types_in_hr_mode(self):
+        s = make_sim()
+        s.switch_source(fw.SRC_HEART_RATE)
+        now = time.time()
+        s.start_scan(6.0, now)
+        s._tick_ble(now + 6.5)
+        self.assertEqual({m["type"] for m in s.found_devices.values()},
+                         {"FTMS", "CPS", "HRS"})
 
 
 class TestHrPersistence(unittest.TestCase):
@@ -196,7 +218,20 @@ class TestHrPersistence(unittest.TestCase):
         s2 = sim_mod.Simulator(cfg_path=s.cfg_path)
         self.assertEqual(s2.cfg.control_source, fw.SRC_HEART_RATE)
         self.assertEqual(s2.cfg.hr_max, 200)
-        self.assertEqual([z.min_bpm for z in s2.cfg.hr_zones], [100, 120, 140, 160, 180])
+        self.assertFalse(s2.cfg.hr_zones_custom)
+        self.assertEqual([z.min_bpm for z in s2.cfg.hr_zones], [100, 121, 141, 161, 181])
+
+    def test_custom_zone_flag_roundtrip(self):
+        s = make_sim()
+        fw.apply_config_patch(s.cfg, {"hrZones": [{"min": 90}, {"min": 110},
+                                                  {"min": 130}, {"min": 150}, {"min": 170}]})
+        s.save()
+        s2 = sim_mod.Simulator(cfg_path=s.cfg_path)
+        self.assertTrue(s2.cfg.hr_zones_custom)
+        self.assertEqual([z.min_bpm for z in s2.cfg.hr_zones], [90, 110, 130, 150, 170])
+        # a Max HR change after reload must NOT touch the custom boundaries
+        fw.apply_config_patch(s2.cfg, {"hrMax": 205})
+        self.assertEqual([z.min_bpm for z in s2.cfg.hr_zones], [90, 110, 130, 150, 170])
         # Power config untouched and separate
         self.assertEqual(s2.cfg.ftp, 221)
         self.assertEqual(s2.cfg.zones[1].min_watts, 124)

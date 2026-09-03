@@ -32,7 +32,7 @@
     <!-- Nav -->
     <nav class="nav" id="nav">
       <button class="nav-btn active" data-view="dashboard" data-testid="nav-dashboard">Dashboard</button>
-      <button class="nav-btn" data-view="source" data-testid="nav-source" id="navSourceBtn">Power Source</button>
+      <button class="nav-btn" data-view="devices" data-testid="nav-devices">Devices</button>
       <button class="nav-btn" data-view="zones" data-testid="nav-zones">Zones</button>
       <button class="nav-btn" data-view="settings" data-testid="nav-settings">Settings</button>
     </nav>
@@ -44,7 +44,7 @@
           <div class="card power-card" id="powerCard" data-testid="power-card">
             <div class="power-glow" id="powerGlow"></div>
             <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em id="powerUnit">W</em></div>
-            <div class="power-raw">Raw <span id="powerRaw">0</span> <span id="powerRawUnit">W</span></div>
+            <div class="power-raw" id="powerRawRow">Raw <span id="powerRaw">0</span> <span id="powerRawUnit">W</span></div>
             <div class="zone-badge" id="zoneBadge" data-testid="zone-badge">
               <span id="zoneNum">Z1</span> — <span id="zoneName">—</span>
             </div>
@@ -78,61 +78,87 @@
         </div>
       </section>
 
-      <!-- POWER SOURCE / HEART RATE SOURCE (adapts to the control source) -->
-      <section class="view" id="view-source">
+      <!-- DEVICES: one scan lists ALL supported sensors, grouped by type -->
+      <section class="view" id="view-devices">
         <div class="card">
           <div class="card-header">
             <div>
-              <div class="card-title" id="sourceTitle">Power Sources</div>
-              <p class="muted" id="sourceSub">BLE Cycling Power Service devices (power meters &amp; smart trainers).</p>
+              <div class="card-title">Devices</div>
+              <p class="muted">All supported BLE sensors. Connecting a Power sensor activates Power mode, a Heart Rate sensor activates Heart Rate mode — only one source is ever active.</p>
             </div>
             <button class="btn primary" id="scanBtn" data-testid="scan-btn">Scan</button>
           </div>
-          <div class="device-list" id="deviceList" data-testid="device-list">
-            <div class="empty" id="deviceEmpty">No devices yet. Tap Scan to search.</div>
+
+          <div class="device-section">
+            <div class="device-section-head">
+              <span class="device-section-title power-title">POWER SENSORS</span>
+              <span class="muted" id="powerSavedHint">No saved device</span>
+            </div>
+            <div class="device-list" id="powerDeviceList" data-testid="power-device-list">
+              <div class="empty">No devices yet. Tap Scan to search.</div>
+            </div>
+          </div>
+
+          <div class="device-section">
+            <div class="device-section-head">
+              <span class="device-section-title hr-title">HEART RATE SENSORS</span>
+              <span class="muted" id="hrSavedHint">No saved device</span>
+            </div>
+            <div class="device-list" id="hrDeviceList" data-testid="hr-device-list">
+              <div class="empty">No devices yet. Tap Scan to search.</div>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- ZONES -->
+      <!-- ZONES: Power and Heart Rate editors, both always visible -->
       <section class="view" id="view-zones">
-        <div class="card">
+        <div class="card" id="powerZoneCard">
           <div class="card-header">
-            <div class="card-title" id="zoneEditorTitle">Zone Editor</div>
+            <div>
+              <div class="card-title">Power Zones</div>
+              <p class="muted">FTP-based training zones (5/6/7 zone models).</p>
+            </div>
             <button class="btn" id="resetZonesBtn" data-testid="reset-zones-btn">Reset to FTP defaults</button>
           </div>
-
-          <!-- Power zone editor (Power mode only) -->
-          <div id="powerZoneBlock">
-            <div class="field-row">
-              <div class="field">
-                <label>FTP (W)</label>
-                <input type="number" id="ftpInput" data-testid="ftp-input" min="50" max="600" />
-              </div>
-              <div class="field">
-                <label>Zone Count</label>
-                <select id="zoneCountSel" data-testid="zone-count-select">
-                  <option value="5">5 Zones</option>
-                  <option value="6">6 Zones</option>
-                  <option value="7">7 Zones</option>
-                </select>
-              </div>
+          <div class="field-row">
+            <div class="field">
+              <label>FTP (W)</label>
+              <input type="number" id="ftpInput" data-testid="ftp-input" min="50" max="600" />
             </div>
-            <div id="zoneEditor" class="zone-editor" data-testid="zone-editor"></div>
-            <button class="btn primary full" id="saveZonesBtn" data-testid="save-zones-btn">Save Zones</button>
-          </div>
-
-          <!-- Heart Rate zone editor (Heart Rate mode only) -->
-          <div id="hrZoneBlock" style="display:none">
-            <div class="field-row">
-              <div class="field">
-                <label>Max HR (bpm)</label>
-                <input type="number" id="hrMaxInput" data-testid="hr-max-input" min="100" max="230" />
-              </div>
+            <div class="field">
+              <label>Zone Count</label>
+              <select id="zoneCountSel" data-testid="zone-count-select">
+                <option value="5">5 Zones</option>
+                <option value="6">6 Zones</option>
+                <option value="7">7 Zones</option>
+              </select>
             </div>
-            <div id="hrEditor" class="zone-editor" data-testid="hr-zone-editor"></div>
-            <button class="btn primary full" id="saveHrZonesBtn" data-testid="save-hr-zones-btn">Save HR Zones</button>
           </div>
+          <div id="zoneEditor" class="zone-editor" data-testid="zone-editor"></div>
+          <button class="btn primary full" id="saveZonesBtn" data-testid="save-zones-btn">Save Power Zones</button>
+        </div>
+
+        <div class="card" id="hrZoneCard">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Heart Rate Zones</div>
+              <p class="muted" id="hrZoneNote">5 zones generated from your Max HR. Changing Max HR recalculates them automatically.</p>
+            </div>
+            <button class="btn" id="resetHrZonesBtn" data-testid="reset-hr-zones-btn">Reset to Max HR defaults</button>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Max HR (bpm)</label>
+              <input type="number" id="hrMaxInput" data-testid="hr-max-input" min="100" max="230" />
+            </div>
+            <div class="field">
+              <label>Zone Count</label>
+              <input type="text" id="hrZoneCount" value="5 (fixed)" disabled />
+            </div>
+          </div>
+          <div id="hrEditor" class="zone-editor" data-testid="hr-zone-editor"></div>
+          <button class="btn primary full" id="saveHrZonesBtn" data-testid="save-hr-zones-btn">Save HR Zones</button>
         </div>
       </section>
 
@@ -140,7 +166,7 @@
       <section class="view" id="view-settings">
         <div class="card">
           <div class="card-title">Control Source</div>
-          <p class="muted">Only one source is active at a time. Switching disconnects the current sensor, stops its scan/reconnect logic and clears its live data.</p>
+          <p class="muted">Only one source is active at a time. Switching disconnects the current sensor, stops its scan/reconnect logic and clears its live data. You can also switch by connecting a device on the Devices page.</p>
           <div class="seg" id="sourceSeg">
             <button data-src="power" class="active" data-testid="src-power">Power</button>
             <button data-src="hr" data-testid="src-hr">Heart Rate</button>
@@ -155,7 +181,7 @@
           </div>
           <div class="field-row">
             <div class="field">
-              <label>Power timeout (ms)</label>
+              <label>Data timeout (ms)</label>
               <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
             </div>
             <div class="field">
