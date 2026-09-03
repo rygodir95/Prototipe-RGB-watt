@@ -53,7 +53,7 @@ function initNav() {
       document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
       b.classList.add("active");
       $("view-" + b.dataset.view).classList.add("active");
-      if (b.dataset.view === "source") refreshDevices();
+      if (b.dataset.view === "devices") refreshDevices();
     });
   });
 }
@@ -74,7 +74,7 @@ async function postConfig(patch) {
   return config;
 }
 
-// ---------------- Control source ----------------
+// ---------------- Control source (Settings) ----------------
 function initSourceSeg() {
   document.querySelectorAll("#sourceSeg button").forEach((b) => {
     b.addEventListener("click", async () => {
@@ -108,28 +108,29 @@ function fillForms() {
   $("wifiSsid").value = config.wifiSsid || "";
   if (config.hrMax) $("hrMaxInput").value = config.hrMax;
 
-  // ---- UI adapts to the active control source ----
+  // ---- Dashboard adapts to the active control source ----
   const hr = isHrMode();
+  $("powerUnit").textContent = hr ? "BPM" : "W";
+  $("powerRawRow").style.display = hr ? "none" : "";   // no raw watts readout in HR mode
   $("statFtpLabel").textContent = hr ? "Max HR" : "FTP";
   $("statFtp").textContent = hr ? config.hrMax : config.ftp;
   $("statFtpUnit").textContent = hr ? "bpm" : "W";
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
-  $("powerUnit").textContent = hr ? "BPM" : "W";
-  $("powerRawUnit").textContent = hr ? "bpm" : "W";
   $("simUnit").textContent = hr ? "bpm" : "W";
   $("hysUnit").textContent = hr ? "bpm" : "W";
-  $("powerZoneBlock").style.display = hr ? "none" : "";
-  $("hrZoneBlock").style.display = hr ? "" : "none";
-  $("resetZonesBtn").textContent = hr ? "Reset to Max HR defaults" : "Reset to FTP defaults";
-  $("sourceTitle").textContent = hr ? "Heart Rate Sensors" : "Power Sources";
-  $("sourceSub").textContent = hr
-    ? "BLE Heart Rate Service devices (chest straps & watches)."
-    : "BLE Cycling Power Service devices (power meters & smart trainers).";
   $("sourceMiniLabel").textContent = hr ? "Heart Rate Source" : "Power Source";
-  $("navSourceBtn").textContent = hr ? "HR Sensors" : "Power Source";
   document.querySelectorAll("#sourceSeg button").forEach((b) => {
     b.classList.toggle("active", (b.dataset.src === "hr") === hr);
   });
+
+  // ---- Devices page: per-type saved source hints ----
+  $("powerSavedHint").textContent = config.sourceName ? "Saved: " + config.sourceName : "No saved device";
+  $("hrSavedHint").textContent = config.hrSourceName ? "Saved: " + config.hrSourceName : "No saved device";
+
+  // ---- HR zones: explain how Max HR interacts with the boundaries ----
+  $("hrZoneNote").textContent = config.hrZonesCustom
+    ? "Boundaries customised — changing Max HR keeps them. Reset restores the defaults."
+    : "5 zones generated from your Max HR. Changing Max HR recalculates them automatically.";
 
   renderZoneEditor();
   renderHrZoneEditor();
@@ -142,7 +143,8 @@ function renderZoneEditor() {
   el.innerHTML = "";
   if (!config.zones) return;
   config.zones.forEach((z, i) => {
-    el.appendChild(zoneRow(z, i, "zone", (i < config.zones.length - 1)));
+    const hasMax = i < config.zones.length - 1;
+    el.appendChild(zoneRow(z, i, "zone", { unit: "W", max: hasMax && z.max >= 0 ? z.max : null }));
   });
   bindZoneEditor(el, config.zones);
 }
@@ -152,25 +154,37 @@ function renderHrZoneEditor() {
   const el = $("hrEditor");
   el.innerHTML = "";
   if (!config.hrZones) return;
+  const hrMax = config.hrMax || 190;
   config.hrZones.forEach((z, i) => {
-    el.appendChild(zoneRow(z, i, "hr-zone", (i < config.hrZones.length - 1)));
+    const isLast = i === config.hrZones.length - 1;
+    // Z5 ends at Max HR; the server also reports max = hrMax for the last zone.
+    const maxBpm = isLast || z.max < 0 ? hrMax : z.max;
+    const pctLo = Math.floor(z.min / hrMax * 100);
+    const pctHi = Math.round(maxBpm / hrMax * 100);
+    el.appendChild(zoneRow(z, i, "hr-zone", {
+      unit: "bpm", max: maxBpm, pct: pctLo + "–" + pctHi + "%",
+    }));
   });
   bindZoneEditor(el, config.hrZones);
 }
 
-function zoneRow(z, i, testPrefix, hasMax) {
+function zoneRow(z, i, testPrefix, opts) {
   const row = document.createElement("div");
-  row.className = "zone-item";
-  const maxLabel = !hasMax || z.max < 0 ? "∞" : z.max;
-  row.innerHTML =
+  row.className = "zone-item" + (opts.pct ? " hr-zone-item" : "");
+  const maxLabel = opts.max === null ? "∞" : opts.max;
+  let html =
     '<input type="color" class="zone-color" value="' + z.color + '" data-i="' + i + '" data-testid="' + testPrefix + '-color-' + i + '" />' +
     '<div><div class="zlabel">Zone ' + (i + 1) + ' name</div>' +
       '<input type="text" class="zone-name" value="' + escapeAttr(z.name) + '" data-i="' + i + '" data-testid="' + testPrefix + '-name-' + i + '" /></div>' +
-    '<div><div class="zlabel">Min ' + (testPrefix === "hr-zone" ? "bpm" : "W") + '</div>' +
+    '<div><div class="zlabel">Min ' + opts.unit + '</div>' +
       '<input type="number" class="zone-min" value="' + z.min + '" data-i="' + i + '" data-testid="' + testPrefix + '-min-' + i + '" /></div>' +
-    '<div class="zmax"><div class="zlabel">Max ' + (testPrefix === "hr-zone" ? "bpm" : "W") + '</div>' +
-      '<input type="number" value="' + (hasMax && z.max >= 0 ? z.max : "") + '" disabled placeholder="' + maxLabel + '" /></div>' +
+    '<div class="zmax"><div class="zlabel">Max ' + opts.unit + '</div>' +
+      '<input type="number" value="' + (opts.max === null ? "" : opts.max) + '" disabled placeholder="' + maxLabel + '" /></div>' +
     '<div class="zone-swatch" style="background:' + z.color + '"></div>';
+  if (opts.pct) {
+    html += '<div class="zpct"><b>' + opts.pct + '</b><span>' + z.min + "–" + maxLabel + " " + opts.unit + '</span></div>';
+  }
+  row.innerHTML = html;
   return row;
 }
 
@@ -193,7 +207,7 @@ async function saveZones() {
   }));
   await postConfig({ ftp: +$("ftpInput").value, zones: zones });
   fillForms();
-  toast("Zones saved");
+  toast("Power zones saved");
 }
 
 async function saveHrZones() {
@@ -213,15 +227,14 @@ async function onZoneCountChange() {
   toast("Zone model updated");
 }
 async function resetZones() {
-  if (isHrMode()) {
-    await postConfig({ hrZonesReset: true });
-    fillForms();
-    toast("HR zones reset to Max HR defaults");
-  } else {
-    await postConfig({ zoneCount: +$("zoneCountSel").value, ftp: +$("ftpInput").value });
-    fillForms();
-    toast("Zones reset to FTP defaults");
-  }
+  await postConfig({ zoneCount: +$("zoneCountSel").value, ftp: +$("ftpInput").value });
+  fillForms();
+  toast("Zones reset to FTP defaults");
+}
+async function resetHrZones() {
+  await postConfig({ hrZonesReset: true });
+  fillForms();
+  toast("HR zones reset to Max HR defaults");
 }
 
 // ---------------- Settings ----------------
@@ -282,13 +295,14 @@ function otaUpload() {
   toast("Uploading firmware…");
 }
 
-// ---------------- Power / HR Source ----------------
+// ---------------- Devices (Power + Heart Rate sensors) ----------------
+const TYPE_LABEL = { CPS: "Power Meter", FTMS: "Trainer / Power", HRS: "Heart Rate" };
 let deviceTimer = null;
 async function scan() {
   await fetch("/api/scan", { method: "POST" });
   $("scanBtn").textContent = "Scanning…";
   $("scanBtn").disabled = true;
-  toast("Scanning for " + (isHrMode() ? "heart rate sensors…" : "power sources…"));
+  toast("Scanning for power and heart rate sensors…");
   let ticks = 0;
   clearInterval(deviceTimer);
   deviceTimer = setInterval(async () => {
@@ -303,20 +317,25 @@ async function scan() {
 async function refreshDevices() {
   const r = await fetch("/api/devices");
   const data = await r.json();
-  const list = $("deviceList");
-  if (!data.devices || data.devices.length === 0) {
-    list.innerHTML = '<div class="empty">' + (data.scanning ? "Scanning…" : "No devices found. Tap Scan.") + "</div>";
+  const all = data.devices || [];
+  renderDeviceList($("powerDeviceList"), all.filter((d) => d.category === "power"), data.scanning);
+  renderDeviceList($("hrDeviceList"), all.filter((d) => d.category === "hr"), data.scanning);
+}
+function renderDeviceList(list, devices, scanning) {
+  if (!devices.length) {
+    list.innerHTML = '<div class="empty">' + (scanning ? "Scanning…" : "No devices found. Tap Scan.") + "</div>";
     return;
   }
   list.innerHTML = "";
-  data.devices.forEach((d) => {
+  devices.forEach((d) => {
     const row = document.createElement("div");
     row.className = "device" + (d.connected ? " connected" : "");
     row.innerHTML =
       '<div class="device-info">' +
         '<span class="device-radio"></span>' +
         '<div class="device-meta">' +
-          '<div class="device-name">' + escapeHtml(d.name) + (d.type ? ' <span class="badge">' + d.type + '</span>' : "") + "</div>" +
+          '<div class="device-name">' + escapeHtml(d.name) +
+            ' <span class="badge badge-' + d.category + '">' + (TYPE_LABEL[d.type] || d.type) + '</span></div>' +
           '<div class="device-addr">' + d.address + "  ·  " + d.rssi + " dBm</div>" +
         "</div></div>" +
       '<div class="device-actions"></div>';
@@ -325,7 +344,7 @@ async function refreshDevices() {
       actions.appendChild(mkBtn("Disconnect", "", () => disconnect()));
       actions.appendChild(mkBtn("Forget", "danger", () => forget()));
     } else {
-      actions.appendChild(mkBtn("Connect", "primary", () => connect(d.address, d.name)));
+      actions.appendChild(mkBtn("Connect", "primary", () => connect(d)));
     }
     list.appendChild(row);
   });
@@ -338,12 +357,19 @@ function mkBtn(label, cls, fn) {
   b.addEventListener("click", fn);
   return b;
 }
-async function connect(address, name) {
+async function connect(d) {
+  // Connecting activates the device's control source first (mutual exclusion):
+  // the previously active sensor is disconnected on the device side.
+  const switching = (d.category === "hr") !== isHrMode();
   await fetch("/api/connect", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address: address, name: name }),
+    body: JSON.stringify({ address: d.address, name: d.name, category: d.category }),
   });
-  toast("Connecting to " + name + "…");
+  await getConfig();   // pick up the (possibly switched) control source immediately
+  fillForms();
+  toast(switching
+    ? "Switching to " + (d.category === "hr" ? "Heart Rate" : "Power") + " mode — connecting to " + d.name + "…"
+    : "Connecting to " + d.name + "…");
   setTimeout(refreshDevices, 1200);
 }
 async function disconnect() { await fetch("/api/disconnect", { method: "POST" }); toast("Disconnected"); setTimeout(refreshDevices, 600); }
@@ -378,11 +404,18 @@ function renderSimControls() {
     if (!simState.enabled) simState.bpm = Math.min(220, Math.max(40, simState.bpm || 120));
     slider.value = simState.bpm;
     $("simVal").textContent = simState.bpm;
-    // Presets covering all 5 HR zones, derived from the configured boundaries.
-    const mins = (config.hrZones || []).map((z) => z.min);
+    // Presets from the configured HR zone boundaries: one centre value per
+    // zone, plus a rest value and one above Max HR.
+    const zones = config.hrZones || [];
+    const hrMax = config.hrMax || 190;
     const presets = [];
-    if (mins.length === 5) {
-      presets.push(Math.max(40, mins[0] - 10), mins[0] + 5, mins[1] + 5, mins[2] + 5, mins[3] + 5, mins[4] + 5, (config.hrMax || 190) + 10);
+    if (zones.length === 5) {
+      presets.push(Math.max(40, zones[0].min - 15));
+      zones.forEach((z, i) => {
+        const hi = i < zones.length - 1 ? zones[i + 1].min - 1 : hrMax;
+        presets.push(Math.round((z.min + hi) / 2));
+      });
+      presets.push(hrMax + 10);
     }
     renderSimPresets(presets, true);
   } else {
@@ -452,8 +485,14 @@ const STATE_MAP = {
   ERROR: { cls: "err", label: "Error" },
 };
 function updateLive(t) {
+  // Another client (or the Devices page) may have switched the control
+  // source: follow immediately so units and zone colours match the mode.
+  const tMode = t.mode || (config && config.controlSource);
+  if (config && tMode && config.controlSource !== tMode) {
+    config.controlSource = tMode;
+    fillForms();
+  }
   $("powerWatts").textContent = t.smoothed;
-  $("powerRaw").textContent = t.raw;
   $("zoneNum").textContent = "Z" + (t.zone + 1);
   $("zoneName").textContent = t.zoneName || "—";
   const s = STATE_MAP[t.state] || STATE_MAP.STARTING;
@@ -464,7 +503,7 @@ function updateLive(t) {
   // Colour glow + brand: must show the SAME zone as the label. Use the current
   // zone's configured colour of the ACTIVE control source so
   // zone number = zone name = displayed colour.
-  const hr = (t.mode || (config && config.controlSource)) === "hr";
+  const hr = isHrMode();
   const zones = hr ? (config.hrZones || []) : (config.zones || []);
   const zoneColor = (t.zone >= 0 && t.zone < zones.length) ? zones[t.zone].color : t.color;
   $("powerGlow").style.background = "radial-gradient(circle, " + zoneColor + "cc, transparent 70%)";
@@ -495,6 +534,7 @@ async function init() {
   $("saveZonesBtn").addEventListener("click", saveZones);
   $("saveHrZonesBtn").addEventListener("click", saveHrZones);
   $("resetZonesBtn").addEventListener("click", resetZones);
+  $("resetHrZonesBtn").addEventListener("click", resetHrZones);
   $("saveSettingsBtn").addEventListener("click", saveSettings);
   $("wifiSaveBtn").addEventListener("click", saveWifi);
   $("factoryBtn").addEventListener("click", factoryReset);
