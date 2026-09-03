@@ -1,59 +1,70 @@
 # ZoneGlow Desktop (Windows proof-of-concept)
 
-A minimal Windows desktop application that reuses the **existing** ZoneGlow
-web UI (Dashboard / Devices / Zones / Settings) unchanged, served by the
-**existing** PC simulator backend. It is a shell/window only — it never becomes
-the controller. All BLE, power/HR processing, zone logic, LED control and
-stored settings stay on the ESP32 (or, in development, on the simulator).
+A minimal Windows desktop application that bundles the **existing** ZoneGlow
+web UI (Dashboard / Devices / Zones / Settings) locally and talks to the
+ZoneGlow controller backend over REST + WebSocket only. It is a shell/window
+only — it never becomes the controller. All BLE, power/HR processing, zone
+logic, LED control and stored settings stay on the ESP32 (or, in development,
+on the PC simulator).
 
 ## Architecture
 
 ```
-Development (this milestone):
-
-  ZoneGlow.exe (Tauri window + connection shell)
-        ↕  HTTP REST + WebSocket (loaded from the backend)
-  PC Simulator (tools/pc-simulator) at http://localhost:8080
+ZoneGlow.exe (Tauri window + local shell server on 127.0.0.1)
+ ├─ serves the bundled ZoneGlow web UI directly in the window (no iframe)
+ └─ /api/*  → forwarded to the configured backend
+    /ws     → tunnelled to the configured backend
         ↕
-  virtual ESP32 / virtual BLE sensors / virtual LED behaviour
-
-Future production (same shell, different backend address):
-
-  ZoneGlow.exe
-        ↕
-  ESP32 ZoneGlow Controller
-        ↕ BLE
-  Power Meter / Smart Trainer / Heart Rate Monitor
-        ↕
-  LED strip
+Development:  PC Simulator (tools/pc-simulator) at http://localhost:8080
+Future:       ESP32 ZoneGlow Controller on the LAN (same REST/WS API)
 ```
 
-The UI is **loaded from the backend itself** (the simulator serves
-`data/web/`, exactly what the ESP32 serves), so no frontend files are copied
-or modified, and relative REST paths (`/api/config`, `/api/devices`, …) and
-the WebSocket endpoint (`/ws`) work unchanged.
+- The window loads the ZoneGlow UI **from the shell itself**, so the UI opens
+  and renders normally even when the backend is offline — no blank page, no
+  browser error.
+- Only REST calls (`/api/...`) and the telemetry WebSocket (`/ws`) reach the
+  backend.
+- `data/web/` (the firmware's embedded UI) stays the **single source of
+  truth** — see "Web UI staging".
 
-### Backend transport abstraction
+### Web UI staging (build step, not a second copy)
 
-`src/transport.js` is the single place that knows how to reach a backend:
+`scripts/sync-web.js` stages a byte-identical copy of the firmware's
+`data/web/` into `src-tauri/generated-web/` (git-ignored, never edited by
+hand). It runs automatically before `tauri dev` / `tauri build`
+(`beforeDevCommand` / `beforeBuildCommand` in `tauri.conf.json`), and the
+staged copy ships inside `ZoneGlow.exe` via `bundle.resources`.
 
-- `SimulatorTransport` — default, `http://localhost:8080`
-- `Esp32Transport` — placeholder, **not implemented yet**; pointing the shell
-  at the controller's LAN address is all that will be needed, because the UI,
-  REST API and telemetry are identical.
+### Local shell server (`src-tauri/src/server.rs`)
 
-The backend address is configurable at runtime (disconnected overlay →
-"Backend address") and persisted in `localStorage`; the development default is
-`http://localhost:8080`.
+A localhost-only HTTP server inside the app (std-only, no extra crates):
 
-### Connection states (shell-level only)
+- serves the staged UI at `/`, `/style.css`, `/app.js`;
+- forwards `/api/*` to the backend — `GET /api/config` **long-polls** while
+  the backend is offline so the UI's startup completes the moment the backend
+  returns; every other call fails fast with 502;
+- `/ws` is a blind TCP tunnel (handshake + frames pass through verbatim), so
+  the UI's own WebSocket reconnect loop just works.
 
-`Connected` / `Connecting…` / `Disconnected`, shown in a slim bar above the
-UI. If the backend is unavailable the window stays open with a clear
-disconnected state and retries every 2 s. When the backend returns, the
-overlay hides and the embedded UI reconnects its WebSocket on its own
-(`app.js` retries on close). The Developer/Test Panel (`/dev/`) is **not**
-exposed anywhere in the desktop navigation.
+### Backend transport abstraction (`src-tauri/src/transport.rs`)
+
+- `SimulatorTransport` — development default, `http://localhost:8080`
+  (override with the `ZONEGLOW_BACKEND_URL` environment variable).
+- `Esp32Transport` — placeholder, **not implemented yet**. The ESP32 serves
+  the same REST/WS API, so enabling it later is just selecting that
+  transport with the controller's LAN address.
+
+### Offline / reconnect behaviour
+
+- Backend down at startup: the UI renders normally and shows **Disconnected**
+  (the UI's own status pill, set by the injected `shell_init.js`, which probes
+  `/api/info` every 2 s through the shell server).
+- Backend goes down while running: the WebSocket tunnel closes, the UI's
+  `app.js` retries every 2 s, the pill flips to Disconnected, the window stays
+  fully interactive.
+- Backend returns: the pending config request resolves, the WebSocket
+  reconnects, telemetry drives the UI again. Nothing is reloaded.
+- The Developer/Test Panel (`/dev/`) is not exposed in the desktop app.
 
 ## Prerequisites (Windows 10/11)
 
@@ -79,8 +90,9 @@ exposed anywhere in the desktop navigation.
    npm run dev
    ```
 
-   A real desktop window opens, connects to `http://localhost:8080` and shows
-   the existing ZoneGlow UI with live telemetry.
+   A real desktop window opens showing the existing ZoneGlow UI. The order
+   does not matter: with the simulator off the window still opens, renders and
+   shows Disconnected; starting the simulator makes the data flow.
 
 ## Build ZoneGlow.exe
 
@@ -101,10 +113,9 @@ communication is included — those are future tasks.
 
 - The simulator is **not** embedded in or auto-launched by the app; run it
   separately (keeping it independently runnable, as required).
-- If the backend is not reachable, the window stays open in the Disconnected
-  state — the app never exits on its own.
+- The shell server binds 127.0.0.1 only and never exits on its own.
 - This PoC was authored on a non-Windows build environment, so the Windows
   `.exe` must be produced on a Windows machine with the steps above; all
-  backend-facing behaviour (probe, REST, WebSocket telemetry, mode switching)
-  was verified against the running simulator with the full simulator test
-  suite passing (45/45).
+  backend-facing behaviour (REST proxy, config long-poll, WebSocket tunnelling,
+  offline/reconnect, mode switching) was verified against the running simulator
+  with the full simulator test suite passing (45/45).

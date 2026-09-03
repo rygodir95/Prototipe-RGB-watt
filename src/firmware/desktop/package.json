@@ -5,6 +5,7 @@
   "description": "ZoneGlow - Training Zone Lighting (Windows desktop shell)",
   "scripts": {
     "tauri": "tauri",
+    "sync:web": "node scripts/sync-web.js",
     "dev": "tauri dev",
     "build": "tauri build",
     "build:exe": "tauri build --no-bundle"
