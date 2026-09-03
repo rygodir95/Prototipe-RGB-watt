@@ -182,8 +182,8 @@ jumps. Noise visibly jitters the raw value while smoothed stays stable.
 
 **Steps:**
 1. Set smoothing 0, hysteresis 0.
-2. Walk the power through 0 → 124 → 168 → 201 → 234 → 268 → 333 → 400 W
-   (FTP-221 default boundaries: 0/124/168/201/234/268/333).
+2. Walk the power through 0 → 124 → 168 → 201 → 234 → 267 → 334 → 400 W
+   (FTP-221 default boundaries: 0/124/168/201/234/267/334).
 3. Compare the panel's "RGB (zone color)" and the big preview with the zone
    colors configured in the GUI zone editor.
 
