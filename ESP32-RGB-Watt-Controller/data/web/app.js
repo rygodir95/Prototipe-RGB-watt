@@ -92,7 +92,8 @@ function fillForms() {
   $("statFtp").textContent = config.ftp;
   $("statZones").textContent = config.zoneCount;
   $("statBright").textContent = config.brightness;
-
+  renderZoneEditor();
+}
 
 // ---------------- Zone editor ----------------
 function renderZoneEditor() {
@@ -145,7 +146,7 @@ async function resetZones() {
   toast("Zones reset to FTP defaults");
 }
 
-
+// ---------------- Settings ----------------
 async function saveSettings() {
   await postConfig({
     smoothing: +$("smoothInput").value,
@@ -347,7 +348,7 @@ function updateLive(t) {
   const ds = $("dashSourceState");
   ds.querySelector("span:last-child").textContent = t.sim ? "Simulated" : s.label;
   ds.querySelector(".pill-dot").style.background = s.cls === "live" || s.cls === "ok" ? "var(--ok)" : "var(--muted)";
-
+}
 
 // ---------------- Init ----------------
 async function init() {
