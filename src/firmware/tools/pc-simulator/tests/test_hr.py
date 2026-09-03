@@ -136,7 +136,8 @@ class TestSourceSwitching(unittest.TestCase):
         self.assertFalse(s.ble_connected)
         self.assertFalse(s.desired)
         self.assertFalse(s.scanning)
-        self.assertEqual(s.found_devices, {})       # cache dropped
+        # shared scan cache (DeviceScan) survives a mode switch
+        self.assertIn("02:00:00:00:11:22", s.found_devices)
         self.assertEqual(s.tel["smoothedPower"], 0.0)
         self.assertEqual(s.tel["zone"], 0)
         self.assertEqual(s.tel["sourceName"], "")

@@ -261,13 +261,15 @@ class Simulator:
         return self.hr_connected if self.mode() == "hr" else self.ble_connected
 
     def ble_shutdown(self):
-        """Power module teardown: disconnect, stop scan/connect/reconnect,
-        drop its cached device list."""
+        """Power module teardown: disconnect, stop scan/connect/reconnect.
+        The shared scan cache (DeviceScan equivalent) is NOT dropped - the
+        firmware's unified DeviceScan list survives a mode switch, so an
+        explicit connect to an already-discovered device connects right away
+        instead of rescanning."""
         self.desired = False
         self.ble_connected = False
         self._connecting = False
         self.scanning = False
-        self.found_devices = {}
 
     def hr_shutdown(self):
         """Heart Rate module teardown (mirror of ble_shutdown)."""
@@ -275,7 +277,6 @@ class Simulator:
         self.hr_connected = False
         self._hr_connecting = False
         self.scanning = False
-        self.found_devices = {}
 
     def switch_source(self, src, restore=True):
         """main.cpp setControlSource(): disconnect the currently active sensor
