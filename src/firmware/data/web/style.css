@@ -118,13 +118,6 @@ body {
   display: inline-block; margin-top: 16px; padding: 8px 18px; border-radius: 999px;
   background: var(--bg-elev); border: 1px solid var(--border); font-weight: 700; font-size: 15px; position: relative;
 }
-.zonebar { position: relative; margin-top: 22px; height: 16px; border-radius: 999px; overflow: hidden; }
-.zonebar-track { display: flex; height: 100%; width: 100%; }
-.zonebar-track > span { flex: 1; }
-.zonebar-marker {
-  position: absolute; top: -4px; width: 4px; height: 24px; border-radius: 4px;
-  background: var(--text); box-shadow: 0 0 0 3px var(--card); transition: left .25s ease;
-}
 
 /* Source mini */
 .source-mini { display: flex; flex-direction: column; gap: 8px; }
