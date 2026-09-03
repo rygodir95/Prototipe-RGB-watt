@@ -37,7 +37,7 @@ const char INDEX_HTML[] = R"rgbwatt(
     <!-- Nav -->
     <nav class="nav" id="nav">
       <button class="nav-btn active" data-view="dashboard" data-testid="nav-dashboard">Dashboard</button>
-      <button class="nav-btn" data-view="source" data-testid="nav-source">Power Source</button>
+      <button class="nav-btn" data-view="source" data-testid="nav-source" id="navSourceBtn">Power Source</button>
       <button class="nav-btn" data-view="zones" data-testid="nav-zones">Zones</button>
       <button class="nav-btn" data-view="settings" data-testid="nav-settings">Settings</button>
     </nav>
@@ -48,21 +48,21 @@ const char INDEX_HTML[] = R"rgbwatt(
         <div class="grid">
           <div class="card power-card" id="powerCard" data-testid="power-card">
             <div class="power-glow" id="powerGlow"></div>
-            <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em>W</em></div>
-            <div class="power-raw">Raw <span id="powerRaw">0</span> W</div>
+            <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em id="powerUnit">W</em></div>
+            <div class="power-raw">Raw <span id="powerRaw">0</span> <span id="powerRawUnit">W</span></div>
             <div class="zone-badge" id="zoneBadge" data-testid="zone-badge">
-              <span id="zoneNum">Z1</span> — <span id="zoneName">Recovery</span>
+              <span id="zoneNum">Z1</span> — <span id="zoneName">—</span>
             </div>
           </div>
 
           <div class="card source-mini" data-testid="source-mini">
-            <div class="card-label">Power Source</div>
+            <div class="card-label" id="sourceMiniLabel">Power Source</div>
             <div class="source-name" id="dashSourceName">—</div>
             <div class="source-state" id="dashSourceState"><span class="pill-dot"></span><span>Disconnected</span></div>
           </div>
 
           <div class="card stat-row" data-testid="stat-row">
-            <div class="stat"><div class="stat-k">FTP</div><div class="stat-v"><span id="statFtp">221</span> W</div></div>
+            <div class="stat"><div class="stat-k" id="statFtpLabel">FTP</div><div class="stat-v"><span id="statFtp">221</span> <span id="statFtpUnit">W</span></div></div>
             <div class="stat"><div class="stat-k">Zones</div><div class="stat-v" id="statZones">7</div></div>
             <div class="stat"><div class="stat-k">Brightness</div><div class="stat-v"><span id="statBright">100</span>%</div></div>
           </div>
@@ -77,25 +77,19 @@ const char INDEX_HTML[] = R"rgbwatt(
             </div>
             <p class="muted" id="simHint">Test the pipeline without a real device.</p>
             <input type="range" min="0" max="600" value="150" id="simSlider" class="slider" data-testid="sim-slider" disabled />
-            <div class="sim-value"><span id="simVal">150</span> W</div>
-            <div class="sim-presets" id="simPresets">
-              <button data-w="0">0</button><button data-w="50">50</button>
-              <button data-w="100">100</button><button data-w="150">150</button>
-              <button data-w="200">200</button><button data-w="250">250</button>
-              <button data-w="300">300</button><button data-w="400">400</button>
-              <button data-w="500">500</button>
-            </div>
+            <div class="sim-value"><span id="simVal">150</span> <span id="simUnit">W</span></div>
+            <div class="sim-presets" id="simPresets"></div>
           </div>
         </div>
       </section>
 
-      <!-- POWER SOURCE -->
+      <!-- POWER SOURCE / HEART RATE SOURCE (adapts to the control source) -->
       <section class="view" id="view-source">
         <div class="card">
           <div class="card-header">
             <div>
-              <div class="card-title">Power Sources</div>
-              <p class="muted">BLE Cycling Power Service devices (power meters &amp; smart trainers).</p>
+              <div class="card-title" id="sourceTitle">Power Sources</div>
+              <p class="muted" id="sourceSub">BLE Cycling Power Service devices (power meters &amp; smart trainers).</p>
             </div>
             <button class="btn primary" id="scanBtn" data-testid="scan-btn">Scan</button>
           </div>
@@ -109,30 +103,55 @@ const char INDEX_HTML[] = R"rgbwatt(
       <section class="view" id="view-zones">
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Zone Editor</div>
+            <div class="card-title" id="zoneEditorTitle">Zone Editor</div>
             <button class="btn" id="resetZonesBtn" data-testid="reset-zones-btn">Reset to FTP defaults</button>
           </div>
-          <div class="field-row">
-            <div class="field">
-              <label>FTP (W)</label>
-              <input type="number" id="ftpInput" data-testid="ftp-input" min="50" max="600" />
+
+          <!-- Power zone editor (Power mode only) -->
+          <div id="powerZoneBlock">
+            <div class="field-row">
+              <div class="field">
+                <label>FTP (W)</label>
+                <input type="number" id="ftpInput" data-testid="ftp-input" min="50" max="600" />
+              </div>
+              <div class="field">
+                <label>Zone Count</label>
+                <select id="zoneCountSel" data-testid="zone-count-select">
+                  <option value="5">5 Zones</option>
+                  <option value="6">6 Zones</option>
+                  <option value="7">7 Zones</option>
+                </select>
+              </div>
             </div>
-            <div class="field">
-              <label>Zone Count</label>
-              <select id="zoneCountSel" data-testid="zone-count-select">
-                <option value="5">5 Zones</option>
-                <option value="6">6 Zones</option>
-                <option value="7">7 Zones</option>
-              </select>
-            </div>
+            <div id="zoneEditor" class="zone-editor" data-testid="zone-editor"></div>
+            <button class="btn primary full" id="saveZonesBtn" data-testid="save-zones-btn">Save Zones</button>
           </div>
-          <div id="zoneEditor" class="zone-editor" data-testid="zone-editor"></div>
-          <button class="btn primary full" id="saveZonesBtn" data-testid="save-zones-btn">Save Zones</button>
+
+          <!-- Heart Rate zone editor (Heart Rate mode only) -->
+          <div id="hrZoneBlock" style="display:none">
+            <div class="field-row">
+              <div class="field">
+                <label>Max HR (bpm)</label>
+                <input type="number" id="hrMaxInput" data-testid="hr-max-input" min="100" max="230" />
+              </div>
+            </div>
+            <div id="hrEditor" class="zone-editor" data-testid="hr-zone-editor"></div>
+            <button class="btn primary full" id="saveHrZonesBtn" data-testid="save-hr-zones-btn">Save HR Zones</button>
+          </div>
         </div>
       </section>
 
       <!-- SETTINGS -->
       <section class="view" id="view-settings">
+        <div class="card">
+          <div class="card-title">Control Source</div>
+          <p class="muted">Only one source is active at a time. Switching disconnects the current sensor, stops its scan/reconnect logic and clears its live data.</p>
+          <div class="seg" id="sourceSeg">
+            <button data-src="power" class="active" data-testid="src-power">Power</button>
+            <button data-src="hr" data-testid="src-hr">Heart Rate</button>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title">Power Processing</div>
           <div class="field">
@@ -145,7 +164,7 @@ const char INDEX_HTML[] = R"rgbwatt(
               <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
             </div>
             <div class="field">
-              <label>Hysteresis (W)</label>
+              <label>Hysteresis (<span id="hysUnit">W</span>)</label>
               <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
             </div>
           </div>
@@ -238,8 +257,7 @@ const char INDEX_HTML[] = R"rgbwatt(
   </div>
   <script src="/app.js"></script>
 </body>
-</html>
-)rgbwatt";
+</html>)rgbwatt";
 
 const char STYLE_CSS[] = R"rgbwatt(
 :root {
@@ -317,6 +335,15 @@ body {
   transition: all .2s;
 }
 .theme-switch button.active { background: var(--accent); color: #fff; }
+
+/* Segmented control (Control Source) */
+.seg { display: flex; gap: 6px; background: var(--bg-elev); border: 1px solid var(--border); padding: 6px; border-radius: 14px; margin-top: 12px; }
+.seg button {
+  flex: 1; border: none; background: transparent; color: var(--muted);
+  padding: 11px 12px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
+  transition: all .2s;
+}
+.seg button.active { background: var(--accent); color: #fff; }
 
 /* Nav */
 .nav {
@@ -472,8 +499,7 @@ input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
   .zone-item { grid-template-columns: 40px 1fr 70px; grid-auto-rows: auto; }
   .zone-item .zmax { display: none; }
   .field-row { flex-direction: column; gap: 0; }
-}
-)rgbwatt";
+})rgbwatt";
 
 const char APP_JS[] = R"rgbwatt(
 // ESP32 RGB Watt Zone Controller - Web UI
@@ -482,7 +508,9 @@ const char APP_JS[] = R"rgbwatt(
 const $ = (id) => document.getElementById(id);
 let config = null;
 let ws = null;
-let simState = { enabled: false, watts: 150 };
+let simState = { enabled: false, watts: 150, bpm: 120 };
+
+function isHrMode() { return !!(config && config.controlSource === "hr"); }
 
 // ---------------- Theme ----------------
 function applyTheme(theme) {
@@ -550,6 +578,21 @@ async function postConfig(patch) {
   return config;
 }
 
+// ---------------- Control source ----------------
+function initSourceSeg() {
+  document.querySelectorAll("#sourceSeg button").forEach((b) => {
+    b.addEventListener("click", async () => {
+      if (b.classList.contains("active")) return;
+      await postConfig({ controlSource: b.dataset.src });
+      // The device disconnected the previous sensor and cleared its state;
+      // reset the local simulation UI to match.
+      simState.enabled = false;
+      fillForms();
+      toast(isHrMode() ? "Switched to Heart Rate mode" : "Switched to Power mode");
+    });
+  });
+}
+
 // ---------------- Populate forms ----------------
 function fillForms() {
   $("ftpInput").value = config.ftp;
@@ -567,36 +610,80 @@ function fillForms() {
   $("autoReconnect").checked = config.autoReconnect;
   $("debugToggle").checked = config.debug;
   $("wifiSsid").value = config.wifiSsid || "";
-  $("statFtp").textContent = config.ftp;
-  $("statZones").textContent = config.zoneCount;
-  $("statBright").textContent = config.brightness;
+  if (config.hrMax) $("hrMaxInput").value = config.hrMax;
+
+  // ---- UI adapts to the active control source ----
+  const hr = isHrMode();
+  $("statFtpLabel").textContent = hr ? "Max HR" : "FTP";
+  $("statFtp").textContent = hr ? config.hrMax : config.ftp;
+  $("statFtpUnit").textContent = hr ? "bpm" : "W";
+  $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
+  $("powerUnit").textContent = hr ? "BPM" : "W";
+  $("powerRawUnit").textContent = hr ? "bpm" : "W";
+  $("simUnit").textContent = hr ? "bpm" : "W";
+  $("hysUnit").textContent = hr ? "bpm" : "W";
+  $("powerZoneBlock").style.display = hr ? "none" : "";
+  $("hrZoneBlock").style.display = hr ? "" : "none";
+  $("resetZonesBtn").textContent = hr ? "Reset to Max HR defaults" : "Reset to FTP defaults";
+  $("sourceTitle").textContent = hr ? "Heart Rate Sensors" : "Power Sources";
+  $("sourceSub").textContent = hr
+    ? "BLE Heart Rate Service devices (chest straps & watches)."
+    : "BLE Cycling Power Service devices (power meters & smart trainers).";
+  $("sourceMiniLabel").textContent = hr ? "Heart Rate Source" : "Power Source";
+  $("navSourceBtn").textContent = hr ? "HR Sensors" : "Power Source";
+  document.querySelectorAll("#sourceSeg button").forEach((b) => {
+    b.classList.toggle("active", (b.dataset.src === "hr") === hr);
+  });
+
   renderZoneEditor();
+  renderHrZoneEditor();
+  renderSimControls();
 }
 
-// ---------------- Zone editor ----------------
+// ---------------- Power zone editor ----------------
 function renderZoneEditor() {
   const el = $("zoneEditor");
   el.innerHTML = "";
+  if (!config.zones) return;
   config.zones.forEach((z, i) => {
-    const row = document.createElement("div");
-    row.className = "zone-item";
-    const maxLabel = z.max < 0 ? "∞" : z.max;
-    row.innerHTML =
-      '<input type="color" class="zone-color" value="' + z.color + '" data-i="' + i + '" data-testid="zone-color-' + i + '" />' +
-      '<div><div class="zlabel">Zone ' + (i + 1) + ' name</div>' +
-        '<input type="text" class="zone-name" value="' + escapeAttr(z.name) + '" data-i="' + i + '" data-testid="zone-name-' + i + '" /></div>' +
-      '<div><div class="zlabel">Min W</div>' +
-        '<input type="number" class="zone-min" value="' + z.min + '" data-i="' + i + '" data-testid="zone-min-' + i + '" /></div>' +
-      '<div class="zmax"><div class="zlabel">Max W</div>' +
-        '<input type="number" value="' + (z.max < 0 ? "" : z.max) + '" disabled placeholder="' + maxLabel + '" /></div>' +
-      '<div class="zone-swatch" style="background:' + z.color + '"></div>';
-    el.appendChild(row);
+    el.appendChild(zoneRow(z, i, "zone", (i < config.zones.length - 1)));
   });
+  bindZoneEditor(el, config.zones);
+}
+
+// ---------------- HR zone editor ----------------
+function renderHrZoneEditor() {
+  const el = $("hrEditor");
+  el.innerHTML = "";
+  if (!config.hrZones) return;
+  config.hrZones.forEach((z, i) => {
+    el.appendChild(zoneRow(z, i, "hr-zone", (i < config.hrZones.length - 1)));
+  });
+  bindZoneEditor(el, config.hrZones);
+}
+
+function zoneRow(z, i, testPrefix, hasMax) {
+  const row = document.createElement("div");
+  row.className = "zone-item";
+  const maxLabel = !hasMax || z.max < 0 ? "∞" : z.max;
+  row.innerHTML =
+    '<input type="color" class="zone-color" value="' + z.color + '" data-i="' + i + '" data-testid="' + testPrefix + '-color-' + i + '" />' +
+    '<div><div class="zlabel">Zone ' + (i + 1) + ' name</div>' +
+      '<input type="text" class="zone-name" value="' + escapeAttr(z.name) + '" data-i="' + i + '" data-testid="' + testPrefix + '-name-' + i + '" /></div>' +
+    '<div><div class="zlabel">Min ' + (testPrefix === "hr-zone" ? "bpm" : "W") + '</div>' +
+      '<input type="number" class="zone-min" value="' + z.min + '" data-i="' + i + '" data-testid="' + testPrefix + '-min-' + i + '" /></div>' +
+    '<div class="zmax"><div class="zlabel">Max ' + (testPrefix === "hr-zone" ? "bpm" : "W") + '</div>' +
+      '<input type="number" value="' + (hasMax && z.max >= 0 ? z.max : "") + '" disabled placeholder="' + maxLabel + '" /></div>' +
+    '<div class="zone-swatch" style="background:' + z.color + '"></div>';
+  return row;
+}
+
+function bindZoneEditor(el, zones) {
   el.querySelectorAll(".zone-color").forEach((c) =>
     c.addEventListener("input", (e) => {
       const i = +e.target.dataset.i;
       e.target.parentElement.querySelector(".zone-swatch").style.background = e.target.value;
-      config.zones[i].color = e.target.value;
+      zones[i].color = e.target.value;
     })
   );
 }
@@ -613,15 +700,32 @@ async function saveZones() {
   toast("Zones saved");
 }
 
+async function saveHrZones() {
+  const zones = config.hrZones.map((z, i) => ({
+    name: $("hrEditor").querySelectorAll(".zone-name")[i].value,
+    min: +$("hrEditor").querySelectorAll(".zone-min")[i].value,
+    color: $("hrEditor").querySelectorAll(".zone-color")[i].value,
+  }));
+  await postConfig({ hrZones: zones });
+  fillForms();
+  toast("HR zones saved");
+}
+
 async function onZoneCountChange() {
   await postConfig({ zoneCount: +$("zoneCountSel").value, ftp: +$("ftpInput").value });
   fillForms();
   toast("Zone model updated");
 }
 async function resetZones() {
-  await postConfig({ zoneCount: +$("zoneCountSel").value, ftp: +$("ftpInput").value });
-  fillForms();
-  toast("Zones reset to FTP defaults");
+  if (isHrMode()) {
+    await postConfig({ hrZonesReset: true });
+    fillForms();
+    toast("HR zones reset to Max HR defaults");
+  } else {
+    await postConfig({ zoneCount: +$("zoneCountSel").value, ftp: +$("ftpInput").value });
+    fillForms();
+    toast("Zones reset to FTP defaults");
+  }
 }
 
 // ---------------- Settings ----------------
@@ -682,13 +786,13 @@ function otaUpload() {
   toast("Uploading firmware…");
 }
 
-// ---------------- Power Source ----------------
+// ---------------- Power / HR Source ----------------
 let deviceTimer = null;
 async function scan() {
   await fetch("/api/scan", { method: "POST" });
   $("scanBtn").textContent = "Scanning…";
   $("scanBtn").disabled = true;
-  toast("Scanning for power sources…");
+  toast("Scanning for " + (isHrMode() ? "heart rate sensors…" : "power sources…"));
   let ticks = 0;
   clearInterval(deviceTimer);
   deviceTimer = setInterval(async () => {
@@ -759,27 +863,77 @@ function initSim() {
     toast(simState.enabled ? "Simulation ON" : "Simulation OFF");
   });
   $("simSlider").addEventListener("input", () => {
-    simState.watts = +$("simSlider").value;
-    $("simVal").textContent = simState.watts;
+    if (isHrMode()) {
+      simState.bpm = +$("simSlider").value;
+      $("simVal").textContent = simState.bpm;
+    } else {
+      simState.watts = +$("simSlider").value;
+      $("simVal").textContent = simState.watts;
+    }
     pushSim();
   });
-  $("simPresets").querySelectorAll("button").forEach((b) =>
-    b.addEventListener("click", () => {
-      simState.watts = +b.dataset.w;
-      $("simSlider").value = simState.watts;
-      $("simVal").textContent = simState.watts;
-      if (!simState.enabled) { simState.enabled = true; $("simToggle").checked = true; $("simSlider").disabled = false; }
-      pushSim();
-    })
-  );
 }
+
+function renderSimControls() {
+  const slider = $("simSlider");
+  if (isHrMode()) {
+    slider.min = 40;
+    slider.max = 220;
+    if (!simState.enabled) simState.bpm = Math.min(220, Math.max(40, simState.bpm || 120));
+    slider.value = simState.bpm;
+    $("simVal").textContent = simState.bpm;
+    // Presets covering all 5 HR zones, derived from the configured boundaries.
+    const mins = (config.hrZones || []).map((z) => z.min);
+    const presets = [];
+    if (mins.length === 5) {
+      presets.push(Math.max(40, mins[0] - 10), mins[0] + 5, mins[1] + 5, mins[2] + 5, mins[3] + 5, mins[4] + 5, (config.hrMax || 190) + 10);
+    }
+    renderSimPresets(presets, true);
+  } else {
+    slider.min = 0;
+    slider.max = 600;
+    if (!simState.enabled) simState.watts = 150;
+    slider.value = simState.watts;
+    $("simVal").textContent = simState.watts;
+    renderSimPresets([0, 50, 100, 150, 200, 250, 300, 400, 500], false);
+  }
+  slider.disabled = !simState.enabled;
+  $("simToggle").checked = simState.enabled;
+}
+
+function renderSimPresets(values, hr) {
+  const box = $("simPresets");
+  box.innerHTML = "";
+  const seen = {};
+  values.forEach((v) => {
+    v = Math.round(v);
+    if (seen[v] || v < (hr ? 40 : 0) || v > (hr ? 220 : 600)) return;
+    seen[v] = true;
+    const b = document.createElement("button");
+    b.textContent = v;
+    b.addEventListener("click", () => {
+      if (hr) simState.bpm = v; else simState.watts = v;
+      if (!simState.enabled) simState.enabled = true;
+      $("simSlider").value = v;
+      $("simVal").textContent = v;
+      $("simSlider").disabled = false;
+      $("simToggle").checked = true;
+      pushSim();
+    });
+    box.appendChild(b);
+  });
+}
+
 let simTimer = null;
 function pushSim() {
   clearTimeout(simTimer);
   simTimer = setTimeout(() => {
+    const body = { enabled: simState.enabled };
+    if (isHrMode()) body.bpm = simState.bpm;
+    else body.watts = simState.watts;
     fetch("/api/simulation", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled: simState.enabled, watts: simState.watts }),
+      body: JSON.stringify(body),
     });
   }, 80);
 }
@@ -792,7 +946,7 @@ function initWs() {
   ws.onclose = () => setTimeout(initWs, 2000);
 }
 const STATE_MAP = {
-  RECEIVING_POWER: { cls: "live", label: "Receiving Power" },
+  RECEIVING_POWER: { cls: "live", label: "Receiving Data" },
   CONNECTED: { cls: "ok", label: "Connected" },
   CONNECTING: { cls: "warn", label: "Connecting" },
   RECONNECTING: { cls: "warn", label: "Reconnecting" },
@@ -811,12 +965,12 @@ function updateLive(t) {
   pill.className = "status-pill " + s.cls;
   $("statusText").textContent = t.sim ? "Simulation" : s.label;
 
-  // Colour glow + brand: must show the SAME zone as the label. t.color is the
-  // interpolated LED gradient, which leads the hysteresis-stabilised zone
-  // number/name by up to one zone. Use the current zone's configured colour so
+  // Colour glow + brand: must show the SAME zone as the label. Use the current
+  // zone's configured colour of the ACTIVE control source so
   // zone number = zone name = displayed colour.
-  const zoneColor = (config && config.zones && t.zone >= 0 && t.zone < config.zones.length)
-    ? config.zones[t.zone].color : t.color;
+  const hr = (t.mode || (config && config.controlSource)) === "hr";
+  const zones = hr ? (config.hrZones || []) : (config.zones || []);
+  const zoneColor = (t.zone >= 0 && t.zone < zones.length) ? zones[t.zone].color : t.color;
   $("powerGlow").style.background = "radial-gradient(circle, " + zoneColor + "cc, transparent 70%)";
   $("brandDot").style.background = zoneColor;
   $("brandDot").style.boxShadow = "0 0 24px " + zoneColor + "88";
@@ -840,8 +994,10 @@ async function init() {
   initWs();
 
   $("ftpInput").addEventListener("change", async () => { await postConfig({ ftp: +$("ftpInput").value }); fillForms(); toast("FTP updated"); });
+  $("hrMaxInput").addEventListener("change", async () => { await postConfig({ hrMax: +$("hrMaxInput").value }); fillForms(); toast("Max HR updated"); });
   $("zoneCountSel").addEventListener("change", onZoneCountChange);
   $("saveZonesBtn").addEventListener("click", saveZones);
+  $("saveHrZonesBtn").addEventListener("click", saveHrZones);
   $("resetZonesBtn").addEventListener("click", resetZones);
   $("saveSettingsBtn").addEventListener("click", saveSettings);
   $("wifiSaveBtn").addEventListener("click", saveWifi);
@@ -852,5 +1008,4 @@ async function init() {
   $("smoothInput").addEventListener("input", () => ($("smoothVal").textContent = $("smoothInput").value));
   $("brightInput").addEventListener("input", () => ($("brightVal").textContent = $("brightInput").value + "%"));
 }
-document.addEventListener("DOMContentLoaded", init);
-)rgbwatt";
+document.addEventListener("DOMContentLoaded", init);)rgbwatt";

@@ -32,7 +32,7 @@
     <!-- Nav -->
     <nav class="nav" id="nav">
       <button class="nav-btn active" data-view="dashboard" data-testid="nav-dashboard">Dashboard</button>
-      <button class="nav-btn" data-view="source" data-testid="nav-source">Power Source</button>
+      <button class="nav-btn" data-view="source" data-testid="nav-source" id="navSourceBtn">Power Source</button>
       <button class="nav-btn" data-view="zones" data-testid="nav-zones">Zones</button>
       <button class="nav-btn" data-view="settings" data-testid="nav-settings">Settings</button>
     </nav>
@@ -43,21 +43,21 @@
         <div class="grid">
           <div class="card power-card" id="powerCard" data-testid="power-card">
             <div class="power-glow" id="powerGlow"></div>
-            <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em>W</em></div>
-            <div class="power-raw">Raw <span id="powerRaw">0</span> W</div>
+            <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em id="powerUnit">W</em></div>
+            <div class="power-raw">Raw <span id="powerRaw">0</span> <span id="powerRawUnit">W</span></div>
             <div class="zone-badge" id="zoneBadge" data-testid="zone-badge">
-              <span id="zoneNum">Z1</span> — <span id="zoneName">Recovery</span>
+              <span id="zoneNum">Z1</span> — <span id="zoneName">—</span>
             </div>
           </div>
 
           <div class="card source-mini" data-testid="source-mini">
-            <div class="card-label">Power Source</div>
+            <div class="card-label" id="sourceMiniLabel">Power Source</div>
             <div class="source-name" id="dashSourceName">—</div>
             <div class="source-state" id="dashSourceState"><span class="pill-dot"></span><span>Disconnected</span></div>
           </div>
 
           <div class="card stat-row" data-testid="stat-row">
-            <div class="stat"><div class="stat-k">FTP</div><div class="stat-v"><span id="statFtp">221</span> W</div></div>
+            <div class="stat"><div class="stat-k" id="statFtpLabel">FTP</div><div class="stat-v"><span id="statFtp">221</span> <span id="statFtpUnit">W</span></div></div>
             <div class="stat"><div class="stat-k">Zones</div><div class="stat-v" id="statZones">7</div></div>
             <div class="stat"><div class="stat-k">Brightness</div><div class="stat-v"><span id="statBright">100</span>%</div></div>
           </div>
@@ -72,25 +72,19 @@
             </div>
             <p class="muted" id="simHint">Test the pipeline without a real device.</p>
             <input type="range" min="0" max="600" value="150" id="simSlider" class="slider" data-testid="sim-slider" disabled />
-            <div class="sim-value"><span id="simVal">150</span> W</div>
-            <div class="sim-presets" id="simPresets">
-              <button data-w="0">0</button><button data-w="50">50</button>
-              <button data-w="100">100</button><button data-w="150">150</button>
-              <button data-w="200">200</button><button data-w="250">250</button>
-              <button data-w="300">300</button><button data-w="400">400</button>
-              <button data-w="500">500</button>
-            </div>
+            <div class="sim-value"><span id="simVal">150</span> <span id="simUnit">W</span></div>
+            <div class="sim-presets" id="simPresets"></div>
           </div>
         </div>
       </section>
 
-      <!-- POWER SOURCE -->
+      <!-- POWER SOURCE / HEART RATE SOURCE (adapts to the control source) -->
       <section class="view" id="view-source">
         <div class="card">
           <div class="card-header">
             <div>
-              <div class="card-title">Power Sources</div>
-              <p class="muted">BLE Cycling Power Service devices (power meters &amp; smart trainers).</p>
+              <div class="card-title" id="sourceTitle">Power Sources</div>
+              <p class="muted" id="sourceSub">BLE Cycling Power Service devices (power meters &amp; smart trainers).</p>
             </div>
             <button class="btn primary" id="scanBtn" data-testid="scan-btn">Scan</button>
           </div>
@@ -104,30 +98,55 @@
       <section class="view" id="view-zones">
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Zone Editor</div>
+            <div class="card-title" id="zoneEditorTitle">Zone Editor</div>
             <button class="btn" id="resetZonesBtn" data-testid="reset-zones-btn">Reset to FTP defaults</button>
           </div>
-          <div class="field-row">
-            <div class="field">
-              <label>FTP (W)</label>
-              <input type="number" id="ftpInput" data-testid="ftp-input" min="50" max="600" />
+
+          <!-- Power zone editor (Power mode only) -->
+          <div id="powerZoneBlock">
+            <div class="field-row">
+              <div class="field">
+                <label>FTP (W)</label>
+                <input type="number" id="ftpInput" data-testid="ftp-input" min="50" max="600" />
+              </div>
+              <div class="field">
+                <label>Zone Count</label>
+                <select id="zoneCountSel" data-testid="zone-count-select">
+                  <option value="5">5 Zones</option>
+                  <option value="6">6 Zones</option>
+                  <option value="7">7 Zones</option>
+                </select>
+              </div>
             </div>
-            <div class="field">
-              <label>Zone Count</label>
-              <select id="zoneCountSel" data-testid="zone-count-select">
-                <option value="5">5 Zones</option>
-                <option value="6">6 Zones</option>
-                <option value="7">7 Zones</option>
-              </select>
-            </div>
+            <div id="zoneEditor" class="zone-editor" data-testid="zone-editor"></div>
+            <button class="btn primary full" id="saveZonesBtn" data-testid="save-zones-btn">Save Zones</button>
           </div>
-          <div id="zoneEditor" class="zone-editor" data-testid="zone-editor"></div>
-          <button class="btn primary full" id="saveZonesBtn" data-testid="save-zones-btn">Save Zones</button>
+
+          <!-- Heart Rate zone editor (Heart Rate mode only) -->
+          <div id="hrZoneBlock" style="display:none">
+            <div class="field-row">
+              <div class="field">
+                <label>Max HR (bpm)</label>
+                <input type="number" id="hrMaxInput" data-testid="hr-max-input" min="100" max="230" />
+              </div>
+            </div>
+            <div id="hrEditor" class="zone-editor" data-testid="hr-zone-editor"></div>
+            <button class="btn primary full" id="saveHrZonesBtn" data-testid="save-hr-zones-btn">Save HR Zones</button>
+          </div>
         </div>
       </section>
 
       <!-- SETTINGS -->
       <section class="view" id="view-settings">
+        <div class="card">
+          <div class="card-title">Control Source</div>
+          <p class="muted">Only one source is active at a time. Switching disconnects the current sensor, stops its scan/reconnect logic and clears its live data.</p>
+          <div class="seg" id="sourceSeg">
+            <button data-src="power" class="active" data-testid="src-power">Power</button>
+            <button data-src="hr" data-testid="src-hr">Heart Rate</button>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title">Power Processing</div>
           <div class="field">
@@ -140,7 +159,7 @@
               <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
             </div>
             <div class="field">
-              <label>Hysteresis (W)</label>
+              <label>Hysteresis (<span id="hysUnit">W</span>)</label>
               <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
             </div>
           </div>

@@ -74,6 +74,15 @@ body {
 }
 .theme-switch button.active { background: var(--accent); color: #fff; }
 
+/* Segmented control (Control Source) */
+.seg { display: flex; gap: 6px; background: var(--bg-elev); border: 1px solid var(--border); padding: 6px; border-radius: 14px; margin-top: 12px; }
+.seg button {
+  flex: 1; border: none; background: transparent; color: var(--muted);
+  padding: 11px 12px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
+  transition: all .2s;
+}
+.seg button.active { background: var(--accent); color: #fff; }
+
 /* Nav */
 .nav {
   display: flex; gap: 6px; margin: 6px 0 20px;

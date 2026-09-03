@@ -4,7 +4,9 @@
 const $ = (id) => document.getElementById(id);
 let config = null;
 let ws = null;
-let simState = { enabled: false, watts: 150 };
+let simState = { enabled: false, watts: 150, bpm: 120 };
+
+function isHrMode() { return !!(config && config.controlSource === "hr"); }
 
 // ---------------- Theme ----------------
 function applyTheme(theme) {
@@ -72,6 +74,21 @@ async function postConfig(patch) {
   return config;
 }
 
+// ---------------- Control source ----------------
+function initSourceSeg() {
+  document.querySelectorAll("#sourceSeg button").forEach((b) => {
+    b.addEventListener("click", async () => {
+      if (b.classList.contains("active")) return;
+      await postConfig({ controlSource: b.dataset.src });
+      // The device disconnected the previous sensor and cleared its state;
+      // reset the local simulation UI to match.
+      simState.enabled = false;
+      fillForms();
+      toast(isHrMode() ? "Switched to Heart Rate mode" : "Switched to Power mode");
+    });
+  });
+}
+
 // ---------------- Populate forms ----------------
 function fillForms() {
   $("ftpInput").value = config.ftp;
@@ -89,36 +106,80 @@ function fillForms() {
   $("autoReconnect").checked = config.autoReconnect;
   $("debugToggle").checked = config.debug;
   $("wifiSsid").value = config.wifiSsid || "";
-  $("statFtp").textContent = config.ftp;
-  $("statZones").textContent = config.zoneCount;
-  $("statBright").textContent = config.brightness;
+  if (config.hrMax) $("hrMaxInput").value = config.hrMax;
+
+  // ---- UI adapts to the active control source ----
+  const hr = isHrMode();
+  $("statFtpLabel").textContent = hr ? "Max HR" : "FTP";
+  $("statFtp").textContent = hr ? config.hrMax : config.ftp;
+  $("statFtpUnit").textContent = hr ? "bpm" : "W";
+  $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
+  $("powerUnit").textContent = hr ? "BPM" : "W";
+  $("powerRawUnit").textContent = hr ? "bpm" : "W";
+  $("simUnit").textContent = hr ? "bpm" : "W";
+  $("hysUnit").textContent = hr ? "bpm" : "W";
+  $("powerZoneBlock").style.display = hr ? "none" : "";
+  $("hrZoneBlock").style.display = hr ? "" : "none";
+  $("resetZonesBtn").textContent = hr ? "Reset to Max HR defaults" : "Reset to FTP defaults";
+  $("sourceTitle").textContent = hr ? "Heart Rate Sensors" : "Power Sources";
+  $("sourceSub").textContent = hr
+    ? "BLE Heart Rate Service devices (chest straps & watches)."
+    : "BLE Cycling Power Service devices (power meters & smart trainers).";
+  $("sourceMiniLabel").textContent = hr ? "Heart Rate Source" : "Power Source";
+  $("navSourceBtn").textContent = hr ? "HR Sensors" : "Power Source";
+  document.querySelectorAll("#sourceSeg button").forEach((b) => {
+    b.classList.toggle("active", (b.dataset.src === "hr") === hr);
+  });
+
   renderZoneEditor();
+  renderHrZoneEditor();
+  renderSimControls();
 }
 
-// ---------------- Zone editor ----------------
+// ---------------- Power zone editor ----------------
 function renderZoneEditor() {
   const el = $("zoneEditor");
   el.innerHTML = "";
+  if (!config.zones) return;
   config.zones.forEach((z, i) => {
-    const row = document.createElement("div");
-    row.className = "zone-item";
-    const maxLabel = z.max < 0 ? "∞" : z.max;
-    row.innerHTML =
-      '<input type="color" class="zone-color" value="' + z.color + '" data-i="' + i + '" data-testid="zone-color-' + i + '" />' +
-      '<div><div class="zlabel">Zone ' + (i + 1) + ' name</div>' +
-        '<input type="text" class="zone-name" value="' + escapeAttr(z.name) + '" data-i="' + i + '" data-testid="zone-name-' + i + '" /></div>' +
-      '<div><div class="zlabel">Min W</div>' +
-        '<input type="number" class="zone-min" value="' + z.min + '" data-i="' + i + '" data-testid="zone-min-' + i + '" /></div>' +
-      '<div class="zmax"><div class="zlabel">Max W</div>' +
-        '<input type="number" value="' + (z.max < 0 ? "" : z.max) + '" disabled placeholder="' + maxLabel + '" /></div>' +
-      '<div class="zone-swatch" style="background:' + z.color + '"></div>';
-    el.appendChild(row);
+    el.appendChild(zoneRow(z, i, "zone", (i < config.zones.length - 1)));
   });
+  bindZoneEditor(el, config.zones);
+}
+
+// ---------------- HR zone editor ----------------
+function renderHrZoneEditor() {
+  const el = $("hrEditor");
+  el.innerHTML = "";
+  if (!config.hrZones) return;
+  config.hrZones.forEach((z, i) => {
+    el.appendChild(zoneRow(z, i, "hr-zone", (i < config.hrZones.length - 1)));
+  });
+  bindZoneEditor(el, config.hrZones);
+}
+
+function zoneRow(z, i, testPrefix, hasMax) {
+  const row = document.createElement("div");
+  row.className = "zone-item";
+  const maxLabel = !hasMax || z.max < 0 ? "∞" : z.max;
+  row.innerHTML =
+    '<input type="color" class="zone-color" value="' + z.color + '" data-i="' + i + '" data-testid="' + testPrefix + '-color-' + i + '" />' +
+    '<div><div class="zlabel">Zone ' + (i + 1) + ' name</div>' +
+      '<input type="text" class="zone-name" value="' + escapeAttr(z.name) + '" data-i="' + i + '" data-testid="' + testPrefix + '-name-' + i + '" /></div>' +
+    '<div><div class="zlabel">Min ' + (testPrefix === "hr-zone" ? "bpm" : "W") + '</div>' +
+      '<input type="number" class="zone-min" value="' + z.min + '" data-i="' + i + '" data-testid="' + testPrefix + '-min-' + i + '" /></div>' +
+    '<div class="zmax"><div class="zlabel">Max ' + (testPrefix === "hr-zone" ? "bpm" : "W") + '</div>' +
+      '<input type="number" value="' + (hasMax && z.max >= 0 ? z.max : "") + '" disabled placeholder="' + maxLabel + '" /></div>' +
+    '<div class="zone-swatch" style="background:' + z.color + '"></div>';
+  return row;
+}
+
+function bindZoneEditor(el, zones) {
   el.querySelectorAll(".zone-color").forEach((c) =>
     c.addEventListener("input", (e) => {
       const i = +e.target.dataset.i;
       e.target.parentElement.querySelector(".zone-swatch").style.background = e.target.value;
-      config.zones[i].color = e.target.value;
+      zones[i].color = e.target.value;
     })
   );
 }
@@ -135,15 +196,32 @@ async function saveZones() {
   toast("Zones saved");
 }
 
+async function saveHrZones() {
+  const zones = config.hrZones.map((z, i) => ({
+    name: $("hrEditor").querySelectorAll(".zone-name")[i].value,
+    min: +$("hrEditor").querySelectorAll(".zone-min")[i].value,
+    color: $("hrEditor").querySelectorAll(".zone-color")[i].value,
+  }));
+  await postConfig({ hrZones: zones });
+  fillForms();
+  toast("HR zones saved");
+}
+
 async function onZoneCountChange() {
   await postConfig({ zoneCount: +$("zoneCountSel").value, ftp: +$("ftpInput").value });
   fillForms();
   toast("Zone model updated");
 }
 async function resetZones() {
-  await postConfig({ zoneCount: +$("zoneCountSel").value, ftp: +$("ftpInput").value });
-  fillForms();
-  toast("Zones reset to FTP defaults");
+  if (isHrMode()) {
+    await postConfig({ hrZonesReset: true });
+    fillForms();
+    toast("HR zones reset to Max HR defaults");
+  } else {
+    await postConfig({ zoneCount: +$("zoneCountSel").value, ftp: +$("ftpInput").value });
+    fillForms();
+    toast("Zones reset to FTP defaults");
+  }
 }
 
 // ---------------- Settings ----------------
@@ -204,13 +282,13 @@ function otaUpload() {
   toast("Uploading firmware…");
 }
 
-// ---------------- Power Source ----------------
+// ---------------- Power / HR Source ----------------
 let deviceTimer = null;
 async function scan() {
   await fetch("/api/scan", { method: "POST" });
   $("scanBtn").textContent = "Scanning…";
   $("scanBtn").disabled = true;
-  toast("Scanning for power sources…");
+  toast("Scanning for " + (isHrMode() ? "heart rate sensors…" : "power sources…"));
   let ticks = 0;
   clearInterval(deviceTimer);
   deviceTimer = setInterval(async () => {
@@ -281,27 +359,77 @@ function initSim() {
     toast(simState.enabled ? "Simulation ON" : "Simulation OFF");
   });
   $("simSlider").addEventListener("input", () => {
-    simState.watts = +$("simSlider").value;
-    $("simVal").textContent = simState.watts;
+    if (isHrMode()) {
+      simState.bpm = +$("simSlider").value;
+      $("simVal").textContent = simState.bpm;
+    } else {
+      simState.watts = +$("simSlider").value;
+      $("simVal").textContent = simState.watts;
+    }
     pushSim();
   });
-  $("simPresets").querySelectorAll("button").forEach((b) =>
-    b.addEventListener("click", () => {
-      simState.watts = +b.dataset.w;
-      $("simSlider").value = simState.watts;
-      $("simVal").textContent = simState.watts;
-      if (!simState.enabled) { simState.enabled = true; $("simToggle").checked = true; $("simSlider").disabled = false; }
-      pushSim();
-    })
-  );
 }
+
+function renderSimControls() {
+  const slider = $("simSlider");
+  if (isHrMode()) {
+    slider.min = 40;
+    slider.max = 220;
+    if (!simState.enabled) simState.bpm = Math.min(220, Math.max(40, simState.bpm || 120));
+    slider.value = simState.bpm;
+    $("simVal").textContent = simState.bpm;
+    // Presets covering all 5 HR zones, derived from the configured boundaries.
+    const mins = (config.hrZones || []).map((z) => z.min);
+    const presets = [];
+    if (mins.length === 5) {
+      presets.push(Math.max(40, mins[0] - 10), mins[0] + 5, mins[1] + 5, mins[2] + 5, mins[3] + 5, mins[4] + 5, (config.hrMax || 190) + 10);
+    }
+    renderSimPresets(presets, true);
+  } else {
+    slider.min = 0;
+    slider.max = 600;
+    if (!simState.enabled) simState.watts = 150;
+    slider.value = simState.watts;
+    $("simVal").textContent = simState.watts;
+    renderSimPresets([0, 50, 100, 150, 200, 250, 300, 400, 500], false);
+  }
+  slider.disabled = !simState.enabled;
+  $("simToggle").checked = simState.enabled;
+}
+
+function renderSimPresets(values, hr) {
+  const box = $("simPresets");
+  box.innerHTML = "";
+  const seen = {};
+  values.forEach((v) => {
+    v = Math.round(v);
+    if (seen[v] || v < (hr ? 40 : 0) || v > (hr ? 220 : 600)) return;
+    seen[v] = true;
+    const b = document.createElement("button");
+    b.textContent = v;
+    b.addEventListener("click", () => {
+      if (hr) simState.bpm = v; else simState.watts = v;
+      if (!simState.enabled) simState.enabled = true;
+      $("simSlider").value = v;
+      $("simVal").textContent = v;
+      $("simSlider").disabled = false;
+      $("simToggle").checked = true;
+      pushSim();
+    });
+    box.appendChild(b);
+  });
+}
+
 let simTimer = null;
 function pushSim() {
   clearTimeout(simTimer);
   simTimer = setTimeout(() => {
+    const body = { enabled: simState.enabled };
+    if (isHrMode()) body.bpm = simState.bpm;
+    else body.watts = simState.watts;
     fetch("/api/simulation", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled: simState.enabled, watts: simState.watts }),
+      body: JSON.stringify(body),
     });
   }, 80);
 }
@@ -314,7 +442,7 @@ function initWs() {
   ws.onclose = () => setTimeout(initWs, 2000);
 }
 const STATE_MAP = {
-  RECEIVING_POWER: { cls: "live", label: "Receiving Power" },
+  RECEIVING_POWER: { cls: "live", label: "Receiving Data" },
   CONNECTED: { cls: "ok", label: "Connected" },
   CONNECTING: { cls: "warn", label: "Connecting" },
   RECONNECTING: { cls: "warn", label: "Reconnecting" },
@@ -333,12 +461,12 @@ function updateLive(t) {
   pill.className = "status-pill " + s.cls;
   $("statusText").textContent = t.sim ? "Simulation" : s.label;
 
-  // Colour glow + brand: must show the SAME zone as the label. t.color is the
-  // interpolated LED gradient, which leads the hysteresis-stabilised zone
-  // number/name by up to one zone. Use the current zone's configured colour so
+  // Colour glow + brand: must show the SAME zone as the label. Use the current
+  // zone's configured colour of the ACTIVE control source so
   // zone number = zone name = displayed colour.
-  const zoneColor = (config && config.zones && t.zone >= 0 && t.zone < config.zones.length)
-    ? config.zones[t.zone].color : t.color;
+  const hr = (t.mode || (config && config.controlSource)) === "hr";
+  const zones = hr ? (config.hrZones || []) : (config.zones || []);
+  const zoneColor = (t.zone >= 0 && t.zone < zones.length) ? zones[t.zone].color : t.color;
   $("powerGlow").style.background = "radial-gradient(circle, " + zoneColor + "cc, transparent 70%)";
   $("brandDot").style.background = zoneColor;
   $("brandDot").style.boxShadow = "0 0 24px " + zoneColor + "88";
@@ -362,8 +490,10 @@ async function init() {
   initWs();
 
   $("ftpInput").addEventListener("change", async () => { await postConfig({ ftp: +$("ftpInput").value }); fillForms(); toast("FTP updated"); });
+  $("hrMaxInput").addEventListener("change", async () => { await postConfig({ hrMax: +$("hrMaxInput").value }); fillForms(); toast("Max HR updated"); });
   $("zoneCountSel").addEventListener("change", onZoneCountChange);
   $("saveZonesBtn").addEventListener("click", saveZones);
+  $("saveHrZonesBtn").addEventListener("click", saveHrZones);
   $("resetZonesBtn").addEventListener("click", resetZones);
   $("saveSettingsBtn").addEventListener("click", saveSettings);
   $("wifiSaveBtn").addEventListener("click", saveWifi);

@@ -19,7 +19,9 @@ void Storage::load(AppConfig &c) {
     _prefs.getBytes(KEY, &tmp, sizeof(AppConfig));
     if (tmp.version == CONFIG_VERSION) {
       c = tmp;
+      if (c.controlSource != SRC_POWER && c.controlSource != SRC_HEART_RATE) c.controlSource = SRC_POWER;
       configSanitizeZones(c);
+      configSanitizeHrZones(c);
       Serial.println("[STORE] Configuration loaded");
     } else {
       Serial.println("[STORE] Config version mismatch, using defaults");
