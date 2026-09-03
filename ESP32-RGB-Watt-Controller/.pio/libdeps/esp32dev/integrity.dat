@@ -1,5 +1,0 @@
-adafruit/Adafruit NeoPixel @ ^1.12.3
-esp32async/AsyncTCP @ ^3.3.2
-bblanchon/ArduinoJson @ ^7.2.0
-h2zero/NimBLE-Arduino @ ^1.4.1
-esp32async/ESPAsyncWebServer @ ^3.6.0
