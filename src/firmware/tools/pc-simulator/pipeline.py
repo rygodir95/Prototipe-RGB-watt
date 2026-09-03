@@ -287,7 +287,23 @@ class AppConfig:
         self.wifi_pass = str(data.get("wifiPass", ""))[:64]
         self.theme = str(data.get("theme", "dark"))[:7]
         self.debug = to_bool(data.get("debug"), True)
+        src = to_int(data.get("controlSource"), SRC_POWER)
+        self.control_source = SRC_HEART_RATE if src == SRC_HEART_RATE else SRC_POWER
+        self.hr_max = constrain(to_int(data.get("hrMax"), 190), 100, 230)
+        hr_zones = data.get("hrZones")
+        if isinstance(hr_zones, list):
+            for i, z in enumerate(hr_zones[:MAX_HR_ZONES]):
+                if not isinstance(z, dict):
+                    continue
+                self.hr_zones[i].name = str(z.get("name", ""))[:23]
+                self.hr_zones[i].min_bpm = to_int(z.get("minBpm"), 0)
+                self.hr_zones[i].r = constrain(to_int(z.get("r")), 0, 255)
+                self.hr_zones[i].g = constrain(to_int(z.get("g")), 0, 255)
+                self.hr_zones[i].b = constrain(to_int(z.get("b")), 0, 255)
+        self.hr_source_addr = str(data.get("hrSourceAddr", ""))[:23]
+        self.hr_source_name = str(data.get("hrSourceName", ""))[:39]
         self.sanitize_zones()
+        self.sanitize_hr_zones()
         return True
 
 
@@ -310,6 +326,7 @@ def rgb_from_hex(hexstr):  # rgbFromHex() - strict (see module docstring)
 
 def build_config_json(cfg):  # buildConfigJson()
     doc = {
+        "controlSource": "hr" if cfg.control_source == SRC_HEART_RATE else "power",
         "ftp": cfg.ftp,
         "smoothing": cfg.smoothing,
         "powerTimeout": cfg.power_timeout_ms,
@@ -336,11 +353,33 @@ def build_config_json(cfg):  # buildConfigJson()
             "max": (cfg.zones[i + 1].min_watts - 1) if i < cfg.zone_count - 1 else -1,
             "color": hex_from_rgb(z.r, z.g, z.b),
         })
+
+    doc["hrMax"]        = cfg.hr_max
+    doc["hrSourceAddr"] = cfg.hr_source_addr
+    doc["hrSourceName"] = cfg.hr_source_name
+
+    doc["hrZones"] = []
+    for i in range(MAX_HR_ZONES):
+        z = cfg.hr_zones[i]
+        doc["hrZones"].append({
+            "name": z.name,
+            "min": z.min_bpm,
+            "max": (cfg.hr_zones[i + 1].min_bpm - 1) if i < MAX_HR_ZONES - 1 else -1,
+            "color": hex_from_rgb(z.r, z.g, z.b),
+        })
     return doc
 
 
 def apply_config_patch(cfg, doc):  # applyConfigPatch()
-    """doc is the parsed JSON body. Mirrors the firmware exactly."""
+    """doc is the parsed JSON body. Mirrors the firmware exactly.
+
+    The control-source switch (which tears down the active BLE module) is
+    performed by the caller BEFORE this runs, mirroring applyConfigPatch()
+    calling setControlSource() first in src/WebInterface.cpp.
+    """
+    if doc.get("controlSource") is not None:
+        cfg.control_source = SRC_HEART_RATE if doc["controlSource"] == "hr" else SRC_POWER
+
     old_ftp = cfg.ftp
     has_zone_count = doc.get("zoneCount") is not None
     has_ftp = doc.get("ftp") is not None
@@ -374,6 +413,30 @@ def apply_config_patch(cfg, doc):  # applyConfigPatch()
                         cfg.zones[i].r, cfg.zones[i].g, cfg.zones[i].b = rgb
             i += 1
         cfg.sanitize_zones()
+
+    # --- Heart Rate configuration (kept separate from Power) ---
+    hr_reset = to_bool(doc.get("hrZonesReset"), False)
+    if doc.get("hrMax") is not None:
+        old_max = cfg.hr_max
+        new_max = constrain(to_int(doc["hrMax"]), 100, 230)
+        if not isinstance(doc.get("hrZones"), list) and not hr_reset:
+            cfg.scale_hr_zones(old_max, new_max)   # rescale custom boundaries
+        cfg.hr_max = new_max
+    if isinstance(doc.get("hrZones"), list):
+        arr = doc["hrZones"]
+        for i, z in enumerate(arr[:MAX_HR_ZONES]):
+            if isinstance(z, dict):
+                if z.get("name") is not None:
+                    cfg.hr_zones[i].name = str(z["name"])[:23]
+                if z.get("min") is not None:
+                    cfg.hr_zones[i].min_bpm = to_int(z["min"])
+                if z.get("color") is not None:
+                    rgb = rgb_from_hex(z["color"])
+                    if rgb is not None:
+                        cfg.hr_zones[i].r, cfg.hr_zones[i].g, cfg.hr_zones[i].b = rgb
+        cfg.sanitize_hr_zones()
+    if hr_reset:
+        cfg.apply_default_hr_zones()
 
     if doc.get("smoothing") is not None:
         cfg.smoothing = constrain(to_int(doc["smoothing"]), 0, 100)
@@ -484,3 +547,52 @@ def color_for(cfg, watts):
     return (_lerp8(cfg.zones[i].r, cfg.zones[i + 1].r, t),
             _lerp8(cfg.zones[i].g, cfg.zones[i + 1].g, t),
             _lerp8(cfg.zones[i].b, cfg.zones[i + 1].b, t))
+
+
+# ---------------------------------------------------------------------------
+# HRZones (src/PowerZones.cpp, HRZones namespace)
+# ---------------------------------------------------------------------------
+
+def hr_zone_index(cfg, bpm, prev_zone, use_hysteresis=True):
+    n = MAX_HR_ZONES
+    z = 0
+    for i in range(n):
+        if bpm >= cfg.hr_zones[i].min_bpm:
+            z = i
+    if use_hysteresis and 0 <= prev_zone < n and z != prev_zone:
+        hys = float(cfg.hysteresis)
+        if z > prev_zone:
+            # moving up: require clearing the entered zone's lower bound by margin
+            if bpm < cfg.hr_zones[z].min_bpm + hys:
+                z = prev_zone
+        else:
+            # moving down: require dropping below current zone's lower bound by margin
+            if bpm > cfg.hr_zones[prev_zone].min_bpm - hys:
+                z = prev_zone
+    return z
+
+
+def hr_color_for(cfg, bpm):
+    n = MAX_HR_ZONES
+    if n <= 0:
+        return 0, 0, 0
+    if bpm <= cfg.hr_zones[0].min_bpm:   # below first boundary -> first colour
+        z = cfg.hr_zones[0]
+        return z.r, z.g, z.b
+    i = 0
+    for k in range(n):
+        if bpm >= cfg.hr_zones[k].min_bpm:
+            i = k
+    if i >= n - 1:                        # last (open-ended) zone: solid colour
+        z = cfg.hr_zones[n - 1]
+        return z.r, z.g, z.b
+    lo = float(cfg.hr_zones[i].min_bpm)
+    hi = float(cfg.hr_zones[i + 1].min_bpm)
+    t = (bpm - lo) / (hi - lo) if hi > lo else 0.0
+    if t < 0:
+        t = 0.0
+    if t > 1:
+        t = 1.0
+    return (_lerp8(cfg.hr_zones[i].r, cfg.hr_zones[i + 1].r, t),
+            _lerp8(cfg.hr_zones[i].g, cfg.hr_zones[i + 1].g, t),
+            _lerp8(cfg.hr_zones[i].b, cfg.hr_zones[i + 1].b, t))
