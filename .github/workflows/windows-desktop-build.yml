@@ -1,0 +1,95 @@
+name: Windows Desktop Build
+
+# Builds the real Windows ZoneGlow.exe on GitHub's windows-latest runner and
+# publishes it as a downloadable workflow artifact. Uses the existing approved
+# desktop architecture (locally staged web UI + localhost shell server);
+# adds no product features.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/windows-desktop
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build:
+    name: Build ZoneGlow.exe (windows-latest)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Rust stable (MSVC toolchain)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build (src-tauri)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/firmware/desktop/src-tauri
+
+      - name: Install desktop npm dependencies
+        working-directory: src/firmware/desktop
+        run: npm install
+
+      - name: Stage web UI (data/web -> src-tauri/generated-web)
+        working-directory: src/firmware/desktop
+        run: npm run sync:web
+
+      - name: Verify staged UI matches data/web (single source of truth)
+        run: diff -r src/firmware/data/web src/firmware/desktop/src-tauri/generated-web
+
+      - name: Desktop architecture checks (CI-compatible)
+        run: |
+          set -e
+          # No iframe in the shell source or the bundled web UI
+          ! grep -rq "<iframe" src/firmware/desktop/src-tauri/src src/firmware/desktop/src-tauri/generated-web
+          # Developer Panel must not be staged into the bundled UI
+          test ! -f src/firmware/desktop/src-tauri/generated-web/devpanel.html
+          # shell_init.js exists in the shell source (runtime injection) but is not part of the staged web UI
+          test -f src/firmware/desktop/src-tauri/src/shell_init.js
+          test ! -f src/firmware/desktop/src-tauri/generated-web/shell_init.js
+          echo "Desktop architecture checks passed"
+
+      - name: Simulator unit tests
+        working-directory: src/firmware/tools/pc-simulator
+        run: python -m unittest discover -s tests -v
+
+      - name: Tauri Windows release build (ZoneGlow.exe)
+        working-directory: src/firmware/desktop
+        run: npm run build
+
+      - name: Report build outputs
+        run: |
+          set -e
+          EXE=src/firmware/desktop/src-tauri/target/release/ZoneGlow.exe
+          test -f "$EXE"
+          ls -l "$EXE"
+          echo "ZoneGlow.exe size: $(wc -c < "$EXE") bytes"
+          ls -lR src/firmware/desktop/src-tauri/target/release/bundle || true
+
+      - name: Upload ZoneGlow-Windows-x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZoneGlow-Windows-x64
+          path: |
+            src/firmware/desktop/src-tauri/target/release/ZoneGlow.exe
+            src/firmware/desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
