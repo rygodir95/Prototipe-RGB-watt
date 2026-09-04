@@ -1,0 +1,1 @@
+/app/.scratch/dbg/target/debug/dbg: /app/.scratch/dbg/src/../../zg-fix/src/firmware/desktop/src-tauri/src/server.rs /app/.scratch/dbg/src/../../zg-fix/src/firmware/desktop/src-tauri/src/transport.rs /app/.scratch/dbg/src/main.rs
