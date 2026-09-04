@@ -530,7 +530,18 @@ async function init() {
   initTheme();
   initNav();
   initSim();
-  await getConfig();
+  // The device config is the source of truth for everything rendered below
+  // (the zone editors included). Retry until it arrives: normally it answers
+  // immediately, and the desktop shell holds the request while the backend is
+  // offline, but a transient failure must never leave the zone editors
+  // permanently empty.
+  for (;;) {
+    try {
+      await getConfig();
+      if (config) break;
+    } catch (e) { /* backend not answering yet */ }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
   // Sync stored theme with device config (device is source of truth on first load if set)
   if (config.theme && !localStorage.getItem("theme")) { localStorage.setItem("theme", config.theme); applyTheme(config.theme); }
   fillForms();

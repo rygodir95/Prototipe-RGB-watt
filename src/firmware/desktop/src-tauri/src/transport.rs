@@ -27,6 +27,11 @@ pub struct SimulatorTransport {
 }
 
 impl SimulatorTransport {
+    /// Direct construction (used by the shell integration tests).
+    pub fn new(host: &str, port: u16) -> Self {
+        Self { host: host.to_string(), port }
+    }
+
     pub fn from_env_or_default() -> Self {
         // Accepts "http://localhost:8080", "localhost:8080", "192.168.1.50" ...
         let raw = std::env::var("ZONEGLOW_BACKEND_URL")

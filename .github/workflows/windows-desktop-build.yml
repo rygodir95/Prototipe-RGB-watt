@@ -72,6 +72,10 @@ jobs:
         working-directory: src/firmware/tools/pc-simulator
         run: python -m unittest discover -s tests -v
 
+      - name: Desktop shell integration tests (Rust)
+        working-directory: src/firmware/desktop/shell-tests
+        run: cargo test
+
       - name: Tauri Windows release build (ZoneGlow.exe)
         working-directory: src/firmware/desktop
         run: npm run build

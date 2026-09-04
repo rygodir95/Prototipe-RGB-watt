@@ -1,0 +1,7 @@
+[package]
+name = "zoneglow-shell-tests"
+version = "0.1.0"
+edition = "2021"
+description = "Integration tests for the ZoneGlow desktop shell server (std only, no extra deps)"
+
+[dependencies]

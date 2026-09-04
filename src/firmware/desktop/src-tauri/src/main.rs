@@ -21,10 +21,16 @@ fn main() {
     tauri::Builder::default()
         .setup(|app| {
             let resource_dir = app.path().resource_dir().ok();
-            let web_root = server::resolve_web_root(resource_dir).expect(
-                "ZoneGlow web UI not staged: run `npm run sync:web` (stages data/web \
-                 into src-tauri/generated-web) before starting the desktop app",
-            );
+            // A missing bundled UI is survivable: the shell server serves a
+            // clear notice page instead of the app silently disappearing.
+            let web_root = server::resolve_web_root(resource_dir);
+            if web_root.is_none() {
+                eprintln!(
+                    "[shell] WARNING: bundled ZoneGlow web UI not found. Install via \
+                     ZoneGlow_x64-setup.exe (it places the bundled `web` folder next to \
+                     ZoneGlow.exe), or run `npm run sync:web` before `npm run dev`."
+                );
+            }
             let backend: Arc<dyn transport::BackendTransport> =
                 Arc::new(transport::SimulatorTransport::from_env_or_default());
             let port = server::spawn(web_root, Arc::clone(&backend))?;

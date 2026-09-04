@@ -42,6 +42,16 @@ pub fn resolve_web_root(resource_dir: Option<PathBuf>) -> Option<PathBuf> {
             return Some(p);
         }
     }
+    // Portable copies (e.g. the install directory copied without the
+    // installer) keep the bundled UI next to the executable.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let p = exe_dir.join("web");
+            if p.join("index.html").is_file() {
+                return Some(p);
+            }
+        }
+    }
     for cand in ["generated-web", "src-tauri/generated-web", "../src-tauri/generated-web"] {
         let p = PathBuf::from(cand);
         if p.join("index.html").is_file() {
@@ -53,7 +63,7 @@ pub fn resolve_web_root(resource_dir: Option<PathBuf>) -> Option<PathBuf> {
 
 /// Bind 127.0.0.1:8787 (falling back through 8797) and serve in the
 /// background. Returns the bound port (the window URL needs it).
-pub fn spawn(web_root: PathBuf, backend: Arc<dyn BackendTransport>) -> std::io::Result<u16> {
+pub fn spawn(web_root: Option<PathBuf>, backend: Arc<dyn BackendTransport>) -> std::io::Result<u16> {
     let (listener, port) = bind_local()?;
     println!(
         "[shell] ZoneGlow UI on http://127.0.0.1:{}/ -> backend: {}",
@@ -89,7 +99,7 @@ fn bind_local() -> std::io::Result<(TcpListener, u16)> {
     ))
 }
 
-fn handle(mut client: TcpStream, web_root: PathBuf, backend: Arc<dyn BackendTransport>) {
+fn handle(mut client: TcpStream, web_root: Option<PathBuf>, backend: Arc<dyn BackendTransport>) {
     let _ = client.set_read_timeout(Some(IO_TIMEOUT));
     let _ = client.set_write_timeout(Some(IO_TIMEOUT));
 
@@ -149,13 +159,24 @@ fn handle(mut client: TcpStream, web_root: PathBuf, backend: Arc<dyn BackendTran
         proxy_api(client, &method, &raw_path, &head, body, backend);
         return;
     }
-    serve_static(client, &path_only, &web_root);
+    serve_static(client, &path_only, web_root.as_deref());
 }
+
+/// Served when the bundled web UI is missing (e.g. ZoneGlow.exe launched
+/// without its resources): a clear notice instead of a silent failure.
+const NOTICE_HTML: &str = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>ZoneGlow</title><style>body{font-family:system-ui,sans-serif;background:#0f1115;color:#e8e8ef;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}div{max-width:560px;padding:32px;line-height:1.5}</style></head><body><div><h1>ZoneGlow</h1><p>The bundled ZoneGlow web UI was not found next to this executable.</p><p>Install using <b>ZoneGlow_x64-setup.exe</b> &mdash; it places the bundled <code>web</code> folder next to <code>ZoneGlow.exe</code>. Running from the repository? Run <code>npm run sync:web</code> before <code>npm run dev</code>.</p></div></body></html>";
 
 /// Serve a file from the staged web UI (index.html for "/"). Path traversal is
 /// rejected; unknown paths 404 (including /dev/ - the Developer Panel is not
 /// part of the desktop app).
-fn serve_static(mut client: TcpStream, path: &str, root: &Path) {
+fn serve_static(mut client: TcpStream, path: &str, root: Option<&Path>) {
+    let root = match root {
+        Some(r) => r,
+        None => {
+            respond(&mut client, 200, "text/html; charset=utf-8", NOTICE_HTML.as_bytes());
+            return;
+        }
+    };
     let rel = if path == "/" || path == "/index.html" {
         "index.html"
     } else {
@@ -306,7 +327,12 @@ fn ws_tunnel(mut client: TcpStream, head: String, early: Vec<u8>, backend: Arc<d
         Ok(s) => s,
         Err(_) => return,
     };
-    if upstream.write_all(head.as_bytes()).is_err()
+    // `head` excludes the terminating blank line (see handle()); the backend
+    // waits for it before answering the upgrade, so it must be re-appended -
+    // without it the handshake never completes and telemetry stays dead.
+    let mut handshake = head;
+    handshake.push_str("\r\n\r\n");
+    if upstream.write_all(handshake.as_bytes()).is_err()
         || (!early.is_empty() && upstream.write_all(&early).is_err())
     {
         let _ = client.write_all(
