@@ -54,7 +54,17 @@ jobs:
         run: npm run sync:web
 
       - name: Verify staged UI matches data/web (single source of truth)
-        run: diff -r src/firmware/data/web src/firmware/desktop/src-tauri/generated-web
+        run: |
+          # default-config.json is GENERATED next to the staged UI (from the
+          # simulator's authoritative defaults), so it is excluded from the
+          # byte-comparison with data/web but must exist.
+          diff -r -x default-config.json src/firmware/data/web src/firmware/desktop/src-tauri/generated-web
+          test -f src/firmware/desktop/src-tauri/generated-web/default-config.json
+
+      - name: Verify bundled default config matches simulator defaults (no drift)
+        run: |
+          python src/firmware/tools/pc-simulator/export_default_config.py "$RUNNER_TEMP/zg-defaults.json"
+          diff "$RUNNER_TEMP/zg-defaults.json" src/firmware/desktop/src-tauri/generated-web/default-config.json
 
       - name: Desktop architecture checks (CI-compatible)
         run: |
@@ -71,6 +81,10 @@ jobs:
       - name: Simulator unit tests
         working-directory: src/firmware/tools/pc-simulator
         run: python -m unittest discover -s tests -v
+
+      - name: Offline-start UI regression tests (jsdom)
+        working-directory: src/firmware/desktop
+        run: npm run test:offline
 
       - name: Desktop shell integration tests (Rust)
         working-directory: src/firmware/desktop/shell-tests

@@ -4,6 +4,7 @@
 const $ = (id) => document.getElementById(id);
 let config = null;
 let ws = null;
+let offlineMode = false;   // showing the bundled defaults while the backend is away
 let simState = { enabled: false, watts: 150, bpm: 120 };
 
 function isHrMode() { return !!(config && config.controlSource === "hr"); }
@@ -27,7 +28,7 @@ function initTheme() {
       const t = b.dataset.themeVal;
       localStorage.setItem("theme", t);
       applyTheme(t);
-      if (config) { config.theme = t; postConfig({ theme: t }); }
+      if (config && !offlineMode) { config.theme = t; postConfig({ theme: t }); }
     });
   });
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
@@ -65,6 +66,12 @@ async function getConfig() {
   return config;
 }
 async function postConfig(patch) {
+  if (offlineMode) {
+    // Nothing can reach the controller right now: refuse the save instead
+    // of falsely confirming it (the save controls are disabled as well).
+    toast("Not connected - start the controller or simulator to save");
+    return config;
+  }
   const r = await fetch("/api/config", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -72,6 +79,80 @@ async function postConfig(patch) {
   });
   config = await r.json();
   return config;
+}
+
+// ---------------- Offline bootstrap (bundled default config) ----------------
+// The desktop shell bundles default-config.json, generated at build time
+// from the SAME authoritative defaults the simulator/firmware use (the
+// staging script runs tools/pc-simulator/export_default_config.py - there is
+// no second, hand-maintained desktop copy). While the backend is away the
+// UI renders these defaults so Zones and Settings are fully populated; the
+// real config replaces them the moment the backend answers.
+
+async function fetchWithTimeout(url, ms) {
+  // The shell holds GET /api/config until the backend appears (long-poll),
+  // so the startup attempt is bounded: on timeout the UI falls back to the
+  // bundled defaults instead of blocking with empty fields.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function bootstrapConfig() {
+  for (;;) {
+    try {
+      const r = await fetchWithTimeout("/api/config", 2500);
+      if (r.ok) { config = await r.json(); return; }
+    } catch (e) { /* backend not answering yet */ }
+    try {
+      const r = await fetch("/default-config.json");
+      if (r.ok) { config = await r.json(); offlineMode = true; return; }
+    } catch (e) { /* no bundled defaults (ESP32 / simulator UI) */ }
+    setPill("DISCONNECTED", "Disconnected");
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
+async function offlineReconnectLoop() {
+  while (offlineMode) {
+    try {
+      // No timeout: the shell long-polls this request, so it resolves the
+      // moment the backend appears; a fast failure simply retries.
+      const r = await fetch("/api/config");
+      if (r.ok) {
+        config = await r.json();       // backend is authoritative now
+        offlineMode = false;
+        setOfflineUi(false);
+        fillForms();
+        toast("Controller connected - configuration loaded");
+        return;
+      }
+    } catch (e) { /* still offline */ }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+}
+
+function setPill(stateKey, label) {
+  const s = STATE_MAP[stateKey] || STATE_MAP.STARTING;
+  $("statusPill").className = "status-pill " + s.cls;
+  $("statusText").textContent = label || s.label;
+}
+
+// Backend-dependent controls: disabled while offline so nothing can pretend
+// to save; re-enabled the moment the backend's real config is in place.
+const BACKEND_CONTROLS = [
+  "saveZonesBtn", "resetZonesBtn", "saveHrZonesBtn", "resetHrZonesBtn",
+  "saveSettingsBtn", "wifiSaveBtn", "otaBtn", "otaFile", "factoryBtn",
+  "scanBtn", "simToggle", "simSlider", "ftpInput", "hrMaxInput",
+  "zoneCountSel", "ledEffectSel",
+];
+function setOfflineUi(off) {
+  BACKEND_CONTROLS.forEach((id) => { const el = $(id); if (el) el.disabled = off; });
+  document.querySelectorAll("#sourceSeg button").forEach((b) => { b.disabled = off; });
 }
 
 // ---------------- Control source (Settings) ----------------
@@ -477,7 +558,7 @@ function initWs() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(proto + "://" + location.host + "/ws");
   ws.onmessage = (e) => { try { updateLive(JSON.parse(e.data)); } catch (_) {} };
-  ws.onclose = () => setTimeout(initWs, 2000);
+  ws.onclose = () => { setPill("DISCONNECTED", "Disconnected"); setTimeout(initWs, 2000); };
 }
 const STATE_MAP = {
   RECEIVING_POWER: { cls: "live", label: "Receiving Data" },
@@ -530,22 +611,22 @@ async function init() {
   initTheme();
   initNav();
   initSim();
-  // The device config is the source of truth for everything rendered below
-  // (the zone editors included). Retry until it arrives: normally it answers
-  // immediately, and the desktop shell holds the request while the backend is
-  // offline, but a transient failure must never leave the zone editors
-  // permanently empty.
-  for (;;) {
-    try {
-      await getConfig();
-      if (config) break;
-    } catch (e) { /* backend not answering yet */ }
-    await new Promise((r) => setTimeout(r, 2000));
-  }
+  // Startup: try the backend config first; when it does not answer promptly
+  // (the desktop shell holds the request while the backend is offline),
+  // bootstrap from the bundled default-config.json so the ENTIRE UI - Zones
+  // and Settings included - renders immediately with the authoritative
+  // defaults. The real config replaces them when the backend appears, with
+  // no page reload.
+  await bootstrapConfig();
   // Sync stored theme with device config (device is source of truth on first load if set)
   if (config.theme && !localStorage.getItem("theme")) { localStorage.setItem("theme", config.theme); applyTheme(config.theme); }
   fillForms();
   initWs();
+  if (offlineMode) {
+    setOfflineUi(true);
+    setPill("DISCONNECTED", "Disconnected");
+    offlineReconnectLoop();
+  }
 
   $("ftpInput").addEventListener("change", async () => { await postConfig({ ftp: +$("ftpInput").value }); fillForms(); toast("FTP updated"); });
   $("hrMaxInput").addEventListener("change", async () => { await postConfig({ hrMax: +$("hrMaxInput").value }); fillForms(); toast("Max HR updated"); });

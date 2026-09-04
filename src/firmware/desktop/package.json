@@ -8,9 +8,11 @@
     "sync:web": "node scripts/sync-web.js",
     "dev": "tauri dev",
     "build": "tauri build",
-    "build:exe": "tauri build --no-bundle"
+    "build:exe": "tauri build --no-bundle",
+    "test:offline": "node tests/offline-ui.test.mjs"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2",
+    "jsdom": "^24.0.0"
   }
 }

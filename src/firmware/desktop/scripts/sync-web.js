@@ -11,6 +11,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 
 const SOURCE = path.resolve(__dirname, "..", "..", "data", "web"); // src/firmware/data/web
 const TARGET = path.resolve(__dirname, "..", "src-tauri", "generated-web");
@@ -37,5 +38,27 @@ if (!files.includes("index.html")) {
   process.exit(1);
 }
 
+// Generate the bundled default config from the AUTHORITATIVE defaults: the
+// simulator's pipeline.py (faithful port of the firmware's Config.cpp /
+// WebInterface.cpp). Staging always regenerates it, so the offline desktop
+// defaults can never drift from the simulator/firmware defaults - there is
+// no hand-maintained desktop copy anywhere.
+const EXPORTER = path.resolve(__dirname, "..", "..", "tools", "pc-simulator", "export_default_config.py");
+const DEFAULTS = path.join(TARGET, "default-config.json");
+let exported = false;
+for (const py of ["python", "python3"]) {
+  const r = spawnSync(py, [EXPORTER, DEFAULTS], { encoding: "utf8" });
+  if (r.status === 0) { exported = true; break; }
+  if (!(r.error && r.error.code === "ENOENT")) {
+    console.error("sync-web: " + py + " failed: " + ((r.stderr || (r.error && r.error.message)) || "unknown error"));
+  }
+}
+if (!exported) {
+  console.error("sync-web: could not generate src-tauri/generated-web/default-config.json.");
+  console.error("sync-web: python is required (runs tools/pc-simulator/export_default_config.py).");
+  process.exit(1);
+}
+
 console.log("sync-web: staged " + files.length + " file(s) data/web -> src-tauri/generated-web:");
 files.forEach((f) => console.log("  - " + f));
+console.log("  - default-config.json (generated from the authoritative simulator/firmware defaults)");

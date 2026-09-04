@@ -110,6 +110,11 @@ fn fixture_web_root() -> PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("index.html"), b"<html><body>ZoneGlow fixture</body></html>").unwrap();
     std::fs::write(dir.join("app.js"), b"console.log('fixture ui');").unwrap();
+    // The bundled default config the offline UI bootstraps from (fixture:
+    // the real file is generated from the simulator's authoritative
+    // defaults at staging time; parity is enforced by CI and by the jsdom
+    // offline-ui regression test).
+    std::fs::write(dir.join("default-config.json"), CONFIG_JSON.as_bytes()).unwrap();
     dir
 }
 
@@ -232,5 +237,44 @@ fn shell_suite() {
         let text = String::from_utf8_lossy(&resp).into_owned();
         assert!(text.contains("200"), "notice page must be served with 200, got: {}", &text[..text.len().min(120)]);
         assert!(text.contains("bundled"), "notice page must explain the missing bundled UI");
+    }
+
+    // 6. Offline startup: the bundled default config is served with NO
+    //    backend, /api/config stays held, and the backend's real config
+    //    takes over once the backend appears (the frontend swap from the
+    //    bundled defaults to the backend config is covered end-to-end by
+    //    the jsdom offline-ui regression test).
+    {
+        let probe = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let dead_port = probe.local_addr().unwrap().port();
+        drop(probe);
+        let shell_port = spawn_shell(Some(web_root.clone()), dead_port);
+
+        // The bundled defaults are a static file: they must load immediately,
+        // with no backend, so the offline UI has a complete config to render.
+        let (resp6, timed_out6) = shell_request(
+            shell_port,
+            "GET /default-config.json HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+            Duration::from_secs(5),
+        );
+        assert!(!timed_out6, "default-config.json request timed out - the offline UI has no config to render");
+        let body6 = body_of(&resp6);
+        assert_eq!(body6, CONFIG_JSON, "bundled default config must be served verbatim while the backend is offline");
+        assert!(body6.contains(r#""ftp":221"#), "default FTP missing from the bundled config");
+        assert!(body6.contains(r#""hrMax":190"#), "default Max HR missing from the bundled config");
+        assert!(body6.contains("Neuromuscular"), "default power zones missing from the bundled config");
+        assert!(body6.contains(r#""max":190"#), "default HR zone 5 boundary missing from the bundled config");
+
+        // /api/config must stay held while offline: the UI must never
+        // mistake the offline state for a backend answer.
+        let (held6, timed_out6b) = shell_request(shell_port, GET_CONFIG, Duration::from_millis(1000));
+        assert!(timed_out6b, "config must stay held while the backend is offline");
+        assert!(held6.is_empty(), "no partial response expected while offline");
+
+        // Backend appears: the request resolves with the BACKEND's config.
+        let _ = start_mock_backend(dead_port);
+        let (resp6b, timed_out6c) = shell_request(shell_port, GET_CONFIG, Duration::from_secs(5));
+        assert!(!timed_out6c, "config request did not recover after the backend appeared");
+        assert_eq!(body_of(&resp6b), CONFIG_JSON, "the backend's authoritative config must take over from the offline defaults");
     }
 }
