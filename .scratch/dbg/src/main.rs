@@ -15,7 +15,7 @@ fn serve_mock(mut stream: TcpStream) {
     let head_end = loop {
         if let Some(p) = buf.windows(4).position(|w| w == b"\r\n\r\n") { break p; }
         let mut chunk = [0u8; 2048];
-        match stream.read(&mut chunk) { Ok(0) => return, Ok(n) => buf.extend_from_slice(&chunk[..n]), Err(e) => { eprintln!("[mock] read err: {e}"); return; } }
+        match stream.read(&mut chunk) { Ok(0) => { eprintln!("[mock] EOF, total={}", buf.len()); return; }, Ok(n) => { buf.extend_from_slice(&chunk[..n]); eprintln!("[mock] read +{} (total {}): {:?}", n, buf.len(), String::from_utf8_lossy(&buf)); }, Err(e) => { eprintln!("[mock] read err: {e}"); return; } }
     };
     let head = String::from_utf8_lossy(&buf[..head_end]).into_owned();
     eprintln!("[mock] got head ({} bytes): {:?}", head.len(), head);
