@@ -1,6 +1,7 @@
 {
   "type": "github",
   "scopes": [
-    "public_repo"
+    "public_repo",
+    "workflow"
   ]
 }
