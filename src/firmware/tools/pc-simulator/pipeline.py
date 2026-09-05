@@ -10,6 +10,9 @@ Every class/function below mirrors a specific piece of the firmware
     apply_config_patch <-> applyConfigPatch() in src/WebInterface.cpp
     build_config_json <-> buildConfigJson() in src/WebInterface.cpp
     storage to/from JSON <-> src/Storage.cpp (NVS blob -> JSON file)
+    LightingState / LightingOutput / LocalLedOutput / LightingOutputManager
+                     <-> include/LightingOutput.h + LocalLedOutput.h +
+                         LightingOutputManager.h (hub architecture)
 
 Constants, clamps, rounding and the order of operations match the firmware
 exactly.  Known deviations (both documented in the README):
@@ -19,6 +22,7 @@ No zone/RGB/smoothing behaviour was changed - this is a port, not a redesign.
 """
 
 import math
+import time
 
 MIN_ZONES = 5
 MAX_ZONES = 7
@@ -607,3 +611,228 @@ def hr_color_for(cfg, bpm):
     return (_lerp8(cfg.hr_zones[i].r, cfg.hr_zones[i + 1].r, t),
             _lerp8(cfg.hr_zones[i].g, cfg.hr_zones[i + 1].g, t),
             _lerp8(cfg.hr_zones[i].b, cfg.hr_zones[i + 1].b, t))
+
+
+# ---------------------------------------------------------------------------
+# Lighting output architecture (hub-ready)
+#   LightingState        <-> include/LightingOutput.h
+#   LightingOutput      <-> LightingOutput (interface)
+#   LocalLedOutput       <-> src/LocalLedOutput.cpp (LEDController fade model)
+#   LightingOutputManager<-> src/LightingOutputManager.cpp
+# The Zone Engine (Simulator._tick_pipeline) computes a LightingState and hands
+# it to the manager, which distributes it to all registered outputs. No zone /
+# RGB / smoothing behaviour changed - the pipeline now publishes state instead
+# of driving the LED preview fields directly.
+# ---------------------------------------------------------------------------
+
+LIGHTING_OUTPUT_MAX = 4   # local strip today + future light nodes
+
+
+class LightingState(object):
+    """Transport-independent lighting state (struct LightingState)."""
+
+    __slots__ = ("active", "r", "g", "b", "brightness", "effect",
+                 "zone", "control_source", "version", "timestamp")
+
+    def __init__(self, active=False, r=0, g=0, b=0, brightness=100,
+                 effect=EFFECT_SOLID, zone=-1, control_source=SRC_POWER,
+                 version=0, timestamp=0.0):
+        self.active = active
+        self.r, self.g, self.b = r, g, b
+        self.brightness = brightness
+        self.effect = effect
+        self.zone = zone
+        self.control_source = control_source
+        self.version = version
+        self.timestamp = timestamp
+
+    def copy(self):
+        return LightingState(self.active, self.r, self.g, self.b,
+                             self.brightness, self.effect, self.zone,
+                             self.control_source, self.version,
+                             self.timestamp)
+
+    def fields(self):
+        """Comparable payload: everything except version/timestamp."""
+        return (self.active, self.r, self.g, self.b, self.brightness,
+                self.effect, self.zone, self.control_source)
+
+    def __eq__(self, other):
+        if not isinstance(other, LightingState):
+            return NotImplemented
+        return self.fields() == other.fields()
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        return result if result is NotImplemented else not result
+
+    def __repr__(self):
+        return ("LightingState(active=%r, rgb=(%d,%d,%d), brightness=%d, "
+                "effect=%d, zone=%d, control_source=%d, version=%d)"
+                % (self.active, self.r, self.g, self.b, self.brightness,
+                   self.effect, self.zone, self.control_source,
+                   self.version))
+
+
+class LightingDevice(object):
+    """Status descriptor for one registered output (struct LightingDevice)."""
+
+    __slots__ = ("id", "name", "type", "enabled", "available", "local")
+
+    def __init__(self, out):
+        self.id = out.id()
+        self.name = out.name()
+        self.type = "local-led" if out.is_local() else "remote-node"
+        self.enabled = out.is_enabled()
+        self.available = out.is_available()
+        self.local = out.is_local()
+
+
+class LightingOutput(object):
+    """Interface for lighting targets (class LightingOutput)."""
+
+    def id(self):
+        raise NotImplementedError
+
+    def name(self):
+        raise NotImplementedError
+
+    def is_local(self):
+        raise NotImplementedError
+
+    def is_available(self):
+        raise NotImplementedError
+
+    def is_enabled(self):
+        raise NotImplementedError
+
+    def set_enabled(self, on):
+        raise NotImplementedError
+
+    def apply(self, state):
+        raise NotImplementedError
+
+    def update(self, now, dt):
+        raise NotImplementedError
+
+
+class LocalLedOutput(LightingOutput):
+    """Hub-local output: the LEDController.cpp fade model as a preview.
+
+    Identical arithmetic to the former inline Simulator fade fields: fade
+    moves towards 1.0/0.0 by dt/0.6 per tick (~600 ms full fade)."""
+
+    def __init__(self):
+        self.ok = True                # virtual hardware always initialises
+        self.enabled = True
+        self.fade = 0.0
+        self._fade_target = 0.0
+        self.r = self.g = self.b = 0
+        self.brightness = 100
+        self.effect = EFFECT_SOLID
+
+    def id(self):
+        return "local-led"
+
+    def name(self):
+        return "Hub LED Strip"
+
+    def is_local(self):
+        return True
+
+    def is_available(self):
+        return self.ok
+
+    def is_enabled(self):
+        return self.enabled
+
+    def set_enabled(self, on):
+        self.enabled = on
+        if not on:
+            self._fade_target = 0.0
+
+    def apply(self, state):
+        self.r, self.g, self.b = state.r, state.g, state.b
+        self.brightness = state.brightness
+        self.effect = state.effect
+        self._fade_target = 1.0 if state.active else 0.0
+
+    def update(self, now, dt):
+        step = dt / 0.6
+        if self.fade < self._fade_target:
+            self.fade = min(self._fade_target, self.fade + step)
+        elif self.fade > self._fade_target:
+            self.fade = max(self._fade_target, self.fade - step)
+
+    def display(self):
+        """Preview pixels: zone colour scaled by brightness and fade."""
+        base = (self.brightness / 100.0) * self.fade
+        return (lround(self.r * base), lround(self.g * base),
+                lround(self.b * base))
+
+
+class LightingOutputManager(object):
+    """Distributes the calculated LightingState to all registered outputs
+    (class LightingOutputManager). The Zone Engine talks ONLY to this."""
+
+    def __init__(self):
+        self._outputs = []
+        self._state = LightingState()
+
+    # -- registration --------------------------------------------------------
+    def register_output(self, out):
+        if out is None or len(self._outputs) >= LIGHTING_OUTPUT_MAX:
+            return False
+        if self.find(out.id()) is not None:
+            return False
+        self._outputs.append(out)
+        out.apply(self._state)      # bring the new output up to date
+        return True
+
+    def unregister_output(self, out_id):
+        before = len(self._outputs)
+        self._outputs = [o for o in self._outputs if o.id() != out_id]
+        return len(self._outputs) < before
+
+    def find(self, out_id):
+        for o in self._outputs:
+            if o.id() == out_id:
+                return o
+        return None
+
+    def count(self):
+        return len(self._outputs)
+
+    # -- state distribution --------------------------------------------------
+    def apply_state(self, state):
+        self._state = state.copy()
+        self._distribute()
+
+    def apply_config(self, brightness, effect):
+        self._state.brightness = brightness
+        self._state.effect = effect
+        self._distribute()
+
+    def clear_active(self):
+        self._state.active = False
+        self._distribute()
+
+    @property
+    def state(self):
+        """Snapshot of the current distributed state (a copy)."""
+        return self._state.copy()
+
+    def _distribute(self):
+        self._state.version += 1
+        self._state.timestamp = time.time()
+        for o in self._outputs:
+            if o.is_enabled():
+                o.apply(self._state)
+
+    # -- lifecycle / status ----------------------------------------------------
+    def update(self, now, dt):
+        for o in self._outputs:
+            o.update(now, dt)
+
+    def status(self):
+        return [LightingDevice(o) for o in self._outputs]

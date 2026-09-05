@@ -15,6 +15,7 @@ public:
   void setActive(bool active);   // controls fade target (1=on, 0=off)
   void update();                 // non-blocking: advances fade + refreshes
   void getColor(uint8_t &r, uint8_t &g, uint8_t &b) const { r = _r; g = _g; b = _b; }
+  bool isOk() const { return _ok; }   // hardware initialised (LightingOutput::isAvailable)
 
 private:
   void rebuild();

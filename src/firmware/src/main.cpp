@@ -7,7 +7,9 @@
 #include "Storage.h"
 #include "PowerProcessor.h"
 #include "PowerZones.h"
-#include "LEDController.h"
+#include "LightingOutput.h"
+#include "LocalLedOutput.h"
+#include "LightingOutputManager.h"
 #include "BLEPower.h"
 #include "HRSensor.h"
 #include "Simulation.h"
@@ -17,9 +19,10 @@
 #include "Log.h"
 
 // ---- Global subsystems ------------------------------------------------------
-Storage        storage;
-LEDController  leds;
-PowerProcessor processor;
+Storage               storage;
+LocalLedOutput        localLed;    // hub-local strip (implements LightingOutput)
+LightingOutputManager lighting;   // distributes state to all registered outputs
+PowerProcessor        processor;
 BLEPower       ble;
 HRSensor       hrBle;
 Simulation     sim;
@@ -37,9 +40,8 @@ static uint32_t s_lastDebug    = 0;
 void applyRuntimeConfig() {
   g_logEnabled = g_config.debug;
   processor.setSmoothing(g_config.smoothing);
-  leds.reconfigure(g_config.ledPin, g_config.ledCount, g_config.ledType);
-  leds.setBrightnessPct(g_config.brightness);
-  leds.setEffect(g_config.ledEffect);
+  localLed.reconfigure(g_config.ledPin, g_config.ledCount, g_config.ledType);
+  lighting.applyConfig(g_config.brightness, g_config.ledEffect);
   ble.setAutoReconnect(g_config.autoReconnect);
   hrBle.setAutoReconnect(g_config.autoReconnect);
 }
@@ -69,7 +71,7 @@ void setControlSource(uint8_t src) {
   g_tel.r = 0; g_tel.g = 0; g_tel.b = 0;
   g_tel.hasData = false;
   g_tel.sourceName[0] = '\0';
-  leds.setActive(false);
+  lighting.clearActive();
 
   // 3. Activate only the selected source and persist the mode.
   g_config.controlSource = src;
@@ -177,8 +179,16 @@ static void processPipeline() {
     g_tel.zone = zone;
     g_tel.r = r; g_tel.g = g; g_tel.b = b;
 
-    leds.setColor(r, g, b);
-    leds.setActive(true);
+    // Publish the zone result to every registered lighting output (hub
+    // architecture): the local strip today, remote Light Nodes later.
+    LightingState st = lighting.state();
+    st.active        = true;
+    st.r             = r;
+    st.g             = g;
+    st.b             = b;
+    st.zone          = (int8_t)zone;
+    st.controlSource = g_config.controlSource;
+    lighting.applyState(st);
 
     bool receiving = sim.enabled() || (hr ? hrBle.isConnected() : ble.isConnected());
     if (receiving) g_tel.state = DeviceState::RECEIVING_POWER;
@@ -196,7 +206,7 @@ static void processPipeline() {
     }
   } else {
     // No fresh data -> fade LEDs out; keep last smoothed for display briefly.
-    leds.setActive(false);
+    lighting.clearActive();
     if (hr) {
       g_tel.rawBpm = 0;
       if (hrBle.isConnected() && g_tel.state == DeviceState::RECEIVING_POWER) g_tel.state = DeviceState::CONNECTED;
@@ -222,11 +232,12 @@ void setup() {
   g_logEnabled = g_config.debug;
   g_tel.controlSource = g_config.controlSource;
 
-  if (!leds.begin(g_config.ledPin, g_config.ledCount, g_config.ledType, g_config.brightness)) {
+  lighting.registerOutput(&localLed);
+  if (!localLed.begin(g_config.ledPin, g_config.ledCount, g_config.ledType, g_config.brightness)) {
     Serial.println("[RGB] WARNING: LED init failed");
     g_tel.state = DeviceState::ERROR;
   }
-  leds.setEffect(g_config.ledEffect);
+  lighting.applyConfig(g_config.brightness, g_config.ledEffect);
   processor.setSmoothing(g_config.smoothing);
 
   setupWifi();
@@ -267,7 +278,7 @@ void loop() {
     processPipeline();
   }
 
-  leds.update();
+  lighting.update();
   web.loop();
 
   if (s_rebootAt && millis() >= s_rebootAt) {

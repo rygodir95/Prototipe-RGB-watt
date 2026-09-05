@@ -127,9 +127,13 @@ class Simulator:
         self.hr_sending = True       # strap notifications on/off
         self.base_bpm = 120.0         # bpm the virtual strap reports
 
-        # LED preview (fade from LEDController.cpp, scaled by brightness)
-        self.fade = 0.0
-        self._fade_target = 0.0
+        # Lighting outputs (LightingOutputManager hub architecture): the
+        # local LED preview is a registered LightingOutput, exactly like the
+        # firmware's LocalLedOutput. Remote light nodes register here later.
+        self.local_led = fw.LocalLedOutput()
+        self.lighting = fw.LightingOutputManager()
+        self.lighting.register_output(self.local_led)
+        self.lighting.apply_config(self.cfg.brightness, self.cfg.led_effect)
 
         # Pipeline state
         self.processor = fw.PowerProcessor()
@@ -194,6 +198,7 @@ class Simulator:
         self.cfg = fw.AppConfig()
         self.save()
         self.processor.set_smoothing(self.cfg.smoothing)
+        self.lighting.apply_config(self.cfg.brightness, self.cfg.led_effect)
 
     # ---- telemetry JSON (broadcastTelemetry) ----------------------------
 
@@ -308,7 +313,7 @@ class Simulator:
         t["r"] = t["g"] = t["b"] = 0
         t["hasData"] = False
         t["sourceName"] = ""
-        self._fade_target = 0.0
+        self.lighting.clear_active()
 
         # 3. Activate only the selected source and persist the mode.
         self.cfg.control_source = src
@@ -590,7 +595,15 @@ class Simulator:
                 unit = "W"
             self.tel["zone"] = zone
             self.tel["r"], self.tel["g"], self.tel["b"] = r, g, b
-            self._fade_target = 1.0
+            # Publish the zone result to all registered lighting outputs
+            # (LightingOutputManager). Mirrors main.cpp processPipeline().
+            st = self.lighting.state
+            st.active = True
+            st.r, st.g, st.b = r, g, b
+            st.zone = zone
+            st.control_source = (fw.SRC_HEART_RATE if hr
+                                 else fw.SRC_POWER)
+            self.lighting.apply_state(st)
 
             if self.sim_enabled or connected:
                 self.set_state("RECEIVING_POWER")
@@ -614,7 +627,7 @@ class Simulator:
                             fw.lround(smoothed), unit))
         else:
             # No fresh data -> fade LEDs out; keep last smoothed for display.
-            self._fade_target = 0.0
+            self.lighting.clear_active()
             if hr:
                 self.tel["rawBpm"] = 0.0
             else:
@@ -628,12 +641,9 @@ class Simulator:
 
         self._had_data = have_data
 
-        # LED fade (~600 ms full fade, LEDController.cpp)
-        step = dt / 0.6
-        if self.fade < self._fade_target:
-            self.fade = min(self._fade_target, self.fade + step)
-        elif self.fade > self._fade_target:
-            self.fade = max(self._fade_target, self.fade - step)
+        # Refresh every registered lighting output (fade lives in
+        # LocalLedOutput now: ~600 ms full fade, like LEDController.cpp).
+        self.lighting.update(now, dt)
 
     # ---- WebSocket ---------------------------------------------------------
 
@@ -683,7 +693,8 @@ class Simulator:
 
     def status_json(self):
         eff = self.power_value(time.time())
-        base = (self.cfg.brightness / 100.0) * self.fade
+        # Fade lives in the registered LocalLedOutput (manager-driven).
+        base = (self.cfg.brightness / 100.0) * self.local_led.fade
         hr_mode = self.mode() == "hr"
         saved_addr = self.cfg.hr_source_addr if hr_mode else self.cfg.source_addr
         return {
@@ -708,7 +719,7 @@ class Simulator:
                 "displayR": fw.lround(self.tel["r"] * base),
                 "displayG": fw.lround(self.tel["g"] * base),
                 "displayB": fw.lround(self.tel["b"] * base),
-                "ledFade": round(self.fade, 2),
+                "ledFade": round(self.local_led.fade, 2),
                 "source": self.tel["sourceName"],
             },
             "power": {
@@ -1089,6 +1100,8 @@ class Handler(BaseHTTPRequestHandler):
                 fw.apply_config_patch(sim.cfg, doc)
                 sim.save()
                 sim.processor.set_smoothing(sim.cfg.smoothing)
+                sim.lighting.apply_config(sim.cfg.brightness,
+                                          sim.cfg.led_effect)
                 sim.log("config", "configuration updated (%s)" %
                         ", ".join(sorted(doc.keys())) if doc else "empty patch")
                 self._json(200, fw.build_config_json(sim.cfg))
