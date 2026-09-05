@@ -93,5 +93,7 @@ var ZoneGlowTransport = (function () {
   };
 })();
 
+/* global module */   // only present under Node (smoke tests), never in the browser
+
 // Node export: lets the shell logic be smoke-tested without a browser.
 if (typeof module !== "undefined" && module.exports) module.exports = ZoneGlowTransport;
