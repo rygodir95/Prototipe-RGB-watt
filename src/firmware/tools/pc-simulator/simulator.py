@@ -1354,12 +1354,28 @@ class Handler(BaseHTTPRequestHandler):
 
 # ---------------------------------------------------------------------------
 
+def _lan_ip():
+    """Best-effort LAN IPv4 of this PC (None if unavailable)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("10.255.255.255", 1))   # no traffic sent; picks a route
+            return s.getsockname()[0]
+        finally:
+            s.close()
+    except OSError:
+        return None
+
+
 def main():
     global SIM
     ap = argparse.ArgumentParser(
         description="PC simulator for the ESP32 RGB Watt Controller (testing tool)")
     ap.add_argument("--port", type=int, default=8080)
-    ap.add_argument("--host", default="127.0.0.1")
+    # Bind to 0.0.0.0 so the Android Emulator (10.0.2.2) and LAN clients
+    # (phone/desktop shell on the same network) can reach the simulator.
+    # Override with --host 127.0.0.1 to restore local-only access.
+    ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--config", default=str(CFG_PATH))
     args = ap.parse_args()
@@ -1382,11 +1398,16 @@ def main():
     server.daemon_threads = True
 
     url = "http://localhost:%d/" % args.port
+    lan_ip = _lan_ip()
     print("=" * 60, flush=True)
     print(" RGB Watt Controller - PC SIMULATOR (%s)" % SIM_VERSION, flush=True)
     print(" TESTING TOOL ONLY - not part of the firmware build", flush=True)
     print("=" * 60, flush=True)
-    print(" Existing web GUI : %s" % url, flush=True)
+    print(" Listening on     : %s:%d" % (args.host, args.port), flush=True)
+    print(" Local PC URL     : %s" % url, flush=True)
+    print(" Android Emulator : http://10.0.2.2:%d/" % args.port, flush=True)
+    if lan_ip:
+        print(" LAN access       : http://%s:%d/" % (lan_ip, args.port), flush=True)
     print(" Developer panel  : %sdev/" % url, flush=True)
     print(" Config storage   : %s" % args.config, flush=True)
     print(" Stop with Ctrl+C or by closing this window.", flush=True)
