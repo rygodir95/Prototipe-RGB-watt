@@ -32,7 +32,12 @@
   var missedProbes = 0;
   var probing = false;
 
+  function log(msg) {
+    try { console.log("[ZoneGlow][shell] " + msg); } catch (e) {}
+  }
+
   function setState(state, url) {
+    log("state -> " + state + " (hub: " + url + ")");
     document.body.dataset.state = state;   // connected|connecting|disconnected|reconnecting
     STATUS_TEXT.textContent =
       state === "connected" ? "Connected" :
@@ -62,6 +67,12 @@
     }
   }
 
+  // WebView load diagnostics (iframe navigation is not CORS-restricted;
+  // this confirms the Hub UI actually rendered in the app view).
+  UI_FRAME.addEventListener("load", function () {
+    log("hub UI loaded in webview from " + uiLoadedFor);
+  });
+
   function tick() {
     if (probing) return;
     probing = true;
@@ -70,16 +81,16 @@
     ZoneGlowTransport.probe(url)
       .then(function () {
         missedProbes = 0;
-        if (!everConnected) {
-          everConnected = true;
-          ZoneGlowTransport.setUrl(url);   // remember last successful Hub
-        }
+        everConnected = true;
+        ZoneGlowTransport.setUrl(url);   // keep last successfully connected Hub
         showUi(url);
         setState("connected", url);
         probing = false;
       })
-      .catch(function () {
+      .catch(function (err) {
         missedProbes++;
+        log("probe failed (" + missedProbes + "/" + MAX_MISSED_PROBES +
+          " missed): " + (err && err.message ? err.message : err));
         if (everConnected && missedProbes < MAX_MISSED_PROBES) {
           setState("reconnecting", url);   // brief hiccup: keep the UI up
           probing = false;

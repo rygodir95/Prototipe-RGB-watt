@@ -132,6 +132,30 @@ Hubs on a LAN use plain `http://` and `ws://`. Two pieces make that work:
    is acceptable for the PoC. For a production release, restrict the config to
    your known Hub addresses.
 
+## Connection probe (WebView vs. browser)
+
+The shell page itself is served by Capacitor from the origin `http://localhost`,
+so a plain `fetch()` from the shell to the Hub (e.g. `http://10.0.2.2:8080/api/info`)
+is a **cross-origin** request. The Hub sends no CORS headers (and must not need
+to), so the WebView blocks the response and `fetch()` rejects with
+`Failed to fetch` even though the Hub is reachable — the app would stay
+"Disconnected" forever. (Opening the same URL in Chrome works because there the
+UI is same-origin.) The probe therefore runs through the built-in native
+**CapacitorHttp** plugin inside the Android WebView (native HTTP, no CORS,
+cleartext governed by the network security config). Plain `fetch()` is only a
+fallback for developing the shell in a desktop browser.
+
+Every probe logs `[ZoneGlow][transport]` / `[ZoneGlow][shell]` lines (requested
+URL, HTTP status, response body, network/timeout errors, state transitions).
+View them with `adb logcat -s chromium` or the Chrome remote DevTools
+(`chrome://inspect`).
+
+Shell transport smoke tests (Node, no dependencies):
+
+```bash
+node mobile/tests/test-transport.cjs
+```
+
 ## Troubleshooting
 
 - **"Disconnected" although the simulator runs:** check the address
