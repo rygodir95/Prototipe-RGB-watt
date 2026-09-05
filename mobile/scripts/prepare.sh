@@ -1,1 +1,24 @@
-IyEvdXNyL2Jpbi9lbnYgYmFzaAojIFpvbmVHbG93IG1vYmlsZSAtIG9uZS1zaG90IHByb2plY3QgcHJlcGFyYXRpb24uCiMKIyBJbnN0YWxscyBDYXBhY2l0b3IgZGVwZW5kZW5jaWVzLCBnZW5lcmF0ZXMvcmVmcmVzaGVzIHRoZSBBbmRyb2lkIHBsYXRmb3JtCiMgYW5kIHN5bmNzIHRoZSBzaGVsbCB3ZWIgYXNzZXRzICh3d3cvKSBpbnRvIGl0LgojCiMgVXNhZ2U6ICBtb2JpbGUvc2NyaXB0cy9wcmVwYXJlLnNoICAgICAgICAgIChmcm9tIHRoZSByZXBvc2l0b3J5IHJvb3QpCiMgUmVxdWlyZXM6IE5vZGUuanMgMTgrIChBbmRyb2lkIFN0dWRpbyBvbmx5IG5lZWRlZCBmb3IgdGhlIGFjdHVhbCBBUEsgYnVpbGQpCgpzZXQgLWV1byBwaXBlZmFpbAoKUk9PVD0iJChjZCAiJChkaXJuYW1lICIke0JBU0hfU09VUkNFWzBdfSIpLy4uLy4uIiAmJiBwd2QpIgpDQVA9IiRST09UL21vYmlsZS9jYXBhY2l0b3IiCgpjZCAiJENBUCIKbnBtIGluc3RhbGwKCmlmIFsgISAtZCBhbmRyb2lkIF07IHRoZW4KICBucHggY2FwIGFkZCBhbmRyb2lkCmZpCgpucHggY2FwIHN5bmMgYW5kcm9pZAplY2hvICJEb25lLiBPcGVuIG1vYmlsZS9jYXBhY2l0b3IvYW5kcm9pZCBpbiBBbmRyb2lkIFN0dWRpbywgb3IgcnVuOiIKZWNobyAiICBjZCBtb2JpbGUvY2FwYWNpdG9yL2FuZHJvaWQgJiYgLi9ncmFkbGV3IGFzc2VtYmxlRGVidWci
+#!/usr/bin/env bash
+# ZoneGlow mobile - one-shot project preparation.
+#
+# Installs Capacitor dependencies, generates/refreshes the Android platform
+# and syncs the shell web assets (www/) into it.
+#
+# Usage:  mobile/scripts/prepare.sh          (from the repository root)
+# Requires: Node.js 18+ (Android Studio only needed for the actual APK build)
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CAP="$ROOT/mobile/capacitor"
+
+cd "$CAP"
+npm install
+
+if [ ! -d android ]; then
+  npx cap add android
+fi
+
+npx cap sync android
+echo "Done. Open mobile/capacitor/android in Android Studio, or run:"
+echo "  cd mobile/capacitor/android && ./gradlew assembleDebug"

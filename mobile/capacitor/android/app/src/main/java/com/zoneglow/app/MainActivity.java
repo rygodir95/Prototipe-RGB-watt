@@ -1,1 +1,5 @@
-cGFja2FnZSBjb20uem9uZWdsb3cuYXBwOwoKaW1wb3J0IGNvbS5nZXRjYXBhY2l0b3IuQnJpZGdlQWN0aXZpdHk7CgpwdWJsaWMgY2xhc3MgTWFpbkFjdGl2aXR5IGV4dGVuZHMgQnJpZGdlQWN0aXZpdHkge30K
+package com.zoneglow.app;
+
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {}

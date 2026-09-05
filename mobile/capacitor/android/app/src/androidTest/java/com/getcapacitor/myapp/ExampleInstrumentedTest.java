@@ -1,1 +1,26 @@
-cGFja2FnZSBjb20uZ2V0Y2FwYWNpdG9yLm15YXBwOwoKaW1wb3J0IHN0YXRpYyBvcmcuanVuaXQuQXNzZXJ0Lio7CgppbXBvcnQgYW5kcm9pZC5jb250ZW50LkNvbnRleHQ7CmltcG9ydCBhbmRyb2lkeC50ZXN0LmV4dC5qdW5pdC5ydW5uZXJzLkFuZHJvaWRKVW5pdDQ7CmltcG9ydCBhbmRyb2lkeC50ZXN0LnBsYXRmb3JtLmFwcC5JbnN0cnVtZW50YXRpb25SZWdpc3RyeTsKaW1wb3J0IG9yZy5qdW5pdC5UZXN0OwppbXBvcnQgb3JnLmp1bml0LnJ1bm5lci5SdW5XaXRoOwoKLyoqCiAqIEluc3RydW1lbnRlZCB0ZXN0LCB3aGljaCB3aWxsIGV4ZWN1dGUgb24gYW4gQW5kcm9pZCBkZXZpY2UuCiAqCiAqIEBzZWUgPGEgaHJlZj0iaHR0cDovL2QuYW5kcm9pZC5jb20vdG9vbHMvdGVzdGluZyI+VGVzdGluZyBkb2N1bWVudGF0aW9uPC9hPgogKi8KQFJ1bldpdGgoQW5kcm9pZEpVbml0NC5jbGFzcykKcHVibGljIGNsYXNzIEV4YW1wbGVJbnN0cnVtZW50ZWRUZXN0IHsKCiAgICBAVGVzdAogICAgcHVibGljIHZvaWQgdXNlQXBwQ29udGV4dCgpIHRocm93cyBFeGNlcHRpb24gewogICAgICAgIC8vIENvbnRleHQgb2YgdGhlIGFwcCB1bmRlciB0ZXN0LgogICAgICAgIENvbnRleHQgYXBwQ29udGV4dCA9IEluc3RydW1lbnRhdGlvblJlZ2lzdHJ5LmdldEluc3RydW1lbnRhdGlvbigpLmdldFRhcmdldENvbnRleHQoKTsKCiAgICAgICAgYXNzZXJ0RXF1YWxzKCJjb20uZ2V0Y2FwYWNpdG9yLmFwcCIsIGFwcENvbnRleHQuZ2V0UGFja2FnZU5hbWUoKSk7CiAgICB9Cn0K
+package com.getcapacitor.myapp;
+
+import static org.junit.Assert.*;
+
+import android.content.Context;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+/**
+ * Instrumented test, which will execute on an Android device.
+ *
+ * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
+ */
+@RunWith(AndroidJUnit4.class)
+public class ExampleInstrumentedTest {
+
+    @Test
+    public void useAppContext() throws Exception {
+        // Context of the app under test.
+        Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
+
+        assertEquals("com.getcapacitor.app", appContext.getPackageName());
+    }
+}

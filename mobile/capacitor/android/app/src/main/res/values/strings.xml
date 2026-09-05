@@ -1,1 +1,7 @@
-PD94bWwgdmVyc2lvbj0nMS4wJyBlbmNvZGluZz0ndXRmLTgnPz4KPHJlc291cmNlcz4KICAgIDxzdHJpbmcgbmFtZT0iYXBwX25hbWUiPlpvbmVHbG93PC9zdHJpbmc+CiAgICA8c3RyaW5nIG5hbWU9InRpdGxlX2FjdGl2aXR5X21haW4iPlpvbmVHbG93PC9zdHJpbmc+CiAgICA8c3RyaW5nIG5hbWU9InBhY2thZ2VfbmFtZSI+Y29tLnpvbmVnbG93LmFwcDwvc3RyaW5nPgogICAgPHN0cmluZyBuYW1lPSJjdXN0b21fdXJsX3NjaGVtZSI+Y29tLnpvbmVnbG93LmFwcDwvc3RyaW5nPgo8L3Jlc291cmNlcz4K
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ZoneGlow</string>
+    <string name="title_activity_main">ZoneGlow</string>
+    <string name="package_name">com.zoneglow.app</string>
+    <string name="custom_url_scheme">com.zoneglow.app</string>
+</resources>

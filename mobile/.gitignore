@@ -1,1 +1,9 @@
-IyBab25lR2xvdyBtb2JpbGUgLSBkZXBlbmRlbmNpZXMgYW5kIGJ1aWxkIGFydGlmYWN0cyBhcmUgbmV2ZXIgY29tbWl0dGVkLgpub2RlX21vZHVsZXMvCmFuZHJvaWQvLmdyYWRsZS8KYW5kcm9pZC9hcHAvYnVpbGQvCmFuZHJvaWQvYnVpbGQvCmFuZHJvaWQvbG9jYWwucHJvcGVydGllcwphbmRyb2lkLy5pZGVhLwoqLmFwawoqLmFhYg==
+# ZoneGlow mobile - dependencies and build artifacts are never committed.
+node_modules/
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab

@@ -1,1 +1,140 @@
-IyBab25lR2xvdyBNb2JpbGUgKEFuZHJvaWQgUG9DKQoKTWluaW1hbCBBbmRyb2lkIHByb29mLW9mLWNvbmNlcHQgYXBwIGZvciBab25lR2xvdy4gSXQgaXMgYSB0aGluICoqVUkvY29uZmlndXJhdGlvbgpjbGllbnQqKiBmb3IgdGhlIFpvbmVHbG93IEh1YiBvdmVyIFdpLUZpL0xBTiDigJQgbm90aGluZyBtb3JlLgoKYGBgClpvbmVHbG93IEFuZHJvaWQgQXBwICDihpQgIFdpLUZpL0xBTiAg4oaUICBab25lR2xvdyBIdWIgIOKGlCAgQkxFIHNlbnNvcnMgIOKGlCAgTEVECmBgYAoKKipUaGUgcGhvbmUgbmV2ZXIgdGFsa3MgdG8gQkxFIHNlbnNvcnMuKiogVGhlIEh1YiBzdGF5cyBmdWxseSBzdGFuZGFsb25lIGFuZApyZW1haW5zIHJlc3BvbnNpYmxlIGZvciBCTEUsIHpvbmUgbG9naWMsIExFRCBjb250cm9sLCBzZXR0aW5ncywgcGVyc2lzdGVuY2UgYW5kCnRlbGVtZXRyeS4gTm8gZmlybXdhcmUgYmVoYXZpb3Igd2FzIGNoYW5nZWQgYW5kIHRoZSBIdWIgQVBJIGlzIHVudG91Y2hlZC4KCiMjIEFyY2hpdGVjdHVyZQoKVGhlIGFwcCBpcyBhIFtDYXBhY2l0b3JdKGh0dHBzOi8vY2FwYWNpdG9yanMuY29tKSBBbmRyb2lkIHNoZWxsIHRoYXQgcmV1c2VzIHRoZQoqKmV4aXN0aW5nKiogWm9uZUdsb3cgd2ViIFVJIChgc3JjL2Zpcm13YXJlL2RhdGEvd2ViL2ApIOKAlCB0aGUgSHViIHNlcnZlcyBpdDoKCjEuIFRoZSBzaGVsbCAoYG1vYmlsZS9jYXBhY2l0b3Ivd3d3L2ApIHNob3dzIGEgY29ubmVjdGlvbiBzY3JlZW4gd2l0aCBhCiAgIGNvbmZpZ3VyYWJsZSBIdWIgYWRkcmVzcyBhbmQgcHJvYmVzIGBHRVQgL2FwaS9pbmZvYCBldmVyeSAyIHNlY29uZHMuCjIuIE9uY2UgdGhlIEh1YiBhbnN3ZXJzLCB0aGUgc2hlbGwgbG9hZHMgdGhlIEh1YidzIG93biBjb3B5IG9mIHRoZSBab25lR2xvdyBVSQogICAoRGFzaGJvYXJkIC8gRGV2aWNlcyAvIFpvbmVzIC8gU2V0dGluZ3MpIGluIHRoZSBhcHAgdmlldy4KMy4gQmVjYXVzZSB0aGUgVUkgaXMgc2VydmVkIGJ5IHRoZSBIdWIgaXRzZWxmLCBhbGwgcmVsYXRpdmUgUkVTVCBjYWxscyBhbmQgdGhlCiAgIFdlYlNvY2tldCB0ZWxlbWV0cnkgY29ubmVjdGlvbiBhcmUgc2FtZS1vcmlnaW4g4oCUIG5vIENPUlMgY2hhbmdlcywgbm8KICAgZmlybXdhcmUgY2hhbmdlcywgbm8gbmF0aXZlIHByb3h5IGNvZGUsIGFuZCAqKnRoZSB3ZWIgVUkgcmVtYWlucyB0aGUgc2luZ2xlCiAgIHNvdXJjZSBvZiB0cnV0aCoqIChpZGVudGljYWwgZmlsZXMgdGhlIEVTUDMyIHNlcnZlcykuCjQuIElmIHRoZSBIdWIgZGlzYXBwZWFycywgdGhlIHNoZWxsIHN3aXRjaGVzIHRvIGBSZWNvbm5lY3RpbmfigKZgICh0aGUgZW1iZWRkZWQgVUkKICAga2VlcHMgaXRzIG93biBXZWJTb2NrZXQgcmV0cnkgcnVubmluZyk7IGFmdGVyIHN1c3RhaW5lZCBsb3NzIGl0IHNob3dzCiAgIGBEaXNjb25uZWN0ZWRgIGFuZCBrZWVwcyBwcm9iaW5nIGF1dG9tYXRpY2FsbHkuCgpDb25uZWN0aW9uIHN0YXRlczogKipDb25uZWN0ZWQgwrcgQ29ubmVjdGluZ+KApiDCtyBEaXNjb25uZWN0ZWQgwrcgUmVjb25uZWN0aW5n4oCmKioKCldoeSB0aGUgVUkgaXMgc3RyZWFtZWQgZnJvbSB0aGUgSHViIGluc3RlYWQgb2YgYnVuZGxlZDogYSBidW5kbGVkIGNvcHkgd291bGQKY2FsbCBgL2FwaS8uLi5gIGFnYWluc3QgdGhlIGFwcCdzIGxvY2FsIG9yaWdpbiBhbmQgZmFpbCDigJQgc3VwcG9ydGluZyBpdCB3b3VsZApyZXF1aXJlIENPUlMgaGVhZGVycyBpbiB0aGUgSHViIGZpcm13YXJlIG9yIGEgbmF0aXZlIEhUVFAvV2ViU29ja2V0IHByb3h5LCBib3RoCm9mIHdoaWNoIHRoaXMgUG9DIGV4cGxpY2l0bHkgYXZvaWRzLiBUaGlzIG1pcnJvcnMgdGhlIGRlc2t0b3Agc2hlbGwncwpiYWNrZW5kLXNlcnZlZCBVSSBhcHByb2FjaC4KClRoZSBsYXN0ICoqc3VjY2Vzc2Z1bGx5IGNvbm5lY3RlZCoqIEh1YiBhZGRyZXNzIGlzIHN0b3JlZCBvbiB0aGUgcGhvbmUKKGBsb2NhbFN0b3JhZ2VgKSBhbmQgaXMgdGhlIGZpcnN0IHRoaW5nIHByb2JlZCBvbiB0aGUgbmV4dCBsYXVuY2guCgojIyBXaGF0IHdvcmtzIGluIHRoZSBQb0MKCi0gRXhpc3RpbmcgWm9uZUdsb3cgVUk6IERhc2hib2FyZCwgRGV2aWNlcywgWm9uZXMsIFNldHRpbmdzCi0gUG93ZXIgKiphbmQqKiBIZWFydCBSYXRlIHRlbGVtZXRyeSB2aWEgdGhlIEh1YidzIFdlYlNvY2tldAotIFNpbXVsYXRpb24gTW9kZSAod2hlbmV2ZXIgdGhlIGNvbm5lY3RlZCBiYWNrZW5kIHN1cHBvcnRzIGl0IOKAlCB0aGUgUEMKICBzaW11bGF0b3IgZG9lczsgdGhlIHJlYWwgSHViIGZpcm13YXJlIGRvZXMgdG9vKQotIEF1dG9tYXRpYyByZWNvbm5lY3Qgd2l0aCBjbGVhciBjb25uZWN0aW9uIHN0YXRlcwotIENvbmZpZ3VyYWJsZSBIdWIgYWRkcmVzcywgcGVyc2lzdGVkIG9uIHRoZSBwaG9uZQoKIyMgRGVsaWJlcmF0ZWx5IE5PVCBpbmNsdWRlZAoKRGlyZWN0IEJMRSBzdXBwb3J0LCBiYWNrZ3JvdW5kIHNlcnZpY2VzLCBjbG91ZCBmZWF0dXJlcywgYWNjb3VudHMvbG9naW4sIHB1c2gKbm90aWZpY2F0aW9ucywgaU9TIHN1cHBvcnQsIEVTUC1OT1csIExpZ2h0IE5vZGUgZmVhdHVyZXMsIEFOVCssIG11bHRpLXVzZXIsCmFueSBmaXJtd2FyZSBjaGFuZ2VzLgoKIyMgTGF5b3V0CgpgYGAKbW9iaWxlLwogIGNhcGFjaXRvci8gICAgICAgICAgQ2FwYWNpdG9yIHByb2plY3QgKHNoZWxsIHdlYkRpciArIGdlbmVyYXRlZCBBbmRyb2lkIGFwcCkKICAgIHd3dy8gICAgICAgICAgICAgIENvbm5lY3Rpb24gc2hlbGwgb25seSAoaW5kZXguaHRtbCwgc2hlbGwuanMsIHRyYW5zcG9ydC5qcywgc2hlbGwuY3NzKQogICAgYW5kcm9pZC8gICAgICAgICAgR2VuZXJhdGVkIEFuZHJvaWQgcGxhdGZvcm0gKGFwcCBzb3VyY2UsIGdyYWRsZSwgbWFuaWZlc3RzKQogIHNjcmlwdHMvCiAgICBwcmVwYXJlLnNoICAgICAgIE9uZS1zaG90OiBucG0gaW5zdGFsbCArIGNhcCBhZGQvc3luYyBhbmRyb2lkCiAgUkVBRE1FLm1kICAgICAgICAgICBUaGlzIGZpbGUKYGBgCgpBbGwgbmF0aXZlIGNvZGUgbGl2ZXMgdW5kZXIgYG1vYmlsZS9gIOKAlCBub3RoaW5nIGVsc2UgaW4gdGhlIHJlcG9zaXRvcnkgaXMKYWZmZWN0ZWQuIEh1YiBmaXJtd2FyZSwgSHViIEFQSSwgZGVza3RvcCBzaGVsbCBhbmQgd2ViIFVJIGFyZSB1bmNoYW5nZWQuCgojIyBEZXZlbG9wbWVudAoKUHJlcmVxdWlzaXRlczogTm9kZS5qcyAxOCsuCgpgYGBiYXNoCiMgMS4gU3RhcnQgdGhlIFBDIHNpbXVsYXRvciAoYWN0cyBhcyB0aGUgSHViIG9uIHlvdXIgUEMpCnNyYy9maXJtd2FyZS90b29scy9wYy1zaW11bGF0b3IvcnVuX3NpbXVsYXRvci5iYXQgICAgICMgV2luZG93cwoKIyAyLiBQcmVwYXJlIHRoZSBBbmRyb2lkIHByb2plY3QgKGluc3RhbGxzIGRlcHMsIGdlbmVyYXRlcy9zeW5jcyBwbGF0Zm9ybSkKbW9iaWxlL3NjcmlwdHMvcHJlcGFyZS5zaAoKIyAzLiBCdWlsZCAmIGluc3RhbGwgb24gYSBjb25uZWN0ZWQgZGV2aWNlIC8gZW11bGF0b3IKY2QgbW9iaWxlL2NhcGFjaXRvci9hbmRyb2lkCi4vZ3JhZGxldyBpbnN0YWxsRGVidWcKYGBgCgojIyBTZXR0aW5nIC8gY2hhbmdpbmcgdGhlIEh1YiBhZGRyZXNzCgotIE9uIHRoZSBzaGVsbCdzIGNvbm5lY3Rpb24gc2NyZWVuLCB0eXBlIHRoZSBhZGRyZXNzIGFuZCBwcmVzcyAqKkNvbm5lY3QqKjoKICBgaHR0cDovL3pvbmVnbG93LmxvY2FsYCwgYW4gSVAgbGlrZSBgMTkyLjE2OC4xLjUwYCwgb3IgYGhvc3Q6cG9ydGAKICAoZS5nLiBgMTAuMC4yLjI6ODA4MGApLiBTY2hlbWUgaXMgb3B0aW9uYWwgKGBodHRwOi8vYCBpcyBhc3N1bWVkKS4KLSBUaGUgdmFsdWUgaXMgc2F2ZWQgb24gdGhlIHBob25lIGFmdGVyIGEgKipzdWNjZXNzZnVsKiogY29ubmVjdGlvbiBhbmQKICByZS1wcm9iZWQgYXV0b21hdGljYWxseSBvbiBldmVyeSBsYXVuY2guCi0gTm90ZTogQW5kcm9pZCdzIFdlYlZpZXcgdXN1YWxseSBkb2VzICoqbm90KiogcmVzb2x2ZSBtRE5TIG5hbWVzCiAgKGB6b25lZ2xvdy5sb2NhbGApIOKAlCB0aGUgSVAgYWRkcmVzcyBpcyB0aGUgcmVsaWFibGUgb3B0aW9uIG9uIGEgcmVhbCBkZXZpY2UuCgojIyBUZXN0aW5nIGFnYWluc3QgdGhlIFBDIHNpbXVsYXRvcgoKVGhlIHNpbXVsYXRvciBzZXJ2ZXMgdGhlIHNhbWUgVUkgYW5kIEFQSSBhcyB0aGUgSHViIG9uIGBodHRwOi8vMC4wLjAuMDo4MDgwYC4KCi0gKipBbmRyb2lkIGVtdWxhdG9yOioqIHRoZSBlbXVsYXRvciByZWFjaGVzIHRoZSBob3N0IFBDIHZpYSBgMTAuMC4yLjJgLCBzbyBzZXQKICB0aGUgSHViIGFkZHJlc3MgdG8gYDEwLjAuMi4yOjgwODBgLgotICoqUGh5c2ljYWwgZGV2aWNlOioqIGNvbm5lY3QgdGhlIHBob25lIHRvIHRoZSBzYW1lIFdpLUZpL0xBTiBhcyB0aGUgUEMgYW5kCiAgdXNlIHRoZSBQQydzIExBTiBJUCwgZS5nLiBgMTkyLjE2OC4xLjUwOjgwODBgIChmaW5kIGl0IHdpdGggYGlwY29uZmlnYCAvCiAgYGlwIGFkZHJgKS4KCiMjIEFuZHJvaWQgYnVpbGQgKGRlYnVnIEFQSykKClByZXJlcXVpc2l0ZXM6IEpESyAxNywgQW5kcm9pZCBTREsgKEFQSSAzNCBwbGF0Zm9ybSArIGJ1aWxkLXRvb2xzKSwgYEFORFJPSURfSE9NRWAgc2V0LgoKYGBgYmFzaApjZCBtb2JpbGUvY2FwYWNpdG9yL2FuZHJvaWQKLi9ncmFkbGV3IGFzc2VtYmxlRGVidWcKIyBBUEs6IG1vYmlsZS9jYXBhY2l0b3IvYW5kcm9pZC9hcHAvYnVpbGQvb3V0cHV0cy9hcGsvZGVidWcvYXBwLWRlYnVnLmFwawpgYGAKCk9yIG9wZW4gYG1vYmlsZS9jYXBhY2l0b3IvYW5kcm9pZGAgaW4gKipBbmRyb2lkIFN0dWRpbyoqIGFuZCBwcmVzcyBSdW4uCkluIEFuZHJvaWQgU3R1ZGlvOiBTREsgbG9jYXRpb24gaXMgd3JpdHRlbiB0byBgbG9jYWwucHJvcGVydGllc2AgYXV0b21hdGljYWxseQooYWxzbyBnaXQtaWdub3JlZCkuCgojIyBOZXR3b3JrIHNlY3VyaXR5IChsb2NhbCBIVFRQL1dlYlNvY2tldCkKCkh1YnMgb24gYSBMQU4gdXNlIHBsYWluIGBodHRwOi8vYCBhbmQgYHdzOi8vYC4gVHdvIHBpZWNlcyBtYWtlIHRoYXQgd29yazoKCjEuIGBjYXBhY2l0b3IuY29uZmlnLmpzb25gIHNldHMgYHNlcnZlci5hbmRyb2lkU2NoZW1lOiAiaHR0cCJgIOKAlCB0aGUgc2hlbGwKICAgaXRzZWxmIGlzIHNlcnZlZCBmcm9tIGBodHRwOi8vbG9jYWxob3N0YCwgc28gZW1iZWRkaW5nIHRoZSBIdWIncwogICBgaHR0cDovL2AgVUkgaXMgbm90IHRyZWF0ZWQgYXMgbWl4ZWQgY29udGVudC4KMi4gYGFuZHJvaWQvYXBwL3NyYy9tYWluL3Jlcy94bWwvbmV0d29ya19zZWN1cml0eV9jb25maWcueG1sYCBwZXJtaXRzIGNsZWFydGV4dAogICB0cmFmZmljIChyZWZlcmVuY2VkIGZyb20gYEFuZHJvaWRNYW5pZmVzdC54bWxgKS4gVGhpcyBpcyByZXF1aXJlZCBmb3IKICAgYXJiaXRyYXJ5IExBTiBJUHM7IHRoZSBhcHAgcGVyZm9ybXMgKipubyoqIHNlbnNpdGl2ZS9jbG91ZCB0cmFmZmljLCBzbyB0aGlzCiAgIGlzIGFjY2VwdGFibGUgZm9yIHRoZSBQb0MuIEZvciBhIHByb2R1Y3Rpb24gcmVsZWFzZSwgcmVzdHJpY3QgdGhlIGNvbmZpZyB0bwogICB5b3VyIGtub3duIEh1YiBhZGRyZXNzZXMuCgojIyBUcm91Ymxlc2hvb3RpbmcKCi0gKioiRGlzY29ubmVjdGVkIiBhbHRob3VnaCB0aGUgc2ltdWxhdG9yIHJ1bnM6KiogY2hlY2sgdGhlIGFkZHJlc3MKICAoZW11bGF0b3I6IGAxMC4wLjIuMjo4MDgwYCwgZGV2aWNlOiBQQyBMQU4gSVAgKyBgOjgwODBgKSBhbmQgdGhhdCB5b3VyCiAgZmlyZXdhbGwgYWxsb3dzIGluYm91bmQgVENQIDgwODAgb24gdGhlIFBDLgotICoqbUROUyBuYW1lIG5ldmVyIGNvbm5lY3RzOioqIHVzZSB0aGUgSHViJ3MgSVAgaW5zdGVhZCAoc2VlIGFib3ZlKS4=
+# ZoneGlow Mobile (Android PoC)
+
+Minimal Android proof-of-concept app for ZoneGlow. It is a thin **UI/configuration
+client** for the ZoneGlow Hub over Wi-Fi/LAN — nothing more.
+
+```
+ZoneGlow Android App  ↔  Wi-Fi/LAN  ↔  ZoneGlow Hub  ↔  BLE sensors  ↔  LED
+```
+
+**The phone never talks to BLE sensors.** The Hub stays fully standalone and
+remains responsible for BLE, zone logic, LED control, settings, persistence and
+telemetry. No firmware behavior was changed and the Hub API is untouched.
+
+## Architecture
+
+The app is a [Capacitor](https://capacitorjs.com) Android shell that reuses the
+**existing** ZoneGlow web UI (`src/firmware/data/web/`) — the Hub serves it:
+
+1. The shell (`mobile/capacitor/www/`) shows a connection screen with a
+   configurable Hub address and probes `GET /api/info` every 2 seconds.
+2. Once the Hub answers, the shell loads the Hub's own copy of the ZoneGlow UI
+   (Dashboard / Devices / Zones / Settings) in the app view.
+3. Because the UI is served by the Hub itself, all relative REST calls and the
+   WebSocket telemetry connection are same-origin — no CORS changes, no
+   firmware changes, no native proxy code, and **the web UI remains the single
+   source of truth** (identical files the ESP32 serves).
+4. If the Hub disappears, the shell switches to `Reconnecting…` (the embedded UI
+   keeps its own WebSocket retry running); after sustained loss it shows
+   `Disconnected` and keeps probing automatically.
+
+Connection states: **Connected · Connecting… · Disconnected · Reconnecting…**
+
+Why the UI is streamed from the Hub instead of bundled: a bundled copy would
+call `/api/...` against the app's local origin and fail — supporting it would
+require CORS headers in the Hub firmware or a native HTTP/WebSocket proxy, both
+of which this PoC explicitly avoids. This mirrors the desktop shell's
+backend-served UI approach.
+
+The last **successfully connected** Hub address is stored on the phone
+(`localStorage`) and is the first thing probed on the next launch.
+
+## What works in the PoC
+
+- Existing ZoneGlow UI: Dashboard, Devices, Zones, Settings
+- Power **and** Heart Rate telemetry via the Hub's WebSocket
+- Simulation Mode (whenever the connected backend supports it — the PC
+  simulator does; the real Hub firmware does too)
+- Automatic reconnect with clear connection states
+- Configurable Hub address, persisted on the phone
+
+## Deliberately NOT included
+
+Direct BLE support, background services, cloud features, accounts/login, push
+notifications, iOS support, ESP-NOW, Light Node features, ANT+, multi-user,
+any firmware changes.
+
+## Layout
+
+```
+mobile/
+  capacitor/          Capacitor project (shell webDir + generated Android app)
+    www/              Connection shell only (index.html, shell.js, transport.js, shell.css)
+    android/          Generated Android platform (app source, gradle, manifests)
+  scripts/
+    prepare.sh       One-shot: npm install + cap add/sync android
+  README.md           This file
+```
+
+All native code lives under `mobile/` — nothing else in the repository is
+affected. Hub firmware, Hub API, desktop shell and web UI are unchanged.
+
+## Development
+
+Prerequisites: Node.js 18+.
+
+```bash
+# 1. Start the PC simulator (acts as the Hub on your PC)
+src/firmware/tools/pc-simulator/run_simulator.bat     # Windows
+
+# 2. Prepare the Android project (installs deps, generates/syncs platform)
+mobile/scripts/prepare.sh
+
+# 3. Build & install on a connected device / emulator
+cd mobile/capacitor/android
+./gradlew installDebug
+```
+
+## Setting / changing the Hub address
+
+- On the shell's connection screen, type the address and press **Connect**:
+  `http://zoneglow.local`, an IP like `192.168.1.50`, or `host:port`
+  (e.g. `10.0.2.2:8080`). Scheme is optional (`http://` is assumed).
+- The value is saved on the phone after a **successful** connection and
+  re-probed automatically on every launch.
+- Note: Android's WebView usually does **not** resolve mDNS names
+  (`zoneglow.local`) — the IP address is the reliable option on a real device.
+
+## Testing against the PC simulator
+
+The simulator serves the same UI and API as the Hub on `http://0.0.0.0:8080`.
+
+- **Android emulator:** the emulator reaches the host PC via `10.0.2.2`, so set
+  the Hub address to `10.0.2.2:8080`.
+- **Physical device:** connect the phone to the same Wi-Fi/LAN as the PC and
+  use the PC's LAN IP, e.g. `192.168.1.50:8080` (find it with `ipconfig` /
+  `ip addr`).
+
+## Android build (debug APK)
+
+Prerequisites: JDK 17, Android SDK (API 34 platform + build-tools), `ANDROID_HOME` set.
+
+```bash
+cd mobile/capacitor/android
+./gradlew assembleDebug
+# APK: mobile/capacitor/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Or open `mobile/capacitor/android` in **Android Studio** and press Run.
+In Android Studio: SDK location is written to `local.properties` automatically
+(also git-ignored).
+
+## Network security (local HTTP/WebSocket)
+
+Hubs on a LAN use plain `http://` and `ws://`. Two pieces make that work:
+
+1. `capacitor.config.json` sets `server.androidScheme: "http"` — the shell
+   itself is served from `http://localhost`, so embedding the Hub's
+   `http://` UI is not treated as mixed content.
+2. `android/app/src/main/res/xml/network_security_config.xml` permits cleartext
+   traffic (referenced from `AndroidManifest.xml`). This is required for
+   arbitrary LAN IPs; the app performs **no** sensitive/cloud traffic, so this
+   is acceptable for the PoC. For a production release, restrict the config to
+   your known Hub addresses.
+
+## Troubleshooting
+
+- **"Disconnected" although the simulator runs:** check the address
+  (emulator: `10.0.2.2:8080`, device: PC LAN IP + `:8080`) and that your
+  firewall allows inbound TCP 8080 on the PC.
+- **mDNS name never connects:** use the Hub's IP instead (see above).

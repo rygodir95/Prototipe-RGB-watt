@@ -1,1 +1,112 @@
-Ly8gWm9uZUdsb3cgbW9iaWxlIHNoZWxsIC0gY29ubmVjdGlvbiBzdGF0ZSBtYWNoaW5lLgovLwovLyBTdGF0ZXM6IENvbm5lY3RlZCAvIENvbm5lY3RpbmfigKYgLyBEaXNjb25uZWN0ZWQgLyBSZWNvbm5lY3RpbmfigKYKLy8gLSBQcm9iZXMgdGhlIGNvbmZpZ3VyZWQgSHViIChHRVQgL2FwaS9pbmZvKSBldmVyeSAyIHNlY29uZHMuCi8vIC0gV2hlbiByZWFjaGFibGUsIGxvYWRzIHRoZSBFWElTVElORyBab25lR2xvdyBVSSBmcm9tIHRoZSBIdWIgaW4gdGhlCi8vICAgaWZyYW1lICh0aGUgSHViIHNlcnZlcyBkYXRhL3dlYiB1bmNoYW5nZWQpLiBUaGUgSHViIHN0YXlzIGZ1bGx5Ci8vICAgc3RhbmRhbG9uZTogQkxFLCB6b25lIGxvZ2ljLCBMRUQgY29udHJvbCwgc2V0dGluZ3MsIHBlcnNpc3RlbmNlIGFuZAovLyAgIHRlbGVtZXRyeSBhbGwgcnVuIG9uIHRoZSBIdWI7IHRoZSBwaG9uZSBpcyBvbmx5IGEgVUkgY2xpZW50LgovLyAtIE9uIHRoZSBmaXJzdCBtaXNzZWQgcHJvYmUgYWZ0ZXIgYSBzdWNjZXNzZnVsIGNvbm5lY3Rpb24gdGhlIHN0YXRlCi8vICAgYmVjb21lcyAiUmVjb25uZWN0aW5n4oCmIiAodGhlIGVtYmVkZGVkIFVJIHN0YXlzIHZpc2libGUgLSBpdHMgb3duCi8vICAgV2ViU29ja2V0IHJldHJ5IGtlZXBzIHJ1bm5pbmcpLiBBZnRlciBzdXN0YWluZWQgbG9zcyB0aGUgc2hlbGwgc2hvd3MKLy8gICB0aGUgZGlzY29ubmVjdGVkIG92ZXJsYXkgYW5kIGtlZXBzIHJldHJ5aW5nIGF1dG9tYXRpY2FsbHkuCi8vIC0gVGhlIGxhc3Qgc3VjY2Vzc2Z1bGx5IGNvbm5lY3RlZCBIdWIgYWRkcmVzcyBpcyBzdG9yZWQgb24gdGhlIHBob25lLgoidXNlIHN0cmljdCI7CgovKiBnbG9iYWwgWm9uZUdsb3dUcmFuc3BvcnQgKi8gICAvLyBkZWZpbmVkIGluIHRyYW5zcG9ydC5qcyAocGxhaW4gPHNjcmlwdD4gZ2xvYmFsKQoKKGZ1bmN0aW9uICgpIHsKICB2YXIgJCA9IGZ1bmN0aW9uIChpZCkgeyByZXR1cm4gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoaWQpOyB9OwogIHZhciBVSV9GUkFNRSA9ICQoInVpRnJhbWUiKTsKICB2YXIgT1ZFUkxBWSA9ICQoIm92ZXJsYXkiKTsKICB2YXIgU1RBVFVTX1RFWFQgPSAkKCJzdGF0dXNUZXh0Iik7CiAgdmFyIEhVQl9MQUJFTCA9ICQoImh1YkxhYmVsIik7CiAgdmFyIEhVQl9VUkxfSU5QVVQgPSAkKCJodWJVcmwiKTsKICB2YXIgQ09OTkVDVF9CVE4gPSAkKCJjb25uZWN0QnRuIik7CiAgdmFyIE9WRVJMQVlfSElOVCA9ICQoIm92ZXJsYXlIaW50Iik7CgogIHZhciBQUk9CRV9JTlRFUlZBTF9NUyA9IDIwMDA7CiAgdmFyIE1BWF9NSVNTRURfUFJPQkVTID0gMzsgICAvLyBzdXN0YWluZWQgbG9zcyB0aHJlc2hvbGQgZm9yICJEaXNjb25uZWN0ZWQiCiAgdmFyIHVpTG9hZGVkRm9yID0gIiI7ICAgICAgICAvLyBIdWIgVVJMIGN1cnJlbnRseSBsb2FkZWQgaW4gdGhlIGlmcmFtZQogIHZhciBldmVyQ29ubmVjdGVkID0gZmFsc2U7CiAgdmFyIG1pc3NlZFByb2JlcyA9IDA7CiAgdmFyIHByb2JpbmcgPSBmYWxzZTsKCiAgZnVuY3Rpb24gc2V0U3RhdGUoc3RhdGUsIHVybCkgewogICAgZG9jdW1lbnQuYm9keS5kYXRhc2V0LnN0YXRlID0gc3RhdGU7ICAgLy8gY29ubmVjdGVkfGNvbm5lY3Rpbmd8ZGlzY29ubmVjdGVkfHJlY29ubmVjdGluZwogICAgU1RBVFVTX1RFWFQudGV4dENvbnRlbnQgPQogICAgICBzdGF0ZSA9PT0gImNvbm5lY3RlZCIgPyAiQ29ubmVjdGVkIiA6CiAgICAgIHN0YXRlID09PSAiZGlzY29ubmVjdGVkIiA/ICJEaXNjb25uZWN0ZWQiIDoKICAgICAgc3RhdGUgPT09ICJyZWNvbm5lY3RpbmciID8gIlJlY29ubmVjdGluZ+KApiIgOiAiQ29ubmVjdGluZ+KApiI7CiAgICBIVUJfTEFCRUwudGV4dENvbnRlbnQgPSB1cmw7CiAgICBpZiAoc3RhdGUgPT09ICJjb25uZWN0ZWQiIHx8IHN0YXRlID09PSAicmVjb25uZWN0aW5nIikgewogICAgICBVSV9GUkFNRS5zdHlsZS5kaXNwbGF5ID0gImJsb2NrIjsKICAgICAgT1ZFUkxBWS5zdHlsZS5kaXNwbGF5ID0gIm5vbmUiOwogICAgfSBlbHNlIHsKICAgICAgVUlfRlJBTUUuc3R5bGUuZGlzcGxheSA9ICJub25lIjsKICAgICAgT1ZFUkxBWS5zdHlsZS5kaXNwbGF5ID0gImZsZXgiOwogICAgICBPVkVSTEFZX0hJTlQudGV4dENvbnRlbnQgPSBzdGF0ZSA9PT0gImNvbm5lY3RpbmciCiAgICAgICAgPyAiTG9va2luZyBmb3IgdGhlIFpvbmVHbG93IEh1YiBhdCAiICsgdXJsICsgIiDigKYiCiAgICAgICAgOiAiQ2Fubm90IHJlYWNoICIgKyB1cmwgKyAiLiBNYWtlIHN1cmUgdGhlIEh1YiBpcyBwb3dlcmVkIGFuZCBvbiAiICsKICAgICAgICAgICJ0aGUgc2FtZSBXaS1GaSwgb3Igc2V0IHRoZSBIdWIgYWRkcmVzcyBiZWxvdy4gUmV0cnlpbmcgIiArCiAgICAgICAgICAiYXV0b21hdGljYWxseSBldmVyeSAiICsgKFBST0JFX0lOVEVSVkFMX01TIC8gMTAwMCkgKyAiIHNlY29uZHMuIjsKICAgIH0KICB9CgogIGZ1bmN0aW9uIHNob3dVaSh1cmwpIHsKICAgIGlmICh1aUxvYWRlZEZvciAhPT0gdXJsKSB7CiAgICAgIC8vIFRoZSBIdWIgc2VydmVzIHRoZSBleGlzdGluZyBab25lR2xvdyBVSSBpdHNlbGYgKHNhbWUgZmlsZXMgdGhlCiAgICAgIC8vIEVTUDMyIHNlcnZlcyksIHNvIGFsbCByZWxhdGl2ZSBSRVNUL1dTIHBhdGhzIGluc2lkZSBpdCBqdXN0IHdvcmsuCiAgICAgIFVJX0ZSQU1FLnNyYyA9IHVybCArICIvIjsKICAgICAgdWlMb2FkZWRGb3IgPSB1cmw7CiAgICB9CiAgfQoKICBmdW5jdGlvbiB0aWNrKCkgewogICAgaWYgKHByb2JpbmcpIHJldHVybjsKICAgIHByb2JpbmcgPSB0cnVlOwogICAgdmFyIHVybCA9IFpvbmVHbG93VHJhbnNwb3J0LmdldFVybCgpOwogICAgaWYgKCFIVUJfVVJMX0lOUFVULnZhbHVlKSBIVUJfVVJMX0lOUFVULnZhbHVlID0gdXJsOwogICAgWm9uZUdsb3dUcmFuc3BvcnQucHJvYmUodXJsKQogICAgICAudGhlbihmdW5jdGlvbiAoKSB7CiAgICAgICAgbWlzc2VkUHJvYmVzID0gMDsKICAgICAgICBpZiAoIWV2ZXJDb25uZWN0ZWQpIHsKICAgICAgICAgIGV2ZXJDb25uZWN0ZWQgPSB0cnVlOwogICAgICAgICAgWm9uZUdsb3dUcmFuc3BvcnQuc2V0VXJsKHVybCk7ICAgLy8gcmVtZW1iZXIgbGFzdCBzdWNjZXNzZnVsIEh1YgogICAgICAgIH0KICAgICAgICBzaG93VWkodXJsKTsKICAgICAgICBzZXRTdGF0ZSgiY29ubmVjdGVkIiwgdXJsKTsKICAgICAgICBwcm9iaW5nID0gZmFsc2U7CiAgICAgIH0pCiAgICAgIC5jYXRjaChmdW5jdGlvbiAoKSB7CiAgICAgICAgbWlzc2VkUHJvYmVzKys7CiAgICAgICAgaWYgKGV2ZXJDb25uZWN0ZWQgJiYgbWlzc2VkUHJvYmVzIDwgTUFYX01JU1NFRF9QUk9CRVMpIHsKICAgICAgICAgIHNldFN0YXRlKCJyZWNvbm5lY3RpbmciLCB1cmwpOyAgIC8vIGJyaWVmIGhpY2N1cDoga2VlcCB0aGUgVUkgdXAKICAgICAgICAgIHByb2JpbmcgPSBmYWxzZTsKICAgICAgICAgIHJldHVybjsKICAgICAgICB9CiAgICAgICAgc2V0U3RhdGUoImRpc2Nvbm5lY3RlZCIsIHVybCk7CiAgICAgICAgcHJvYmluZyA9IGZhbHNlOwogICAgICB9KTsKICB9CgogIENPTk5FQ1RfQlROLmFkZEV2ZW50TGlzdGVuZXIoImNsaWNrIiwgZnVuY3Rpb24gKCkgewogICAgaWYgKCFab25lR2xvd1RyYW5zcG9ydC5zZXRVcmwoSFVCX1VSTF9JTlBVVC52YWx1ZSkpIHsKICAgICAgSFVCX1VSTF9JTlBVVC5jbGFzc0xpc3QuYWRkKCJpbnZhbGlkIik7CiAgICAgIHJldHVybjsKICAgIH0KICAgIEhVQl9VUkxfSU5QVVQuY2xhc3NMaXN0LnJlbW92ZSgiaW52YWxpZCIpOwogICAgdWlMb2FkZWRGb3IgPSAiIjsgICAgICAgICAgLy8gZm9yY2UgdGhlIGlmcmFtZSB0byBsb2FkIGZyb20gdGhlIG5ldyBIdWIKICAgIG1pc3NlZFByb2JlcyA9IDA7CiAgICBldmVyQ29ubmVjdGVkID0gZmFsc2U7CiAgICBzZXRTdGF0ZSgiY29ubmVjdGluZyIsIFpvbmVHbG93VHJhbnNwb3J0LmdldFVybCgpKTsKICAgIHRpY2soKTsKICB9KTsKICBIVUJfVVJMX0lOUFVULmFkZEV2ZW50TGlzdGVuZXIoImlucHV0IiwgZnVuY3Rpb24gKCkgewogICAgSFVCX1VSTF9JTlBVVC5jbGFzc0xpc3QucmVtb3ZlKCJpbnZhbGlkIik7CiAgfSk7CgogIHNldFN0YXRlKCJjb25uZWN0aW5nIiwgWm9uZUdsb3dUcmFuc3BvcnQuZ2V0VXJsKCkpOwogIHRpY2soKTsKICBzZXRJbnRlcnZhbCh0aWNrLCBQUk9CRV9JTlRFUlZBTF9NUyk7Cn0pKCk7
+// ZoneGlow mobile shell - connection state machine.
+//
+// States: Connected / Connecting… / Disconnected / Reconnecting…
+// - Probes the configured Hub (GET /api/info) every 2 seconds.
+// - When reachable, loads the EXISTING ZoneGlow UI from the Hub in the
+//   iframe (the Hub serves data/web unchanged). The Hub stays fully
+//   standalone: BLE, zone logic, LED control, settings, persistence and
+//   telemetry all run on the Hub; the phone is only a UI client.
+// - On the first missed probe after a successful connection the state
+//   becomes "Reconnecting…" (the embedded UI stays visible - its own
+//   WebSocket retry keeps running). After sustained loss the shell shows
+//   the disconnected overlay and keeps retrying automatically.
+// - The last successfully connected Hub address is stored on the phone.
+"use strict";
+
+/* global ZoneGlowTransport */   // defined in transport.js (plain <script> global)
+
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var UI_FRAME = $("uiFrame");
+  var OVERLAY = $("overlay");
+  var STATUS_TEXT = $("statusText");
+  var HUB_LABEL = $("hubLabel");
+  var HUB_URL_INPUT = $("hubUrl");
+  var CONNECT_BTN = $("connectBtn");
+  var OVERLAY_HINT = $("overlayHint");
+
+  var PROBE_INTERVAL_MS = 2000;
+  var MAX_MISSED_PROBES = 3;   // sustained loss threshold for "Disconnected"
+  var uiLoadedFor = "";        // Hub URL currently loaded in the iframe
+  var everConnected = false;
+  var missedProbes = 0;
+  var probing = false;
+
+  function setState(state, url) {
+    document.body.dataset.state = state;   // connected|connecting|disconnected|reconnecting
+    STATUS_TEXT.textContent =
+      state === "connected" ? "Connected" :
+      state === "disconnected" ? "Disconnected" :
+      state === "reconnecting" ? "Reconnecting…" : "Connecting…";
+    HUB_LABEL.textContent = url;
+    if (state === "connected" || state === "reconnecting") {
+      UI_FRAME.style.display = "block";
+      OVERLAY.style.display = "none";
+    } else {
+      UI_FRAME.style.display = "none";
+      OVERLAY.style.display = "flex";
+      OVERLAY_HINT.textContent = state === "connecting"
+        ? "Looking for the ZoneGlow Hub at " + url + " …"
+        : "Cannot reach " + url + ". Make sure the Hub is powered and on " +
+          "the same Wi-Fi, or set the Hub address below. Retrying " +
+          "automatically every " + (PROBE_INTERVAL_MS / 1000) + " seconds.";
+    }
+  }
+
+  function showUi(url) {
+    if (uiLoadedFor !== url) {
+      // The Hub serves the existing ZoneGlow UI itself (same files the
+      // ESP32 serves), so all relative REST/WS paths inside it just work.
+      UI_FRAME.src = url + "/";
+      uiLoadedFor = url;
+    }
+  }
+
+  function tick() {
+    if (probing) return;
+    probing = true;
+    var url = ZoneGlowTransport.getUrl();
+    if (!HUB_URL_INPUT.value) HUB_URL_INPUT.value = url;
+    ZoneGlowTransport.probe(url)
+      .then(function () {
+        missedProbes = 0;
+        if (!everConnected) {
+          everConnected = true;
+          ZoneGlowTransport.setUrl(url);   // remember last successful Hub
+        }
+        showUi(url);
+        setState("connected", url);
+        probing = false;
+      })
+      .catch(function () {
+        missedProbes++;
+        if (everConnected && missedProbes < MAX_MISSED_PROBES) {
+          setState("reconnecting", url);   // brief hiccup: keep the UI up
+          probing = false;
+          return;
+        }
+        setState("disconnected", url);
+        probing = false;
+      });
+  }
+
+  CONNECT_BTN.addEventListener("click", function () {
+    if (!ZoneGlowTransport.setUrl(HUB_URL_INPUT.value)) {
+      HUB_URL_INPUT.classList.add("invalid");
+      return;
+    }
+    HUB_URL_INPUT.classList.remove("invalid");
+    uiLoadedFor = "";          // force the iframe to load from the new Hub
+    missedProbes = 0;
+    everConnected = false;
+    setState("connecting", ZoneGlowTransport.getUrl());
+    tick();
+  });
+  HUB_URL_INPUT.addEventListener("input", function () {
+    HUB_URL_INPUT.classList.remove("invalid");
+  });
+
+  setState("connecting", ZoneGlowTransport.getUrl());
+  tick();
+  setInterval(tick, PROBE_INTERVAL_MS);
+})();

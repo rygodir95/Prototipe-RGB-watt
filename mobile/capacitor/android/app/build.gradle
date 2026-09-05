@@ -1,1 +1,54 @@
-YXBwbHkgcGx1Z2luOiAnY29tLmFuZHJvaWQuYXBwbGljYXRpb24nCgphbmRyb2lkIHsKICAgIG5hbWVzcGFjZSAiY29tLnpvbmVnbG93LmFwcCIKICAgIGNvbXBpbGVTZGsgcm9vdFByb2plY3QuZXh0LmNvbXBpbGVTZGtWZXJzaW9uCiAgICBkZWZhdWx0Q29uZmlnIHsKICAgICAgICBhcHBsaWNhdGlvbklkICJjb20uem9uZWdsb3cuYXBwIgogICAgICAgIG1pblNka1ZlcnNpb24gcm9vdFByb2plY3QuZXh0Lm1pblNka1ZlcnNpb24KICAgICAgICB0YXJnZXRTZGtWZXJzaW9uIHJvb3RQcm9qZWN0LmV4dC50YXJnZXRTZGtWZXJzaW9uCiAgICAgICAgdmVyc2lvbkNvZGUgMQogICAgICAgIHZlcnNpb25OYW1lICIxLjAiCiAgICAgICAgdGVzdEluc3RydW1lbnRhdGlvblJ1bm5lciAiYW5kcm9pZHgudGVzdC5ydW5uZXIuQW5kcm9pZEpVbml0UnVubmVyIgogICAgICAgIGFhcHRPcHRpb25zIHsKICAgICAgICAgICAgIC8vIEZpbGVzIGFuZCBkaXJzIHRvIG9taXQgZnJvbSB0aGUgcGFja2FnZWQgYXNzZXRzIGRpciwgbW9kaWZpZWQgdG8gYWNjb21tb2RhdGUgbW9kZXJuIHdlYiBhcHBzLgogICAgICAgICAgICAgLy8gRGVmYXVsdDogaHR0cHM6Ly9hbmRyb2lkLmdvb2dsZXNvdXJjZS5jb20vcGxhdGZvcm0vZnJhbWV3b3Jrcy9iYXNlLysvMjgyZTE4MWI1OGNmNzJiNmNhNzcwZGM3Y2E1ZjkxZjEzNTQ0NDUwMi90b29scy9hYXB0L0FhcHRBc3NldHMuY3BwIzYxCiAgICAgICAgICAgIGlnbm9yZUFzc2V0c1BhdHRlcm4gJyEuc3ZuOiEuZ2l0OiEuZHNfc3RvcmU6ISouc2NjOi4qOiFDVlM6IXRodW1icy5kYjohcGljYXNhLmluaTohKn4nCiAgICAgICAgfQogICAgfQogICAgYnVpbGRUeXBlcyB7CiAgICAgICAgcmVsZWFzZSB7CiAgICAgICAgICAgIG1pbmlmeUVuYWJsZWQgZmFsc2UKICAgICAgICAgICAgcHJvZ3VhcmRGaWxlcyBnZXREZWZhdWx0UHJvZ3VhcmRGaWxlKCdwcm9ndWFyZC1hbmRyb2lkLnR4dCcpLCAncHJvZ3VhcmQtcnVsZXMucHJvJwogICAgICAgIH0KICAgIH0KfQoKcmVwb3NpdG9yaWVzIHsKICAgIGZsYXREaXJ7CiAgICAgICAgZGlycyAnLi4vY2FwYWNpdG9yLWNvcmRvdmEtYW5kcm9pZC1wbHVnaW5zL3NyYy9tYWluL2xpYnMnLCAnbGlicycKICAgIH0KfQoKZGVwZW5kZW5jaWVzIHsKICAgIGltcGxlbWVudGF0aW9uIGZpbGVUcmVlKGluY2x1ZGU6IFsnKi5qYXInXSwgZGlyOiAnbGlicycpCiAgICBpbXBsZW1lbnRhdGlvbiAiYW5kcm9pZHguYXBwY29tcGF0OmFwcGNvbXBhdDokYW5kcm9pZHhBcHBDb21wYXRWZXJzaW9uIgogICAgaW1wbGVtZW50YXRpb24gImFuZHJvaWR4LmNvb3JkaW5hdG9ybGF5b3V0OmNvb3JkaW5hdG9ybGF5b3V0OiRhbmRyb2lkeENvb3JkaW5hdG9yTGF5b3V0VmVyc2lvbiIKICAgIGltcGxlbWVudGF0aW9uICJhbmRyb2lkeC5jb3JlOmNvcmUtc3BsYXNoc2NyZWVuOiRjb3JlU3BsYXNoU2NyZWVuVmVyc2lvbiIKICAgIGltcGxlbWVudGF0aW9uIHByb2plY3QoJzpjYXBhY2l0b3ItYW5kcm9pZCcpCiAgICB0ZXN0SW1wbGVtZW50YXRpb24gImp1bml0Omp1bml0OiRqdW5pdFZlcnNpb24iCiAgICBhbmRyb2lkVGVzdEltcGxlbWVudGF0aW9uICJhbmRyb2lkeC50ZXN0LmV4dDpqdW5pdDokYW5kcm9pZHhKdW5pdFZlcnNpb24iCiAgICBhbmRyb2lkVGVzdEltcGxlbWVudGF0aW9uICJhbmRyb2lkeC50ZXN0LmVzcHJlc3NvOmVzcHJlc3NvLWNvcmU6JGFuZHJvaWR4RXNwcmVzc29Db3JlVmVyc2lvbiIKICAgIGltcGxlbWVudGF0aW9uIHByb2plY3QoJzpjYXBhY2l0b3ItY29yZG92YS1hbmRyb2lkLXBsdWdpbnMnKQp9CgphcHBseSBmcm9tOiAnY2FwYWNpdG9yLmJ1aWxkLmdyYWRsZScKCnRyeSB7CiAgICBkZWYgc2VydmljZXNKU09OID0gZmlsZSgnZ29vZ2xlLXNlcnZpY2VzLmpzb24nKQogICAgaWYgKHNlcnZpY2VzSlNPTi50ZXh0KSB7CiAgICAgICAgYXBwbHkgcGx1Z2luOiAnY29tLmdvb2dsZS5nbXMuZ29vZ2xlLXNlcnZpY2VzJwogICAgfQp9IGNhdGNoKEV4Y2VwdGlvbiBlKSB7CiAgICBsb2dnZXIuaW5mbygiZ29vZ2xlLXNlcnZpY2VzLmpzb24gbm90IGZvdW5kLCBnb29nbGUtc2VydmljZXMgcGx1Z2luIG5vdCBhcHBsaWVkLiBQdXNoIE5vdGlmaWNhdGlvbnMgd29uJ3Qgd29yayIpCn0K
+apply plugin: 'com.android.application'
+
+android {
+    namespace "com.zoneglow.app"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.zoneglow.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

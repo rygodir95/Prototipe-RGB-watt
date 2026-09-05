@@ -1,1 +1,5 @@
-PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHBhdGhzIHhtbG5zOmFuZHJvaWQ9Imh0dHA6Ly9zY2hlbWFzLmFuZHJvaWQuY29tL2Fway9yZXMvYW5kcm9pZCI+CiAgICA8ZXh0ZXJuYWwtcGF0aCBuYW1lPSJteV9pbWFnZXMiIHBhdGg9Ii4iIC8+CiAgICA8Y2FjaGUtcGF0aCBuYW1lPSJteV9jYWNoZV9pbWFnZXMiIHBhdGg9Ii4iIC8+CjwvcGF0aHM+
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-path name="my_images" path="." />
+    <cache-path name="my_cache_images" path="." />
+</paths>

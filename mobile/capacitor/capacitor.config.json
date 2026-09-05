@@ -1,1 +1,13 @@
-ewogICJhcHBJZCI6ICJjb20uem9uZWdsb3cuYXBwIiwKICAiYXBwTmFtZSI6ICJab25lR2xvdyIsCiAgIndlYkRpciI6ICJ3d3ciLAogICJzZXJ2ZXIiOiB7CiAgICAiYW5kcm9pZFNjaGVtZSI6ICJodHRwIiwKICAgICJob3N0bmFtZSI6ICJsb2NhbGhvc3QiLAogICAgImNsZWFydGV4dCI6IHRydWUKICB9LAogICJhbmRyb2lkIjogewogICAgImFsbG93TWl4ZWRDb250ZW50IjogdHJ1ZQogIH0KfQ==
+{
+  "appId": "com.zoneglow.app",
+  "appName": "ZoneGlow",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "hostname": "localhost",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

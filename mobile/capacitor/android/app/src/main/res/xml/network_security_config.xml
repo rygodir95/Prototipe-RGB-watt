@@ -1,1 +1,8 @@
-PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPG5ldHdvcmstc2VjdXJpdHktY29uZmlnPgogICAgPCEtLSBab25lR2xvdyBIdWIgcnVucyBvbiBwbGFpbiBodHRwOi8vd3M6Ly8gb24gdGhlIExBTi4gQWxsb3cgY2xlYXJ0ZXh0CiAgICAgICAgIGZvciB0aGUgd2hvbGUgYXBwOiBpdCBwZXJmb3JtcyBubyBzZW5zaXRpdmUvY2xvdWQgdHJhZmZpYy4gRm9yIGEKICAgICAgICAgcHJvZHVjdGlvbiByZWxlYXNlLCByZXBsYWNlIHRoaXMgd2l0aCBhIHBpbm5lZCBjb25maWcgdGhhdCBvbmx5CiAgICAgICAgIGFsbG93cyB5b3VyIGtub3duIEh1YiBhZGRyZXNzZXMuIC0tPgogICAgPGJhc2UtY29uZmlnIGNsZWFydGV4dFRyYWZmaWNQZXJtaXR0ZWQ9InRydWUiIC8+CjwvbmV0d29yay1zZWN1cml0eS1jb25maWc+Cg==
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- ZoneGlow Hub runs on plain http://ws:// on the LAN. Allow cleartext
+         for the whole app: it performs no sensitive/cloud traffic. For a
+         production release, replace this with a pinned config that only
+         allows your known Hub addresses. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

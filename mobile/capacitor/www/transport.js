@@ -1,1 +1,85 @@
-Ly8gWm9uZUdsb3cgbW9iaWxlIC0gSHViIHRyYW5zcG9ydCBhYnN0cmFjdGlvbi4KLy8KLy8gVGhlIFpvbmVHbG93IHdlYiBVSSBpcyBzZXJ2ZWQgQlkgdGhlIEh1YiBpdHNlbGYgKHRoZSBQQyBzaW11bGF0b3IgaW4KLy8gZGV2ZWxvcG1lbnQsIHRoZSByZWFsIEVTUDMyIFpvbmVHbG93IEh1YiBpbiBwcm9kdWN0aW9uKS4gQSAidHJhbnNwb3J0IgovLyB0aGVyZWZvcmUgcmVkdWNlcyB0byB0d28gdGhpbmdzOiB3aGljaCBiYXNlIFVSTCB0byBsb2FkIHRoZSBVSSBmcm9tLAovLyBhbmQgaG93IHRvIGNoZWNrIHRoYXQgdGhlIEh1YiBpcyBhbGl2ZS4gVGhlIFVJLCBpdHMgUkVTVCBBUEkgYW5kIGl0cwovLyBXZWJTb2NrZXQgdGVsZW1ldHJ5IGFyZSBpZGVudGljYWwgaW4gYm90aCBjYXNlcywgc28gcG9pbnRpbmcgdGhlIG1vYmlsZQovLyBhcHAgYXQgYW55IEh1YiBhZGRyZXNzIG5lZWRzIG5vIFVJIHJld3JpdGUgYW5kIG5vIGZpcm13YXJlIGNoYW5nZXMuCiJ1c2Ugc3RyaWN0IjsKCnZhciBab25lR2xvd1RyYW5zcG9ydCA9IChmdW5jdGlvbiAoKSB7CiAgdmFyIERFRkFVTFRfVVJMID0gImh0dHA6Ly96b25lZ2xvdy5sb2NhbCI7CiAgdmFyIFNUT1JBR0VfS0VZID0gInpvbmVnbG93Lmh1Yi51cmwiOwoKICBmdW5jdGlvbiBzdG9yYWdlKCkgewogICAgdHJ5IHsKICAgICAgcmV0dXJuIHR5cGVvZiBsb2NhbFN0b3JhZ2UgIT09ICJ1bmRlZmluZWQiID8gbG9jYWxTdG9yYWdlIDogbnVsbDsKICAgIH0gY2F0Y2ggKGUpIHsKICAgICAgcmV0dXJuIG51bGw7CiAgICB9CiAgfQoKICAvLyBBY2NlcHRzICJodHRwOi8vem9uZWdsb3cubG9jYWwvIiwgIjE5Mi4xNjguMS41MCIsICIxMC4wLjIuMjo4MDgwIiAuLi4KICAvLyBSZXR1cm5zICIiIGZvciBhbnl0aGluZyB1bnVzYWJsZS4KICBmdW5jdGlvbiBub3JtYWxpemVVcmwodXJsKSB7CiAgICBpZiAodHlwZW9mIHVybCAhPT0gInN0cmluZyIpIHJldHVybiAiIjsKICAgIHVybCA9IHVybC50cmltKCk7CiAgICBpZiAodXJsID09PSAiIikgcmV0dXJuICIiOwogICAgaWYgKCEvXmh0dHBzPzpcL1wvL2kudGVzdCh1cmwpKSB7CiAgICAgIGlmICghL15bXHcuLV0rKDpcZCspPyhcL3wkKS8udGVzdCh1cmwpKSByZXR1cm4gIiI7CiAgICAgIHVybCA9ICJodHRwOi8vIiArIHVybDsKICAgIH0KICAgIHJldHVybiB1cmwucmVwbGFjZSgvXC8rJC8sICIiKTsKICB9CgogIC8vIExhc3Qgc3VjY2Vzc2Z1bGx5IGNvbm5lY3RlZCBIdWIgYWRkcmVzcyAocmVxdWlyZW1lbnQ6IHBlcnNpc3Qgb24gdGhlCiAgLy8gcGhvbmUpLiBGYWxscyBiYWNrIHRvIHRoZSBkZWZhdWx0IHN1Z2dlc3Rpb24gd2hlbiBub3RoaW5nIHN0b3JlZCB5ZXQuCiAgZnVuY3Rpb24gZ2V0VXJsKCkgewogICAgdmFyIHMgPSBzdG9yYWdlKCk7CiAgICB2YXIgc2F2ZWQgPSBzID8gcy5nZXRJdGVtKFNUT1JBR0VfS0VZKSA6IG51bGw7CiAgICByZXR1cm4gbm9ybWFsaXplVXJsKHNhdmVkKSB8fCBERUZBVUxUX1VSTDsKICB9CgogIGZ1bmN0aW9uIHNldFVybCh1cmwpIHsKICAgIHZhciBub3JtYWxpemVkID0gbm9ybWFsaXplVXJsKHVybCk7CiAgICBpZiAoIW5vcm1hbGl6ZWQpIHJldHVybiBmYWxzZTsKICAgIHZhciBzID0gc3RvcmFnZSgpOwogICAgaWYgKHMpIHMuc2V0SXRlbShTVE9SQUdFX0tFWSwgbm9ybWFsaXplZCk7CiAgICByZXR1cm4gdHJ1ZTsKICB9CgogIC8vIExpdmVuZXNzIHByb2JlLiBCb3RoIHRoZSBzaW11bGF0b3IgYW5kIHRoZSBFU1AzMiBIdWIgZXhwb3NlCiAgLy8gR0VUIC9hcGkvaW5mbzsgYW55dGhpbmcgZWxzZSBpcyB0cmVhdGVkIGFzICJIdWIgbm90IHJlYWNoYWJsZSIuCiAgZnVuY3Rpb24gcHJvYmUodXJsLCB0aW1lb3V0TXMpIHsKICAgIHRpbWVvdXRNcyA9IHRpbWVvdXRNcyB8fCAxNTAwOwogICAgdmFyIGNvbnRyb2xsZXIgPSB0eXBlb2YgQWJvcnRDb250cm9sbGVyICE9PSAidW5kZWZpbmVkIiA/IG5ldyBBYm9ydENvbnRyb2xsZXIoKSA6IG51bGw7CiAgICB2YXIgdGltZXIgPSBjb250cm9sbGVyCiAgICAgID8gc2V0VGltZW91dChmdW5jdGlvbiAoKSB7IGNvbnRyb2xsZXIuYWJvcnQoKTsgfSwgdGltZW91dE1zKQogICAgICA6IG51bGw7CiAgICByZXR1cm4gZmV0Y2godXJsICsgIi9hcGkvaW5mbyIsIHsgc2lnbmFsOiBjb250cm9sbGVyID8gY29udHJvbGxlci5zaWduYWwgOiB1bmRlZmluZWQgfSkKICAgICAgLnRoZW4oZnVuY3Rpb24gKHJlcykgewogICAgICAgIGlmICh0aW1lcikgY2xlYXJUaW1lb3V0KHRpbWVyKTsKICAgICAgICBpZiAoIXJlcy5vaykgdGhyb3cgbmV3IEVycm9yKCJIVFRQICIgKyByZXMuc3RhdHVzKTsKICAgICAgICByZXR1cm4gdHJ1ZTsKICAgICAgfSkKICAgICAgLmNhdGNoKGZ1bmN0aW9uIChlcnIpIHsKICAgICAgICBpZiAodGltZXIpIGNsZWFyVGltZW91dCh0aW1lcik7CiAgICAgICAgdGhyb3cgZXJyOwogICAgICB9KTsKICB9CgogIHJldHVybiB7CiAgICBERUZBVUxUX1VSTDogREVGQVVMVF9VUkwsCiAgICBTVE9SQUdFX0tFWTogU1RPUkFHRV9LRVksCiAgICBub3JtYWxpemVVcmw6IG5vcm1hbGl6ZVVybCwKICAgIGdldFVybDogZ2V0VXJsLAogICAgc2V0VXJsOiBzZXRVcmwsCiAgICBwcm9iZTogcHJvYmUKICB9Owp9KSgpOwoKLyogZ2xvYmFsIG1vZHVsZSAqLyAgIC8vIG9ubHkgcHJlc2VudCB1bmRlciBOb2RlIChzbW9rZSB0ZXN0cyksIG5ldmVyIGluIHRoZSBXZWJWaWV3CgovLyBOb2RlIGV4cG9ydDogbGV0cyB0aGUgc2hlbGwgbG9naWMgYmUgc21va2UtdGVzdGVkIHdpdGhvdXQgYSBicm93c2VyLgppZiAodHlwZW9mIG1vZHVsZSAhPT0gInVuZGVmaW5lZCIgJiYgbW9kdWxlLmV4cG9ydHMpIG1vZHVsZS5leHBvcnRzID0gWm9uZUdsb3dUcmFuc3BvcnQ7
+// ZoneGlow mobile - Hub transport abstraction.
+//
+// The ZoneGlow web UI is served BY the Hub itself (the PC simulator in
+// development, the real ESP32 ZoneGlow Hub in production). A "transport"
+// therefore reduces to two things: which base URL to load the UI from,
+// and how to check that the Hub is alive. The UI, its REST API and its
+// WebSocket telemetry are identical in both cases, so pointing the mobile
+// app at any Hub address needs no UI rewrite and no firmware changes.
+"use strict";
+
+var ZoneGlowTransport = (function () {
+  var DEFAULT_URL = "http://zoneglow.local";
+  var STORAGE_KEY = "zoneglow.hub.url";
+
+  function storage() {
+    try {
+      return typeof localStorage !== "undefined" ? localStorage : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Accepts "http://zoneglow.local/", "192.168.1.50", "10.0.2.2:8080" ...
+  // Returns "" for anything unusable.
+  function normalizeUrl(url) {
+    if (typeof url !== "string") return "";
+    url = url.trim();
+    if (url === "") return "";
+    if (!/^https?:\/\//i.test(url)) {
+      if (!/^[\w.-]+(:\d+)?(\/|$)/.test(url)) return "";
+      url = "http://" + url;
+    }
+    return url.replace(/\/+$/, "");
+  }
+
+  // Last successfully connected Hub address (requirement: persist on the
+  // phone). Falls back to the default suggestion when nothing stored yet.
+  function getUrl() {
+    var s = storage();
+    var saved = s ? s.getItem(STORAGE_KEY) : null;
+    return normalizeUrl(saved) || DEFAULT_URL;
+  }
+
+  function setUrl(url) {
+    var normalized = normalizeUrl(url);
+    if (!normalized) return false;
+    var s = storage();
+    if (s) s.setItem(STORAGE_KEY, normalized);
+    return true;
+  }
+
+  // Liveness probe. Both the simulator and the ESP32 Hub expose
+  // GET /api/info; anything else is treated as "Hub not reachable".
+  function probe(url, timeoutMs) {
+    timeoutMs = timeoutMs || 1500;
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = controller
+      ? setTimeout(function () { controller.abort(); }, timeoutMs)
+      : null;
+    return fetch(url + "/api/info", { signal: controller ? controller.signal : undefined })
+      .then(function (res) {
+        if (timer) clearTimeout(timer);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return true;
+      })
+      .catch(function (err) {
+        if (timer) clearTimeout(timer);
+        throw err;
+      });
+  }
+
+  return {
+    DEFAULT_URL: DEFAULT_URL,
+    STORAGE_KEY: STORAGE_KEY,
+    normalizeUrl: normalizeUrl,
+    getUrl: getUrl,
+    setUrl: setUrl,
+    probe: probe
+  };
+})();
+
+/* global module */   // only present under Node (smoke tests), never in the WebView
+
+// Node export: lets the shell logic be smoke-tested without a browser.
+if (typeof module !== "undefined" && module.exports) module.exports = ZoneGlowTransport;
