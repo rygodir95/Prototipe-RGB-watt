@@ -37,6 +37,104 @@ static bool rgbFromHex(const char *hex, uint8_t &r, uint8_t &g, uint8_t &b) {
   return true;
 }
 
+// ---- Secure OTA upload helpers ---------------------------------------------
+// The /api/ota multipart handler streams the uploaded image through these.
+// Production builds require an ECDSA-P256 signature (X-FW-Signature header,
+// hex-encoded DER over the SHA-256 of the image) and enforce an anti-rollback
+// version check against the running firmware. Development builds accept
+// unsigned images but verify a signature when one is supplied.
+
+static bool   s_otaRejected   = false;
+static char   s_otaReason[96] = {0};
+static bool   s_otaShaActive  = false;
+static mbedtls_sha256_context s_otaSha;
+static uint8_t s_otaSig[160]  = {0};   // hex-decoded DER signature
+static size_t s_otaSigLen     = 0;
+static bool   s_otaHeaderSeen = false; // image header version checked
+
+static void otaReject(const char *reason) {
+  if (s_otaRejected) return;
+  s_otaRejected = true;
+  strlcpy(s_otaReason, reason ? reason : "update rejected", sizeof(s_otaReason));
+  if (s_otaShaActive) { mbedtls_sha256_free(&s_otaSha); s_otaShaActive = false; }
+  if (Update.isRunning()) Update.abort();
+  Serial.printf("[OTA] rejected: %s\n", s_otaReason);
+}
+
+static void otaBegin(AsyncWebServerRequest *req, const String &filename) {
+  (void)filename;
+  s_otaRejected   = false;
+  s_otaReason[0]  = '\0';
+  s_otaSigLen     = 0;
+  s_otaHeaderSeen = false;
+
+  if (req->hasHeader("X-FW-Signature")) {
+    String hex = req->getHeader("X-FW-Signature")->value();
+    if (hex.length() >= 2 && hex.length() % 2 == 0 && hex.length() / 2 <= sizeof(s_otaSig)) {
+      for (size_t i = 0; i < hex.length() / 2; i++) {
+        char b[3] = { hex[2 * i], hex[2 * i + 1], '\0' };
+        char *end = nullptr;
+        long v = strtol(b, &end, 16);
+        if (end == b || *end) { s_otaSigLen = 0; break; }
+        s_otaSig[i] = (uint8_t)v;
+        s_otaSigLen = i + 1;
+      }
+    }
+  }
+  if (Security::requireSignedOTA() && s_otaSigLen == 0) {
+    otaReject("signed firmware required");
+    return;
+  }
+  if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+    otaReject(Update.errorString() ? Update.errorString() : "flash prepare failed");
+    return;
+  }
+  mbedtls_sha256_init(&s_otaSha);
+  if (mbedtls_sha256_starts_ret(&s_otaSha, 0) != 0) {
+    otaReject("hash init failed");
+    return;
+  }
+  s_otaShaActive = true;
+}
+
+static void otaWrite(uint8_t *data, size_t len) {
+  if (s_otaRejected) return;
+  if (!s_otaHeaderSeen) {
+    s_otaHeaderSeen = true;
+    int v = Security::parseImageVersionCode(data, len);
+    if (v >= 0 && v < Security::runningVersionCode()) {
+      otaReject("rollback rejected: image older than running firmware");
+      return;
+    }
+  }
+  if (s_otaShaActive) mbedtls_sha256_update_ret(&s_otaSha, data, len);
+  if (Update.write(data, len) != len) {
+    otaReject(Update.errorString() ? Update.errorString() : "flash write failed");
+  }
+}
+
+static void otaFinish(size_t total) {
+  if (s_otaRejected) return;
+  uint8_t sha[32];
+  if (s_otaShaActive) {
+    mbedtls_sha256_finish_ret(&s_otaSha, sha);
+    mbedtls_sha256_free(&s_otaSha);
+    s_otaShaActive = false;
+  } else {
+    otaReject("hash unavailable");
+    return;
+  }
+  if (s_otaSigLen > 0 && !Security::verifyImage(sha, s_otaSig, s_otaSigLen)) {
+    otaReject("invalid firmware signature");
+    return;
+  }
+  if (!Update.end(true)) {
+    otaReject(Update.errorString() ? Update.errorString() : "flash finalize failed");
+    return;
+  }
+  Serial.printf("[OTA] Firmware update accepted (%u bytes)\n", (unsigned)total);
+}
+
 static void buildConfigJson(JsonDocument &doc) {
   doc["controlSource"] = (g_config.controlSource == SRC_HEART_RATE) ? "hr" : "power";
   doc["ftp"]          = g_config.ftp;
