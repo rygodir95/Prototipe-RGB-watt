@@ -1,0 +1,34 @@
+name: ZoneGlow Firmware Build
+
+on:
+  push:
+    branches: [feature/mobile-app]
+    paths: ["src/firmware/**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build firmware (esp32dev-dev)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware (esp32dev-dev, no changes)
+        working-directory: src/firmware
+        run: pio run
+
+      - name: Upload firmware.bin
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZoneGlow-Firmware-esp32dev-dev
+          path: src/firmware/.pio/build/esp32dev-dev/firmware.bin
+          if-no-files-found: error
