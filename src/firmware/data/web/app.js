@@ -4,7 +4,6 @@
 const $ = (id) => document.getElementById(id);
 let config = null;
 let ws = null;
-let simState = { enabled: false, watts: 150, bpm: 120 };
 
 function isHrMode() { return !!(config && config.controlSource === "hr"); }
 
@@ -80,9 +79,7 @@ function initSourceSeg() {
     b.addEventListener("click", async () => {
       if (b.classList.contains("active")) return;
       await postConfig({ controlSource: b.dataset.src });
-      // The device disconnected the previous sensor and cleared its state;
-      // reset the local simulation UI to match.
-      simState.enabled = false;
+      // The device disconnected the previous sensor and cleared its state.
       fillForms();
       toast(isHrMode() ? "Switched to Heart Rate mode" : "Switched to Power mode");
     });
@@ -111,12 +108,10 @@ function fillForms() {
   // ---- Dashboard adapts to the active control source ----
   const hr = isHrMode();
   $("powerUnit").textContent = hr ? "BPM" : "W";
-  $("powerRawRow").style.display = hr ? "none" : "";   // no raw watts readout in HR mode
   $("statFtpLabel").textContent = hr ? "Max HR" : "FTP";
   $("statFtp").textContent = hr ? config.hrMax : config.ftp;
   $("statFtpUnit").textContent = hr ? "BPM" : "W";
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
-  $("simUnit").textContent = hr ? "BPM" : "W";
   $("hysUnit").textContent = hr ? "BPM" : "W";
   $("sourceMiniLabel").textContent = hr ? "Heart Rate" : "Power Source";
   document.querySelectorAll("#sourceSeg button").forEach((b) => {
@@ -138,7 +133,6 @@ function fillForms() {
 
   renderZoneEditor();
   renderHrZoneEditor();
-  renderSimControls();
 }
 
 // ---------------- Power zone editor ----------------
@@ -381,97 +375,6 @@ async function disconnect() { await fetch("/api/disconnect", { method: "POST" })
 async function forget() { await fetch("/api/forget", { method: "POST" }); toast("Source forgotten"); setTimeout(refreshDevices, 600); }
 function escapeHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
-// ---------------- Simulation ----------------
-function initSim() {
-  $("simToggle").addEventListener("change", () => {
-    simState.enabled = $("simToggle").checked;
-    $("simSlider").disabled = !simState.enabled;
-    pushSim();
-    toast(simState.enabled ? "Simulation ON" : "Simulation OFF");
-  });
-  $("simSlider").addEventListener("input", () => {
-    if (isHrMode()) {
-      simState.bpm = +$("simSlider").value;
-      $("simVal").textContent = simState.bpm;
-    } else {
-      simState.watts = +$("simSlider").value;
-      $("simVal").textContent = simState.watts;
-    }
-    pushSim();
-  });
-}
-
-function renderSimControls() {
-  const slider = $("simSlider");
-  if (isHrMode()) {
-    slider.min = 40;
-    slider.max = 220;
-    if (!simState.enabled) simState.bpm = Math.min(220, Math.max(40, simState.bpm || 120));
-    slider.value = simState.bpm;
-    $("simVal").textContent = simState.bpm;
-    // Presets from the configured HR zone boundaries: one centre value per
-    // zone, plus a rest value and one above Max HR.
-    const zones = config.hrZones || [];
-    const hrMax = config.hrMax || 190;
-    const presets = [];
-    if (zones.length === 5) {
-      presets.push(Math.max(40, zones[0].min - 15));
-      zones.forEach((z, i) => {
-        const hi = i < zones.length - 1 ? zones[i + 1].min - 1 : hrMax;
-        presets.push(Math.round((z.min + hi) / 2));
-      });
-      presets.push(hrMax + 10);
-    }
-    renderSimPresets(presets, true);
-  } else {
-    slider.min = 0;
-    slider.max = 600;
-    if (!simState.enabled) simState.watts = 150;
-    slider.value = simState.watts;
-    $("simVal").textContent = simState.watts;
-    renderSimPresets([0, 50, 100, 150, 200, 250, 300, 400, 500], false);
-  }
-  slider.disabled = !simState.enabled;
-  $("simToggle").checked = simState.enabled;
-}
-
-function renderSimPresets(values, hr) {
-  const box = $("simPresets");
-  box.innerHTML = "";
-  const seen = {};
-  values.forEach((v) => {
-    v = Math.round(v);
-    if (seen[v] || v < (hr ? 40 : 0) || v > (hr ? 220 : 600)) return;
-    seen[v] = true;
-    const b = document.createElement("button");
-    b.textContent = v;
-    b.addEventListener("click", () => {
-      if (hr) simState.bpm = v; else simState.watts = v;
-      if (!simState.enabled) simState.enabled = true;
-      $("simSlider").value = v;
-      $("simVal").textContent = v;
-      $("simSlider").disabled = false;
-      $("simToggle").checked = true;
-      pushSim();
-    });
-    box.appendChild(b);
-  });
-}
-
-let simTimer = null;
-function pushSim() {
-  clearTimeout(simTimer);
-  simTimer = setTimeout(() => {
-    const body = { enabled: simState.enabled };
-    if (isHrMode()) body.bpm = simState.bpm;
-    else body.watts = simState.watts;
-    fetch("/api/simulation", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  }, 80);
-}
-
 // ---------------- WebSocket telemetry ----------------
 // The Hub broadcasts telemetry ~5x/s, so sustained silence means the socket
 // is dead. In the Android WebView (mobile shell iframe) a dead WebSocket can
@@ -544,7 +447,6 @@ function updateLive(t) {
 async function init() {
   initTheme();
   initNav();
-  initSim();
   await getConfig();
   // Sync stored theme with device config (device is source of truth on first load if set)
   if (config.theme && !localStorage.getItem("theme")) { localStorage.setItem("theme", config.theme); applyTheme(config.theme); }

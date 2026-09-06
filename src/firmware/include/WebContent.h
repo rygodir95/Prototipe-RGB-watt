@@ -49,7 +49,6 @@ const char INDEX_HTML[] = R"rgbwatt(
           <div class="card power-card" id="powerCard" data-testid="power-card">
             <div class="power-glow" id="powerGlow"></div>
             <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em id="powerUnit">W</em></div>
-            <div class="power-raw" id="powerRawRow">Raw <span id="powerRaw">0</span> <span id="powerRawUnit">W</span></div>
             <div class="zone-badge" id="zoneBadge" data-testid="zone-badge">
               <span id="zoneNum">Z1</span> · <span id="zoneName">—</span>
             </div>
@@ -67,19 +66,6 @@ const char INDEX_HTML[] = R"rgbwatt(
             <div class="stat"><div class="stat-k">Brightness</div><div class="stat-v"><span id="statBright">100</span>%</div></div>
           </div>
 
-          <div class="card sim-card" data-testid="sim-card">
-            <div class="card-header">
-              <div class="card-label">Simulation Mode</div>
-              <label class="toggle">
-                <input type="checkbox" id="simToggle" data-testid="sim-toggle" />
-                <span class="toggle-track"></span>
-              </label>
-            </div>
-            <p class="muted" id="simHint">Test the pipeline without a real device.</p>
-            <input type="range" min="0" max="600" value="150" id="simSlider" class="slider" data-testid="sim-slider" disabled />
-            <div class="sim-value"><span id="simVal">150</span> <span id="simUnit">W</span></div>
-            <div class="sim-presets" id="simPresets"></div>
-          </div>
         </div>
       </section>
 
@@ -410,7 +396,6 @@ body {
 }
 .power-value { font-size: 84px; font-weight: 800; line-height: 1; letter-spacing: -3px; position: relative; }
 .power-value em { font-size: 28px; font-style: normal; color: var(--muted); margin-left: 6px; font-weight: 600; }
-.power-raw { color: var(--muted); font-size: 13px; margin-top: 6px; position: relative; }
 .zone-badge {
   display: inline-block; margin-top: 16px; padding: 8px 18px; border-radius: 999px;
   background: var(--bg-elev); border: 1px solid var(--border); font-weight: 700; font-size: 15px; position: relative;
@@ -426,16 +411,6 @@ body {
 .stat { text-align: center; }
 .stat-k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 .stat-v { font-size: 22px; font-weight: 700; margin-top: 4px; }
-
-/* Sim */
-.sim-card { grid-column: 1 / -1; }
-.sim-value { text-align: center; font-size: 26px; font-weight: 700; margin: 6px 0 12px; }
-.sim-presets { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; }
-.sim-presets button {
-  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text);
-  padding: 8px 0; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px; transition: all .15s;
-}
-.sim-presets button:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Buttons */
 .btn {
@@ -541,7 +516,6 @@ input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
   .power-value { font-size: 66px; }
-  .sim-presets { grid-template-columns: repeat(5, 1fr); }
   .zone-item { grid-template-columns: 40px 1fr 70px; grid-auto-rows: auto; }
   .zone-item .zmax { display: none; }
   .zone-item .zpct { display: none; }
@@ -555,7 +529,6 @@ const char APP_JS[] = R"rgbwatt(
 const $ = (id) => document.getElementById(id);
 let config = null;
 let ws = null;
-let simState = { enabled: false, watts: 150, bpm: 120 };
 
 function isHrMode() { return !!(config && config.controlSource === "hr"); }
 
@@ -631,9 +604,7 @@ function initSourceSeg() {
     b.addEventListener("click", async () => {
       if (b.classList.contains("active")) return;
       await postConfig({ controlSource: b.dataset.src });
-      // The device disconnected the previous sensor and cleared its state;
-      // reset the local simulation UI to match.
-      simState.enabled = false;
+      // The device disconnected the previous sensor and cleared its state.
       fillForms();
       toast(isHrMode() ? "Switched to Heart Rate mode" : "Switched to Power mode");
     });
@@ -662,12 +633,10 @@ function fillForms() {
   // ---- Dashboard adapts to the active control source ----
   const hr = isHrMode();
   $("powerUnit").textContent = hr ? "BPM" : "W";
-  $("powerRawRow").style.display = hr ? "none" : "";   // no raw watts readout in HR mode
   $("statFtpLabel").textContent = hr ? "Max HR" : "FTP";
   $("statFtp").textContent = hr ? config.hrMax : config.ftp;
   $("statFtpUnit").textContent = hr ? "BPM" : "W";
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
-  $("simUnit").textContent = hr ? "BPM" : "W";
   $("hysUnit").textContent = hr ? "BPM" : "W";
   $("sourceMiniLabel").textContent = hr ? "Heart Rate" : "Power Source";
   document.querySelectorAll("#sourceSeg button").forEach((b) => {
@@ -689,7 +658,6 @@ function fillForms() {
 
   renderZoneEditor();
   renderHrZoneEditor();
-  renderSimControls();
 }
 
 // ---------------- Power zone editor ----------------
@@ -932,97 +900,6 @@ async function disconnect() { await fetch("/api/disconnect", { method: "POST" })
 async function forget() { await fetch("/api/forget", { method: "POST" }); toast("Source forgotten"); setTimeout(refreshDevices, 600); }
 function escapeHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
-// ---------------- Simulation ----------------
-function initSim() {
-  $("simToggle").addEventListener("change", () => {
-    simState.enabled = $("simToggle").checked;
-    $("simSlider").disabled = !simState.enabled;
-    pushSim();
-    toast(simState.enabled ? "Simulation ON" : "Simulation OFF");
-  });
-  $("simSlider").addEventListener("input", () => {
-    if (isHrMode()) {
-      simState.bpm = +$("simSlider").value;
-      $("simVal").textContent = simState.bpm;
-    } else {
-      simState.watts = +$("simSlider").value;
-      $("simVal").textContent = simState.watts;
-    }
-    pushSim();
-  });
-}
-
-function renderSimControls() {
-  const slider = $("simSlider");
-  if (isHrMode()) {
-    slider.min = 40;
-    slider.max = 220;
-    if (!simState.enabled) simState.bpm = Math.min(220, Math.max(40, simState.bpm || 120));
-    slider.value = simState.bpm;
-    $("simVal").textContent = simState.bpm;
-    // Presets from the configured HR zone boundaries: one centre value per
-    // zone, plus a rest value and one above Max HR.
-    const zones = config.hrZones || [];
-    const hrMax = config.hrMax || 190;
-    const presets = [];
-    if (zones.length === 5) {
-      presets.push(Math.max(40, zones[0].min - 15));
-      zones.forEach((z, i) => {
-        const hi = i < zones.length - 1 ? zones[i + 1].min - 1 : hrMax;
-        presets.push(Math.round((z.min + hi) / 2));
-      });
-      presets.push(hrMax + 10);
-    }
-    renderSimPresets(presets, true);
-  } else {
-    slider.min = 0;
-    slider.max = 600;
-    if (!simState.enabled) simState.watts = 150;
-    slider.value = simState.watts;
-    $("simVal").textContent = simState.watts;
-    renderSimPresets([0, 50, 100, 150, 200, 250, 300, 400, 500], false);
-  }
-  slider.disabled = !simState.enabled;
-  $("simToggle").checked = simState.enabled;
-}
-
-function renderSimPresets(values, hr) {
-  const box = $("simPresets");
-  box.innerHTML = "";
-  const seen = {};
-  values.forEach((v) => {
-    v = Math.round(v);
-    if (seen[v] || v < (hr ? 40 : 0) || v > (hr ? 220 : 600)) return;
-    seen[v] = true;
-    const b = document.createElement("button");
-    b.textContent = v;
-    b.addEventListener("click", () => {
-      if (hr) simState.bpm = v; else simState.watts = v;
-      if (!simState.enabled) simState.enabled = true;
-      $("simSlider").value = v;
-      $("simVal").textContent = v;
-      $("simSlider").disabled = false;
-      $("simToggle").checked = true;
-      pushSim();
-    });
-    box.appendChild(b);
-  });
-}
-
-let simTimer = null;
-function pushSim() {
-  clearTimeout(simTimer);
-  simTimer = setTimeout(() => {
-    const body = { enabled: simState.enabled };
-    if (isHrMode()) body.bpm = simState.bpm;
-    else body.watts = simState.watts;
-    fetch("/api/simulation", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  }, 80);
-}
-
 // ---------------- WebSocket telemetry ----------------
 // The Hub broadcasts telemetry ~5x/s, so sustained silence means the socket
 // is dead. In the Android WebView (mobile shell iframe) a dead WebSocket can
@@ -1095,7 +972,6 @@ function updateLive(t) {
 async function init() {
   initTheme();
   initNav();
-  initSim();
   await getConfig();
   // Sync stored theme with device config (device is source of truth on first load if set)
   if (config.theme && !localStorage.getItem("theme")) { localStorage.setItem("theme", config.theme); applyTheme(config.theme); }

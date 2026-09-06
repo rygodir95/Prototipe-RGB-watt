@@ -44,7 +44,6 @@
           <div class="card power-card" id="powerCard" data-testid="power-card">
             <div class="power-glow" id="powerGlow"></div>
             <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em id="powerUnit">W</em></div>
-            <div class="power-raw" id="powerRawRow">Raw <span id="powerRaw">0</span> <span id="powerRawUnit">W</span></div>
             <div class="zone-badge" id="zoneBadge" data-testid="zone-badge">
               <span id="zoneNum">Z1</span> · <span id="zoneName">—</span>
             </div>
@@ -62,19 +61,6 @@
             <div class="stat"><div class="stat-k">Brightness</div><div class="stat-v"><span id="statBright">100</span>%</div></div>
           </div>
 
-          <div class="card sim-card" data-testid="sim-card">
-            <div class="card-header">
-              <div class="card-label">Simulation Mode</div>
-              <label class="toggle">
-                <input type="checkbox" id="simToggle" data-testid="sim-toggle" />
-                <span class="toggle-track"></span>
-              </label>
-            </div>
-            <p class="muted" id="simHint">Test the pipeline without a real device.</p>
-            <input type="range" min="0" max="600" value="150" id="simSlider" class="slider" data-testid="sim-slider" disabled />
-            <div class="sim-value"><span id="simVal">150</span> <span id="simUnit">W</span></div>
-            <div class="sim-presets" id="simPresets"></div>
-          </div>
         </div>
       </section>
 
