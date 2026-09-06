@@ -47,6 +47,35 @@ body[data-state="disconnected"] #statusDot { background: #e74c3c; }
 body[data-state="connected"] #statusText { color: #2ecc71; }
 body[data-state="disconnected"] #statusText { color: #e74c3c; }
 
+/* ---- startup splash (shared startup flow with the Windows shell) ---- */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b0e14;
+  transition: opacity .35s ease;
+}
+#splash.hide { opacity: 0; pointer-events: none; }
+.splash-brand { text-align: center; }
+.splash-brand h1 { margin: 10px 0 0; font-size: 26px; letter-spacing: 0.5px; }
+.splash-brand p { margin: 4px 0 0; color: #8b94a7; font-size: 12px; }
+.splash-bar {
+  width: 140px; height: 3px; margin: 24px auto 0; border-radius: 2px;
+  background: #1d2330; overflow: hidden;
+}
+.splash-bar i {
+  display: block; height: 100%; width: 40%; border-radius: 2px;
+  background: linear-gradient(90deg, #ff7a59, #ff3d68);
+  animation: splash-slide 1s ease-in-out infinite;
+}
+@keyframes splash-slide {
+  0% { transform: translateX(-60px); }
+  100% { transform: translateX(150px); }
+}
+
 /* ---- embedded ZoneGlow UI ---- */
 #uiFrame {
   flex: 1 1 auto;

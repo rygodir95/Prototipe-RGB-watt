@@ -7,6 +7,18 @@
   <link rel="stylesheet" href="shell.css" />
 </head>
 <body data-state="connecting">
+  <!-- Startup splash: branding while the first Hub probe runs. It never
+       delays startup - it disappears as soon as the Hub responds, or after
+       1.2 s at the latest, handing over to the normal connection view. -->
+  <div id="splash" aria-hidden="true">
+    <div class="splash-brand">
+      <span class="overlay-dot"></span>
+      <h1>ZoneGlow</h1>
+      <p>Training Zone Lighting</p>
+      <div class="splash-bar"><i></i></div>
+    </div>
+  </div>
+
   <!-- Minimal desktop-level connection bar (shell only). The ZoneGlow UI
        itself is served by the backend and shown unchanged in the iframe. -->
   <header id="statusbar">
@@ -32,8 +44,8 @@
           <p>Training Zone Lighting</p>
         </div>
       </div>
-      <p id="overlayHint" class="overlay-hint">Looking for the ZoneGlow backend…</p>
-      <label class="overlay-label" for="backendUrl">Backend address</label>
+      <p id="overlayHint" class="overlay-hint">Searching for Hub…</p>
+      <label class="overlay-label" for="backendUrl">Hub address</label>
       <div class="overlay-row">
         <input id="backendUrl" type="text" spellcheck="false" placeholder="http://localhost:8080" />
         <button id="connectBtn" type="button">Connect</button>

@@ -31,9 +31,23 @@
   var everConnected = false;
   var missedProbes = 0;
   var probing = false;
+  var userInitiated = false;   // Connect button pressed (vs. automatic search)
+  var splashHidden = false;
+
+  var SPLASH = $("splash");
 
   function log(msg) {
     try { console.log("[ZoneGlow][shell] " + msg); } catch (e) {}
+  }
+
+  // Splash never artificially delays startup: it hides on the first
+  // successful probe OR after 1.2 s, whichever comes first, then the normal
+  // connection view ("Searching for Hub…" / "Connecting…") takes over.
+  function hideSplash() {
+    if (splashHidden) return;
+    splashHidden = true;
+    SPLASH.classList.add("hide");
+    setTimeout(function () { SPLASH.style.display = "none"; }, 400);
   }
 
   function setState(state, url) {
@@ -51,7 +65,7 @@
       UI_FRAME.style.display = "none";
       OVERLAY.style.display = "flex";
       OVERLAY_HINT.textContent = state === "connecting"
-        ? "Looking for the ZoneGlow Hub at " + url + " …"
+        ? (userInitiated ? "Connecting to " + url + " …" : "Searching for Hub at " + url + " …")
         : "Cannot reach " + url + ". Make sure the Hub is powered and on " +
           "the same Wi-Fi, or set the Hub address below. Retrying " +
           "automatically every " + (PROBE_INTERVAL_MS / 1000) + " seconds.";
@@ -85,6 +99,7 @@
         ZoneGlowTransport.setUrl(url);   // keep last successfully connected Hub
         showUi(url);
         setState("connected", url);
+        hideSplash();
         probing = false;
       })
       .catch(function (err) {
@@ -110,6 +125,7 @@
     uiLoadedFor = "";          // force the iframe to load from the new Hub
     missedProbes = 0;
     everConnected = false;
+    userInitiated = true;
     setState("connecting", ZoneGlowTransport.getUrl());
     tick();
   });
@@ -120,4 +136,5 @@
   setState("connecting", ZoneGlowTransport.getUrl());
   tick();
   setInterval(tick, PROBE_INTERVAL_MS);
+  setTimeout(hideSplash, 1200);   // branding window: 1.2 s max, never blocking
 })();

@@ -1,0 +1,38 @@
+name: ZoneGlow Windows Debug Build
+
+on:
+  push:
+    branches: [feature/mobile-app]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Windows exe
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src/firmware/desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust (stable MSVC)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build ZoneGlow.exe (release, no bundling)
+        run: npm run build:exe
+
+      - name: Upload ZoneGlow.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZoneGlow-Windows-Exe
+          path: src/firmware/desktop/src-tauri/target/release/ZoneGlow.exe
+          if-no-files-found: error
