@@ -1024,11 +1024,26 @@ function pushSim() {
 }
 
 // ---------------- WebSocket telemetry ----------------
+// The Hub broadcasts telemetry ~5x/s, so sustained silence means the socket
+// is dead. In the Android WebView (mobile shell iframe) a dead WebSocket can
+// drop WITHOUT ever firing onclose - the network path (emulator NAT, Wi-Fi
+// power-save) silently blackholes it. The dashboard would then freeze on the
+// last received frame forever while REST commands still work. A watchdog
+// re-arms on every telemetry frame and force-closes a silent socket, letting
+// the normal onclose reconnect take over.
+const WS_SILENCE_MS = 6000;   // ~30 missed telemetry frames = definitively dead
+let wsWatchdog = null;
+function armWsWatchdog() {
+  clearTimeout(wsWatchdog);
+  wsWatchdog = setTimeout(() => { try { ws.close(); } catch (_) {} }, WS_SILENCE_MS);
+}
 function initWs() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(proto + "://" + location.host + "/ws");
-  ws.onmessage = (e) => { try { updateLive(JSON.parse(e.data)); } catch (_) {} };
-  ws.onclose = () => setTimeout(initWs, 2000);
+  ws.onmessage = (e) => { armWsWatchdog(); try { updateLive(JSON.parse(e.data)); } catch (_) {} };
+  ws.onerror = () => { try { ws.close(); } catch (_) {} };
+  ws.onclose = () => { clearTimeout(wsWatchdog); setTimeout(initWs, 2000); };
+  armWsWatchdog();   // a socket that never opens at all must not hang either
 }
 const STATE_MAP = {
   RECEIVING_POWER: { cls: "live", label: "Receiving Data" },
