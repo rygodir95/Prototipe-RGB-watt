@@ -3,7 +3,7 @@ name: ZoneGlow Firmware Build
 on:
   push:
     branches: [feature/mobile-app]
-    paths: ["src/firmware/**"]
+    paths: ["src/firmware/**", ".github/workflows/firmware-build.yml"]
   workflow_dispatch:
 
 jobs:
