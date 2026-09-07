@@ -33,6 +33,7 @@ jobs:
       - name: Assemble flashing package (factory.bin + FLASHING.txt)
         working-directory: src/firmware
         run: |
+          python - <<'PY'
           import glob, json, os, shutil, subprocess, sys
           
           BUILD = ".pio/build/esp32dev-dev"
@@ -97,6 +98,7 @@ jobs:
               fp.write(FLASHING_TXT.format(app=app_offset, boot=by_name["bootloader.bin"],
                                            part=by_name["partitions.bin"], boot_app=by_name["boot_app0.bin"]))
           print("Staged flashing package: " + ", ".join(sorted(os.listdir(stage))))
+          PY
 
       - name: Upload flashing package
         uses: actions/upload-artifact@v4
