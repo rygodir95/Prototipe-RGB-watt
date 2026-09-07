@@ -49,17 +49,25 @@ jobs:
           os.makedirs(stage, exist_ok=True)
           
           # Stage every image PlatformIO itself flashes, under its expected basename.
-          fw = data.get("prog_path")
-          files = {"firmware.bin": fw}
           for img in images:
-              files[os.path.basename(img["path"])] = img["path"]
-          for name, src in files.items():
-              if not src or not os.path.isfile(src):
-                  sys.exit("Missing required flashing file: " + name)
-              shutil.copy2(src, os.path.join(stage, name))
+              shutil.copy2(img["path"], os.path.join(stage, os.path.basename(img["path"])))
           for name in ("bootloader.bin", "partitions.bin", "boot_app0.bin"):
               if not os.path.isfile(os.path.join(stage, name)):
                   sys.exit("Expected " + name + " in the flashing package")
+          
+          # The flashable application binary is BUILD/firmware.bin. Never use idedata
+          # prog_path - it points at firmware.elf, not a flashable image.
+          fw_bin = os.path.join(BUILD, "firmware.bin")
+          if not os.path.isfile(fw_bin):
+              sys.exit("Missing flashable application image: " + fw_bin)
+          with open(fw_bin, "rb") as fp:
+              magic = fp.read(4)
+          if len(magic) < 4:
+              sys.exit("Application image is empty or truncated")
+          if magic == b"\x7fELF":
+              sys.exit("Application image starts with ELF magic - expected a flashable ESP32 binary")
+          shutil.copy2(fw_bin, os.path.join(stage, "firmware.bin"))
+          print("Application image: firmware.bin " + str(os.path.getsize(fw_bin)) + " bytes, first bytes " + magic.hex())
           
           # esptool bundled with the PlatformIO toolchain (same interpreter pio uses).
           pkg = os.path.expanduser("~/.platformio/packages/tool-esptoolpy")
@@ -70,8 +78,8 @@ jobs:
                   sys.exit("esptool not found in " + pkg)
               esptool = hits[0]
           
-          # merge: bootloader + partitions + boot flag + app; offsets come straight
-          # from PlatformIO metadata - nothing hardcoded.
+          # merge: bootloader + partitions + boot flag + the REAL flashable firmware.bin;
+          # offsets come straight from PlatformIO metadata - nothing hardcoded.
           parts = sorted(images, key=lambda i: int(i["offset"], 16))
           parts.append({"offset": app_offset, "path": "firmware.bin"})
           args = []
@@ -89,8 +97,27 @@ jobs:
               print(cmd + " failed: " + r.stdout + r.stderr)
           if merged is None:
               sys.exit("factory.bin merge failed")
+          
+          # ---- Validate the merged image before upload ----
+          FLASH_LIMIT = 4 * 1024 * 1024   # 4 MB ESP32 flash layout
           factory = os.path.join(stage, "factory.bin")
-          print("factory.bin generated with esptool " + merged + ": " + str(os.path.getsize(factory)) + " bytes")
+          fsize = os.path.getsize(factory)
+          app_off = int(app_offset, 16)
+          asize = os.path.getsize(fw_bin)
+          print("factory.bin generated with esptool " + merged + ": " + str(fsize) + " bytes")
+          if app_off + asize > FLASH_LIMIT:
+              sys.exit("Application image (" + str(asize) + " bytes at " + app_offset + ") exceeds the 4 MB flash layout")
+          with open(factory, "rb") as ff:
+              ff.seek(app_off)
+              embedded = ff.read()
+          with open(fw_bin, "rb") as af:
+              app = af.read()
+          if embedded != app:
+              sys.exit("factory.bin does not contain the real firmware.bin at " + app_offset)
+          print("Validated: factory.bin at " + app_offset + " matches firmware.bin byte for byte")
+          if fsize > FLASH_LIMIT:
+              sys.exit("factory.bin (" + str(fsize) + " bytes) exceeds the 4 MB flash layout")
+          print("Validated: factory.bin fits the 4 MB flash target (" + str(fsize) + " / " + str(FLASH_LIMIT) + " bytes)")
           
           by_name = {os.path.basename(i["path"]): i["offset"] for i in images}
           FLASHING_TXT = "ZoneGlow Hub firmware - full-flash package (esp32dev-dev build)\n\nThis package contains everything needed to flash a classic ESP32 board from scratch.\n\nFILES\n  factory.bin     Merged full-flash image (bootloader + partition table + boot\n                  flag + application). Flash it once at 0x0 to fully initialize\n                  a new or wiped chip.\n  firmware.bin    Application-only image, for app/OTA-style updates at {app}.\n  bootloader.bin  Second-stage bootloader ({boot}).\n  partitions.bin  Partition table ({part}).\n  boot_app0.bin   OTA boot flag ({boot_app}).\n\nFULL CHIP (new board, one command):\n  esptool.py --chip esp32 --port COM3 --baud 921600 write_flash -z 0x0 factory.bin\n\nAPPLICATION-ONLY (existing board, keeps bootloader/partitions/settings):\n  esptool.py --chip esp32 --port COM3 --baud 921600 write_flash -z {app} firmware.bin\n\nNOTES\n  - Replace COM3 with your board's serial port (/dev/ttyUSB0 or /dev/ttyACM0 on\n    Linux, /dev/cu.usbserial* on macOS).\n  - 921600 baud is recommended; drop to 115200 if the board fails to connect.\n  - factory.bin flashes the whole chip; firmware.bin replaces only the\n    application partition.\n"
