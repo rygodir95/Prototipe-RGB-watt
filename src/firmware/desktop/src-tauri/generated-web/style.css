@@ -214,6 +214,9 @@ input:focus, select:focus { border-color: var(--accent); }
 .ota-progress { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; margin: 14px 0; }
 .ota-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .2s; }
 input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
+.ota-status { margin-top: 12px; font-size: 14px; font-weight: 600; }
+.ota-status.ok { color: var(--ok); }
+.ota-status.err { color: var(--err); }
 
 /* Zone editor */
 .zone-editor { display: flex; flex-direction: column; gap: 12px; margin: 8px 0 16px; }

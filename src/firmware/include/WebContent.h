@@ -264,6 +264,7 @@ const char INDEX_HTML[] = R"rgbwatt(
           <input type="file" id="otaFile" accept=".bin" data-testid="ota-file-input" />
           <div class="ota-progress" id="otaProgress"><div class="ota-bar" id="otaBar"></div></div>
           <button class="btn primary" id="otaBtn" data-testid="ota-upload-btn">Upload &amp; Flash</button>
+          <div class="ota-status" id="otaStatus" data-testid="ota-status" hidden></div>
         </div>
 
         <div class="card danger-card">
@@ -548,6 +549,9 @@ input:focus, select:focus { border-color: var(--accent); }
 .ota-progress { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; margin: 14px 0; }
 .ota-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .2s; }
 input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
+.ota-status { margin-top: 12px; font-size: 14px; font-weight: 600; }
+.ota-status.ok { color: var(--ok); }
+.ota-status.err { color: var(--err); }
 
 /* Zone editor */
 .zone-editor { display: flex; flex-direction: column; gap: 12px; margin: 8px 0 16px; }
@@ -954,13 +958,83 @@ async function factoryReset() {
 }
 
 // ---------------- OTA ----------------
+// A successful POST /api/ota only means the Hub ACCEPTED the file: it then
+// flashes and reboots, briefly disappearing from the network. Success is
+// reported only after the Hub answers /api/info again, and failure only if
+// it does not come back within the polling budget - never from the POST
+// alone, and never from the WebSocket disconnect the expected reboot
+// causes (that is handled by the normal connection banner).
+const OTA_POLL_MS = 2000;
+const OTA_DROP_POLLS = 10;   // ~20 s waiting for the reboot gap
+const OTA_BACK_POLLS = 45;    // ~90 s for flash + reboot + Wi-Fi rejoin
+let otaBusy = false;
+
+function setOtaStatus(msg, cls) {
+  const el = $("otaStatus");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.className = "ota-status" + (cls ? " " + cls : "");
+  el.hidden = !msg;
+}
+function otaSetBusy(busy) {
+  otaBusy = busy;
+  $("otaBtn").disabled = busy;
+  $("otaFile").disabled = busy;
+}
+async function otaInfoReachable() {
+  try { return (await fetch("/api/info", { cache: "no-store" })).ok; }
+  catch (_) { return false; }
+}
+async function waitHubUnreachable() {
+  // The old firmware answers /api/info right up to the reboot; wait for
+  // that gap so a fast first poll cannot mistake the pre-reboot Hub for
+  // the rebooted one.
+  for (let i = 0; i < OTA_DROP_POLLS; i++) {
+    if (!(await otaInfoReachable())) return true;
+    await new Promise((r) => setTimeout(r, OTA_POLL_MS));
+  }
+  return false;   // no gap observed (very quick reboot) - keep waiting anyway
+}
+async function waitHubBack() {
+  let announced = false;
+  for (let i = 0; i < OTA_BACK_POLLS; i++) {
+    if (await otaInfoReachable()) return true;
+    if (!announced) { setOtaStatus("Reconnecting to Hub…"); announced = true; }
+    await new Promise((r) => setTimeout(r, OTA_POLL_MS));
+  }
+  return false;
+}
+async function otaFinishUpdate() {
+  const preInfo = hubInfo && hubInfo.deviceId ? hubInfo : null;
+  setOtaStatus("Installing update…");
+  await waitHubUnreachable();
+  setOtaStatus("Hub restarting…");
+  await new Promise((r) => setTimeout(r, OTA_POLL_MS));   // the reboot takes at least a beat
+  const back = await waitHubBack();
+  if (!back) {
+    setOtaStatus("Update not confirmed — the Hub did not come back. Check its power and Wi-Fi, then reload this page.", "err");
+    toast("Hub did not return after the update");
+    otaSetBusy(false);
+    return;
+  }
+  await loadHubInfo();   // refresh About/Diagnostics with the running firmware
+  const info = hubInfo;
+  let suffix = info && info.version ? " — running firmware " + info.version : "";
+  if (preInfo && info && preInfo.deviceId !== info.deviceId) suffix += " (different Hub device ID)";
+  $("otaBar").style.width = "100%";
+  setOtaStatus("Update successful ✓" + suffix, "ok");
+  toast("Update successful");
+  otaSetBusy(false);
+}
 function otaUpload() {
+  if (otaBusy) return;
   const f = $("otaFile").files[0];
   if (!f) { toast("Choose a firmware .bin first"); return; }
+  loadHubInfo();   // record pre-update /api/info for comparison
+  otaSetBusy(true);
   const bar = $("otaBar");
-  const btn = $("otaBtn");
-  btn.disabled = true;
   bar.style.width = "0%";
+  setOtaStatus("Uploading firmware…");
   const fd = new FormData();
   fd.append("firmware", f, f.name);
   const xhr = new XMLHttpRequest();
@@ -971,12 +1045,19 @@ function otaUpload() {
   xhr.onload = () => {
     let ok = false;
     try { ok = JSON.parse(xhr.responseText).ok; } catch (_) {}
-    if (ok) { bar.style.width = "100%"; toast("Firmware flashed — rebooting…"); }
-    else { toast("Update failed"); btn.disabled = false; }
+    if (ok) otaFinishUpdate();   // accepted -> follow the reboot + reconnect
+    else {
+      setOtaStatus("Update failed — the Hub rejected the file.", "err");
+      toast("Update failed");
+      otaSetBusy(false);
+    }
   };
-  xhr.onerror = () => { toast("Upload error"); btn.disabled = false; };
+  xhr.onerror = () => {
+    setOtaStatus("Upload error — could not send the file to the Hub.", "err");
+    toast("Upload error");
+    otaSetBusy(false);
+  };
   xhr.send(fd);
-  toast("Uploading firmware…");
 }
 
 // ---------------- Devices (Power + Heart Rate sensors) ----------------
