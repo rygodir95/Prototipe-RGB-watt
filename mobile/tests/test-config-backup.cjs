@@ -328,19 +328,16 @@ async function main() {
 
     const env2 = makeContext();
     await env2.ctx.getConfig();
-    await env2.ctx.startDemo();           // open-ended Test Lighting (dashboard)
+    await env2.ctx.startDemo();           // dashboard "Test Lighting" (no argument)
     await settle();
-    env2.clock.advance(13000);
+    env2.clock.advance(1200 * 14);        // more than one full 7-zone cycle
     await settle();
-    let sim2 = postsTo(env2.posts, "/api/simulation");
-    assert(!sim2.some((d) => d.enabled === false),
-      "open-ended demo keeps running (no auto-disable posts)");
-    await env2.ctx.stopDemo();
-    await settle();
-    sim2 = postsTo(env2.posts, "/api/simulation");
+    const sim2 = postsTo(env2.posts, "/api/simulation");
+    assert(sim2[0].enabled === true, "dashboard test enables simulation");
     assert(sim2[sim2.length - 1].enabled === false,
-      "Stop test returns the Hub to real sensor control");
-    assert(env2.elements.demoBanner.hidden === true, "banner hides on stop");
+      "dashboard Test Lighting now auto-completes one cycle");
+    assert(env2.elements.demoBanner.hidden === true,
+      "banner hides on automatic completion");
   }
 
   // ---- 5b. Lighting test in HR mode sends bpm, not watts ----

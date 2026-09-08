@@ -663,7 +663,7 @@ function demoSequence() {
 async function startDemo(cycles) {
   if (demoTimer || !config) return;   // already running
   demoPos = 0;
-  demoCyclesLeft = cycles || Infinity;
+  demoCyclesLeft = cycles || 1;   // dashboard runs exactly ONE automatic cycle, then stops
   try { await postSimulation({ enabled: true }); }
   catch (_) { toast("Cannot reach the Hub"); return; }
   $("demoBanner").hidden = false;
