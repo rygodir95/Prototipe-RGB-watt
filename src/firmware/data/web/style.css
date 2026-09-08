@@ -262,9 +262,12 @@ input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
    completion (demoBanner.hidden = true) never visually hides the banner. */
 .demo-banner[hidden] { display: none; }
 /* Same class-vs-[hidden] conflict: the shared display:flex rule above
-   overrides [hidden], so showHubBanner(false) on a connected WebSocket
+   overrides [hidden], so hideHubBanner() on a connected WebSocket
    never visually hides the reconnect banner. */
 .conn-banner[hidden] { display: none; }
+/* Green confirmation after a successful reconnect (class set from app.js,
+   auto-hides after ~3 s). */
+.conn-banner.ok { border-color: var(--ok); color: var(--ok); }
 .btn.small { padding: 7px 12px; font-size: 12px; }
 .demo-btn { margin-top: 14px; }
 

@@ -476,7 +476,7 @@ function armWsWatchdog() {
 function initWs() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(proto + "://" + location.host + "/ws");
-  ws.onmessage = (e) => { armWsWatchdog(); showHubBanner(false); try { updateLive(JSON.parse(e.data)); } catch (_) {} };
+  ws.onmessage = (e) => { armWsWatchdog(); showHubReconnected(); try { updateLive(JSON.parse(e.data)); } catch (_) {} };
   ws.onerror = () => { try { ws.close(); } catch (_) {} };
   ws.onclose = () => { clearTimeout(wsWatchdog); showHubBanner(true); setTimeout(initWs, 2000); };
   armWsWatchdog();   // a socket that never opens at all must not hang either
@@ -534,9 +534,53 @@ function updateLive(t) {
 }
 
 // ---------------- Hub connection banner ----------------
+// Three states: hidden (normal), red "lost" and a short green confirmation
+// after a successful reconnect. The green state only appears after an
+// actual connection loss during this page session - never on the initial
+// connection - and auto-hides after ~3 s. A new loss while the green
+// confirmation is up returns to red immediately and cancels its timer.
+const HUB_OK_MS = 3000;
+const HUB_OK_TEXT = "Hub reconnected ✓";
+let hubWasLost = false;    // a disconnect was seen since the last green
+let hubOkShowing = false;  // the green confirmation is currently visible
+let hubOkTimer = null;
+let hubLostText = "";      // red wording, captured from the banner HTML
+
+function hideHubBanner() {
+  const b = $("hubBanner");
+  if (!b) return;
+  b.hidden = true;
+  b.classList.remove("ok");
+  hubOkShowing = false;
+}
 function showHubBanner(show) {
   const b = $("hubBanner");
-  if (b) b.hidden = !show;
+  if (!b) return;
+  clearTimeout(hubOkTimer); hubOkTimer = null;
+  if (show) {
+    hubWasLost = true;
+    if (!hubLostText) hubLostText = b.textContent;   // keep the HTML wording
+    b.textContent = hubLostText;
+    b.classList.remove("ok");
+    b.hidden = false;
+  } else {
+    hideHubBanner();
+  }
+}
+function showHubReconnected() {
+  // What ws.onmessage calls: incoming telemetry proves the Hub is back.
+  const b = $("hubBanner");
+  if (!b) return;
+  if (hubWasLost) {
+    hubWasLost = false;
+    hubOkShowing = true;
+    b.textContent = HUB_OK_TEXT;
+    b.classList.add("ok");
+    b.hidden = false;
+    hubOkTimer = setTimeout(() => { hubOkTimer = null; hideHubBanner(); }, HUB_OK_MS);
+  } else if (!hubOkShowing) {
+    hideHubBanner();   // normal connection, no loss seen: stay hidden
+  }
 }
 
 // ---------------- First-run onboarding ----------------
