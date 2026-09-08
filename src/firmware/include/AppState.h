@@ -37,3 +37,22 @@ struct Telemetry {
 };
 
 extern Telemetry g_tel;
+
+// ---- Teardown-settle gate (control-source switching) ------------------------
+// NimBLEClient::disconnect() is asynchronous: the link stays on the air
+// until the host has processed the DISCONNECT event. With
+// CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1 a new source's connect attempt that
+// starts before the OLD source's link is actually gone fails with
+// BLE_HS_ENOMEM (rc=6). On every category switch, setControlSource()
+// registers the old module's link probe here when its link was still
+// active; the new source's one-shot connect executor
+// (BLEPower::update / HRSensor::update) then holds its single pending
+// attempt - WITHOUT consuming it - until bleTeardownSettling() reports the
+// old link gone. No scans, no retries, no blocking: one Connect action still
+// produces exactly one connection attempt, just sequenced after the old
+// disconnect completes. Without a registration the gate is open (direct
+// same-category connects stay immediate).
+
+typedef bool (*LinkProbe)();               // live link state of the old module
+void bleNoteTeardown(LinkProbe probe);      // register at switch time
+bool bleTeardownSettling();                 // true while the old link is still terminating

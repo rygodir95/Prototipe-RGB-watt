@@ -112,6 +112,20 @@ function main() {
   assert(simCfg.includes("doc.pop(\"controlSource\", None)") && simCfg.indexOf("switch_source(") === -1,
     "simulator /api/config ignores controlSource exactly like the firmware");
 
+  // ---- simulator parity: teardown-settle gate on category switches ----
+  console.log("  -- simulator settle-gate parity --");
+  assert(SIMULATOR.indexOf("def teardown_settling") !== -1 &&
+         SIMULATOR.indexOf("TEARDOWN_SETTLE_S") !== -1,
+    "simulator models the teardown-settle gate (async old-link terminate)");
+  const sw = SIMULATOR.slice(SIMULATOR.indexOf("def switch_source"),
+                             SIMULATOR.indexOf("def teardown_settling"));
+  const capIdx = sw.indexOf("old_link = self.hr_connected");
+  const shutIdx = sw.indexOf("self.hr_shutdown()");
+  assert(capIdx !== -1 && shutIdx > capIdx,
+    "simulator switch_source captures the old link state BEFORE the teardown");
+  assert(sw.indexOf("if old_link:") !== -1,
+    "simulator registers a pending teardown only when the old link was connected");
+
   console.log("");
   console.log(failures === 0
     ? "ALL " + count + " CHECKS PASSED"

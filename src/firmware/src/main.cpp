@@ -57,9 +57,22 @@ void setControlSource(uint8_t src, bool restore) {
   if (src == g_config.controlSource) return;
 
   // 1. Fully tear down the currently active BLE module: disconnect, stop its
-  //    scan and reconnect logic, drop its cached device list.
-  if (g_config.controlSource == SRC_HEART_RATE) hrBle.shutdown();
-  else                                          ble.shutdown();
+  //    scan and reconnect logic, drop its cached device list. NimBLE's
+  //    disconnect is asynchronous, so when the old link is still on the air
+  //    its live link state is registered in the teardown-settle gate: the
+  //    explicit connect that follows a category switch holds its single
+  //    pending attempt (non-blocking) until the old link is actually gone -
+  //    with CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1 an attempt started any
+  //    earlier fails with rc=6/BLE_HS_ENOMEM.
+  if (g_config.controlSource == SRC_HEART_RATE) {
+    bool oldLinkUp = hrBle.isLinkActive();   // capture BEFORE the teardown
+    hrBle.shutdown();
+    if (oldLinkUp) bleNoteTeardown([]() -> bool { return hrBle.isLinkActive(); });
+  } else {
+    bool oldLinkUp = ble.isLinkActive();     // capture BEFORE the teardown
+    ble.shutdown();
+    if (oldLinkUp) bleNoteTeardown([]() -> bool { return ble.isLinkActive(); });
+  }
 
   // 2. Clear the shared live measurement state and LED pipeline.
   processor.reset();

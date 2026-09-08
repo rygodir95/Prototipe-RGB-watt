@@ -158,6 +158,13 @@ void BLEPower::shutdown() {
   portEXIT_CRITICAL(&g_mux);
 }
 
+bool BLEPower::isLinkActive() const {
+  // Read-only NimBLE state (NOT the _connected flag): true while the link is
+  // still on the air, including the async terminate window after
+  // disconnect() until the host has processed the DISCONNECT event.
+  return _client && _client->isConnected();
+}
+
 bool BLEPower::connectInternal(const std::string &addr) {
   portENTER_CRITICAL(&g_mux);
   auto it = g_addrMap.find(addr);
@@ -221,6 +228,14 @@ void BLEPower::update() {
   // strategy will be implemented separately once the basic sensor
   // connection path is hardware-verified.
   if (_doConnect) {
+    // Teardown-settle gate (AppState.h): after a category switch the OLD
+    // source's link may still be terminating (NimBLE disconnect is
+    // asynchronous; with MAX_CONNECTIONS=1 an attempt started now fails
+    // with rc=6/BLE_HS_ENOMEM). Hold the single pending attempt WITHOUT
+    // consuming it until the old link is gone - one Connect action still
+    // produces exactly one connection attempt. Without a pending teardown
+    // the gate is open (direct connects stay immediate).
+    if (bleTeardownSettling()) return;
     _doConnect = false;
     if (connectInternal(_targetAddr)) {
       _connected = true;

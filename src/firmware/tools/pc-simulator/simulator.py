@@ -62,6 +62,14 @@ VIRTUAL_HR_SENSORS = [
 
 MAX_EVENTS = 300
 
+# Modelled duration of the asynchronous on-air BLE terminate: NimBLE's
+# disconnect() completes only when the host has processed the DISCONNECT
+# event, so after a control-source switch the OLD link stays "on the air"
+# briefly. This is the simulator counterpart of the firmware's
+# teardown-settle gate (AppState.cpp bleTeardownSettling() + the
+# BLE_HS_ENOMEM/rc=6 fix it guards against).
+TEARDOWN_SETTLE_S = 0.3
+
 
 class Simulator:
     """Virtual ESP32: config + BLE state machine + pipeline + event log."""
@@ -126,6 +134,15 @@ class Simulator:
         self._hr_value = 0.0
         self.hr_sending = True       # strap notifications on/off
         self.base_bpm = 120.0         # bpm the virtual strap reports
+
+        # Control-source teardown-settle gate (AppState.cpp
+        # bleTeardownSettling): the OLD source's link needs a moment to
+        # terminate after a switch, so the new module's ONE pending connect
+        # is held (not dropped, not duplicated) until the old link settles.
+        self._teardown_until = 0.0        # > 0: old link still terminating
+        self._teardown_mode = ""          # "power" / "hr" (the OLD source)
+        self._connect_pending = False     # power connect held by the gate
+        self._hr_connect_pending = False  # HR connect held by the gate
 
         # Lighting outputs (LightingOutputManager hub architecture): the
         # local LED preview is a registered LightingOutput, exactly like the
@@ -274,6 +291,7 @@ class Simulator:
         self.desired = False
         self.ble_connected = False
         self._connecting = False
+        self._connect_pending = False   # module teardown clears a held attempt
         self.scanning = False
 
     def hr_shutdown(self):
@@ -281,6 +299,7 @@ class Simulator:
         self.hr_desired = False
         self.hr_connected = False
         self._hr_connecting = False
+        self._hr_connect_pending = False   # module teardown clears a held attempt
         self.scanning = False
 
     def switch_source(self, src, restore=True):
@@ -294,11 +313,22 @@ class Simulator:
         if src == self.cfg.control_source:
             return
 
-        # 1. Fully tear down the currently active BLE module.
-        if self.cfg.control_source == fw.SRC_HEART_RATE:
+        # 1. Fully tear down the currently active BLE module. When its link
+        #    was still connected, the teardown-settle gate holds the new
+        #    source's pending connect until the old link has actually
+        #    terminated (firmware: async NimBLE disconnect). The old link
+        #    state is captured BEFORE the teardown, like setControlSource().
+        old_hr = self.cfg.control_source == fw.SRC_HEART_RATE
+        old_link = self.hr_connected if old_hr else self.ble_connected
+        if old_hr:
             self.hr_shutdown()
         else:
             self.ble_shutdown()
+        if old_link:
+            self._teardown_until = time.time() + TEARDOWN_SETTLE_S
+            self._teardown_mode = "hr" if old_hr else "power"
+            self.log("src", "old %s link terminating - connect deferred"
+                     % ("heart rate" if old_hr else "power"))
 
         # 2. Clear the shared live measurement state and the LED pipeline.
         self.processor.reset()
@@ -335,6 +365,20 @@ class Simulator:
         else:
             self.set_state("DISCONNECTED")
 
+    def teardown_settling(self, now):
+        """AppState.cpp bleTeardownSettling(): true while the OLD source's BLE
+        link is still terminating after a control-source switch. Self-clearing
+        and non-blocking: once the old link has settled the gate opens and
+        stays open until the next switch registers a new teardown."""
+        if self._teardown_until <= 0.0:
+            return False
+        if now < self._teardown_until:
+            return True
+        self._teardown_until = 0.0
+        self.log("src", "old %s link settled"
+                 % ("heart rate" if self._teardown_mode == "hr" else "power"))
+        return False
+
     # ---- BLE simulation ----------------------------------------------------
 
     def start_scan(self, seconds, now=None):
@@ -365,6 +409,13 @@ class Simulator:
             self.start_scan(6.0, now)   # not seen yet -> scan then connect
 
     def _start_connecting(self, now):
+        # Teardown-settle gate (firmware update(): bleTeardownSettling()): the
+        # ONE pending connect is held - not dropped, not duplicated - while
+        # the old source's link is still terminating after a category switch.
+        if self.teardown_settling(now):
+            self._connect_pending = True
+            return
+        self._connect_pending = False
         self._connecting = True
         self._connect_end = now + 1.2
         if not self.ble_connected:
@@ -411,6 +462,13 @@ class Simulator:
             self.start_scan(6.0, now)   # not seen yet -> scan then connect
 
     def _hr_start_connecting(self, now):
+        # Teardown-settle gate (firmware HRSensor::update() mirror of the
+        # BLEPower gate): hold the ONE pending connect while the old source's
+        # link is still terminating after a category switch.
+        if self.teardown_settling(now):
+            self._hr_connect_pending = True
+            return
+        self._hr_connect_pending = False
         self._hr_connecting = True
         self._hr_connect_end = now + 1.2
         if not self.hr_connected:
@@ -501,6 +559,11 @@ class Simulator:
             self._tick_module_power(now)
 
     def _tick_module_power(self, now):
+        # Held one-shot connect resumes once the old source's link settled
+        # (firmware update() re-checks the gate on every tick).
+        if self._connect_pending and not self._connecting:
+            self._start_connecting(now)
+
         # Connecting completes -> CONNECTED (data flow then promotes to RECEIVING_POWER)
         if self._connecting and now >= self._connect_end:
             self._connecting = False
@@ -519,6 +582,11 @@ class Simulator:
                 self.start_scan(6.0, now)
 
     def _tick_module_hr(self, now):
+        # Held one-shot connect resumes once the old source's link settled
+        # (firmware update() re-checks the gate on every tick).
+        if self._hr_connect_pending and not self._hr_connecting:
+            self._hr_start_connecting(now)
+
         # Strap connect completes -> CONNECTED (data flow then promotes to RECEIVING_POWER)
         if self._hr_connecting and now >= self._hr_connect_end:
             self._hr_connecting = False

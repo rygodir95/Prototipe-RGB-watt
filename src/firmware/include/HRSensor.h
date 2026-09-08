@@ -42,6 +42,12 @@ public:
   void setAutoReconnect(bool v) { _autoReconnect = v; }
 
   bool     isConnected() const { return _connected; }
+
+  // Live link state straight from the NimBLE client (NOT the driver's
+  // _connected flag): stays true after disconnect() until the host has
+  // processed the DISCONNECT event - the settle signal for the
+  // control-source teardown gate (see AppState.h).
+  bool isLinkActive() const;
   float    getBpm()      const { return _bpm; }
   uint32_t getBpmTime()  const { return _bpmTime; }
 
