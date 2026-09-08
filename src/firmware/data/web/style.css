@@ -258,6 +258,10 @@ input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
    overrides the browser's [hidden] handling, so Stop test / natural
    completion (demoBanner.hidden = true) never visually hides the banner. */
 .demo-banner[hidden] { display: none; }
+/* Same class-vs-[hidden] conflict: the shared display:flex rule above
+   overrides [hidden], so showHubBanner(false) on a connected WebSocket
+   never visually hides the reconnect banner. */
+.conn-banner[hidden] { display: none; }
 .btn.small { padding: 7px 12px; font-size: 12px; }
 .demo-btn { margin-top: 14px; }
 
