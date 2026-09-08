@@ -639,6 +639,21 @@ class Simulator:
                          % ("heart rate" if hr else "power", self.cfg.power_timeout_ms))
             self.processor.reset()
 
+            # No sensor connected -> nothing will ever arrive, so stale
+            # telemetry (e.g. the last Lighting Test value) must not linger
+            # on the dashboard. Mirrors main.cpp processPipeline().
+            if not connected:
+                if hr:
+                    self.tel["smoothedBpm"] = 0.0
+                    self.prev_zone_hr = 0
+                else:
+                    self.tel["smoothedPower"] = 0.0
+                    self.prev_zone = 0
+                self.tel["zone"] = 0
+                self.tel["r"] = self.tel["g"] = self.tel["b"] = 0
+                if self.tel["state"] == "RECEIVING_POWER":
+                    self.set_state("DISCONNECTED")
+
         self._had_data = have_data
 
         # Refresh every registered lighting output (fade lives in

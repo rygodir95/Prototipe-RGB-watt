@@ -215,6 +215,23 @@ static void processPipeline() {
       if (ble.isConnected() && g_tel.state == DeviceState::RECEIVING_POWER) g_tel.state = DeviceState::CONNECTED;
     }
     processor.reset();
+
+    // No sensor connected -> nothing will ever arrive, so stale telemetry
+    // (e.g. the last Lighting Test value) must not linger on the dashboard.
+    // With a sensor still connected we keep the previous brief-display
+    // timeout behaviour untouched.
+    if (!g_tel.connected) {
+      if (hr) {
+        g_tel.smoothedBpm = 0;
+        s_prevZoneHr = 0;
+      } else {
+        g_tel.smoothedPower = 0;
+        s_prevZone = 0;
+      }
+      g_tel.zone = 0;
+      g_tel.r = 0; g_tel.g = 0; g_tel.b = 0;
+      if (g_tel.state == DeviceState::RECEIVING_POWER) g_tel.state = DeviceState::DISCONNECTED;
+    }
   }
 }
 
