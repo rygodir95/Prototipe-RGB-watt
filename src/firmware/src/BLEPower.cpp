@@ -111,8 +111,11 @@ void BLEPower::onScanEnd() {
     bool have = g_addrMap.find(_targetAddr) != g_addrMap.end();
     portEXIT_CRITICAL(&g_mux);
     if (have) _doConnect = true;
-    else if (!_connected) g_tel.state = DeviceState::DISCONNECTED;
   }
+  // The finite scan window is over: the scanning state must never linger
+  // in telemetry, no matter who started the scan. When an explicit Connect
+  // found its target, update() moves on to the connecting state next tick.
+  if (!_connected) g_tel.state = DeviceState::DISCONNECTED;
 }
 
 void BLEPower::connectToAddress(const std::string &addr, const std::string &name) {
@@ -208,8 +211,14 @@ void BLEPower::scheduleReconnect() {
 }
 
 void BLEPower::update() {
-  uint32_t now = millis();
-
+  // One-shot connect executor ONLY. The automatic reconnect loop that used
+  // to live here restarted a BLE scan roughly every 7 seconds while the
+  // desired sensor was not connected - the root cause of the endless
+  // rescan storm (hub-side, so it continued with every client closed).
+  // That loop is temporarily removed for the hardware-validation phase:
+  // update() must never start a scan. A proper bounded/backoff reconnect
+  // strategy will be implemented separately once the basic sensor
+  // connection path is hardware-verified.
   if (_doConnect) {
     _doConnect = false;
     if (connectInternal(_targetAddr)) {
@@ -218,19 +227,11 @@ void BLEPower::update() {
       g_tel.sourceName[sizeof(g_tel.sourceName) - 1] = '\0';
       g_tel.state = DeviceState::CONNECTED;
     } else {
+      // Failed one-shot attempt: settle into the disconnected/no-source
+      // state. No retry, no rescan.
       _connected = false;
       g_tel.state = DeviceState::DISCONNECTED;
-      scheduleReconnect();
-    }
-  }
-
-  // Automatic reconnect loop.
-  if (_desired && _autoReconnect && !_connected && !_scanning && !_targetAddr.empty()) {
-    if (now - _lastReconnectAttempt > 7000) {
-      _lastReconnectAttempt = now;
-      g_tel.state = DeviceState::RECONNECTING;
-      Serial.println("[BLE] Attempting reconnect...");
-      startScan(6);
+      scheduleReconnect();   // inert today; hook for the future bounded strategy
     }
   }
 }
@@ -269,7 +270,9 @@ void BLEPower::onClientConnect() {
 void BLEPower::onClientDisconnect() {
   _connected = false;
   Serial.println("[BLE] Disconnected");
-  g_tel.state = (_desired && _autoReconnect) ? DeviceState::RECONNECTING
-                                             : DeviceState::DISCONNECTED;
-  scheduleReconnect();
+  // No reconnect attempt is scheduled anymore (see update()), so the hub
+  // settles into the disconnected state instead of lingering in a
+  // reconnecting state that would never resolve.
+  g_tel.state = DeviceState::DISCONNECTED;
+  scheduleReconnect();   // inert today; hook for the future bounded strategy
 }
