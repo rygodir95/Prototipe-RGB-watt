@@ -13,6 +13,54 @@ static const NimBLEUUID HRS_MEASURE((uint16_t)0x2A37);
 static portMUX_TYPE g_hrMux = portMUX_INITIALIZER_UNLOCKED;
 static std::map<std::string, NimBLEAddress> g_hrAddrMap;
 
+#if defined(BUILD_DEV)
+// ---- HR scan diagnostics (dev builds only) ---------------------------------
+// Prints one entry per BLE advertiser DURING an active HR scan, BEFORE the
+// HRS filter, so devices that fail the 0x180D classification (e.g. the Wahoo
+// ELEMNT RIVAL investigation) are visible with their advertised name,
+// service UUIDs, manufacturer data, service data and raw payload.
+// Pure logging: classification, scan timing and connection logic unchanged.
+static uint32_t g_hrAdvSeen    = 0;   // advertisers observed this scan
+static uint32_t g_hrAdvMatched = 0;   // advertisers classified as HRS
+
+static std::string hrHex(const std::string &s) {
+  static const char *kHex = "0123456789abcdef";
+  std::string out;
+  out.reserve(s.size() * 2);
+  for (unsigned char c : s) { out += kHex[c >> 4]; out += kHex[c & 0x0f]; }
+  return out;
+}
+
+static void hrLogAdvertiser(NimBLEAdvertisedDevice *dev) {
+  Serial.printf("[HR][diag] adv addr=%s rssi=%d connectable=%d name=%s\n",
+                dev->getAddress().toString().c_str(), dev->getRSSI(),
+                dev->isConnectable() ? 1 : 0,
+                dev->haveName() ? dev->getName().c_str() : "<none>");
+  Serial.printf("[HR][diag]   svcUuids=%u",
+                dev->haveServiceUUID() ? dev->getServiceUUIDCount() : 0);
+  if (dev->haveServiceUUID()) {
+    for (uint8_t i = 0; i < dev->getServiceUUIDCount(); i++)
+      Serial.printf(" %s", dev->getServiceUUID(i).toString().c_str());
+  }
+  Serial.println();
+  if (dev->haveManufacturerData()) {
+    Serial.printf("[HR][diag]   mfgData=%s\n",
+                  hrHex(dev->getManufacturerData()).c_str());
+  }
+  if (dev->haveServiceData()) {
+    for (uint8_t i = 0; i < dev->getServiceDataCount(); i++) {
+      Serial.printf("[HR][diag]   svcData uuid=%s data=%s\n",
+                    dev->getServiceDataUUID(i).toString().c_str(),
+                    hrHex(dev->getServiceData(i)).c_str());
+    }
+  }
+  Serial.printf("[HR][diag]   payload(%u)=%s\n",
+                (unsigned)dev->getPayloadLength(),
+                hrHex(std::string((const char *)dev->getPayload(),
+                                  dev->getPayloadLength())).c_str());
+}
+#endif
+
 // ---- Free callbacks ---------------------------------------------------------
 
 static void hrNotifyCB(NimBLERemoteCharacteristic *chr, uint8_t *data, size_t len, bool isNotify) {
@@ -27,7 +75,17 @@ static void hrScanCompleteCB(NimBLEScanResults results) {
 
 class HRScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
   void onResult(NimBLEAdvertisedDevice *dev) override {
+#if defined(BUILD_DEV)
+    // Dev-only per-advertiser dump, BEFORE the HRS gate below.
+    if (HRSensor::instance && HRSensor::instance->isScanning()) {
+      g_hrAdvSeen++;
+      hrLogAdvertiser(dev);
+    }
+#endif
     if (!dev->isAdvertisingService(HRS_SERVICE)) return;
+#if defined(BUILD_DEV)
+    g_hrAdvMatched++;
+#endif
     std::string addr = dev->getAddress().toString();
     std::string name = dev->getName();
     if (name.empty()) name = "Unknown HR Sensor";
@@ -72,6 +130,10 @@ void HRSensor::startScan(int seconds) {
   g_hrAddrMap.clear();
   _devices.clear();
   portEXIT_CRITICAL(&g_hrMux);
+#if defined(BUILD_DEV)
+  g_hrAdvSeen = 0;
+  g_hrAdvMatched = 0;
+#endif
   _scanning = true;
   if (!_connected) g_tel.state = DeviceState::SCANNING;
   Serial.println("[HR] Scanning...");
@@ -98,6 +160,10 @@ void HRSensor::onDeviceFound(const std::string &addr, const std::string &name, c
 
 void HRSensor::onScanEnd() {
   _scanning = false;
+#if defined(BUILD_DEV)
+  Serial.printf("[HR][diag] scan end: advertisers=%u matchedHRS=%u\n",
+                (unsigned)g_hrAdvSeen, (unsigned)g_hrAdvMatched);
+#endif
   Serial.println("[HR] Scan complete");
   if (_desired && !_connected && !_targetAddr.empty()) {
     portENTER_CRITICAL(&g_hrMux);
