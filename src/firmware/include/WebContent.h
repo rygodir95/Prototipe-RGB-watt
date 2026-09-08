@@ -588,6 +588,10 @@ input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
   box-shadow: 0 6px 24px rgba(0,0,0,.35);
 }
 .demo-banner .pill-dot { background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); }
+/* Same class-vs-[hidden] conflict as .onboarding: the display:flex above
+   overrides the browser's [hidden] handling, so Stop test / natural
+   completion (demoBanner.hidden = true) never visually hides the banner. */
+.demo-banner[hidden] { display: none; }
 .btn.small { padding: 7px 12px; font-size: 12px; }
 .demo-btn { margin-top: 14px; }
 
