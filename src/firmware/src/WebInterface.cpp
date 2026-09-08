@@ -347,6 +347,7 @@ void WebInterface::setupRoutes() {
         o["address"]   = d.address;
         o["name"]      = d.name;
         o["type"]      = d.type;
+o["category"]  = "hr";      // all HRSensor devices (HRS) are heart rate
         o["rssi"]      = d.rssi;
         o["connected"] = hrBle.isConnected() && strcmp(g_config.hrSourceAddr, d.address.c_str()) == 0;
       }
@@ -358,6 +359,7 @@ void WebInterface::setupRoutes() {
         o["address"]   = d.address;
         o["name"]      = d.name;
         o["type"]      = d.type;
+o["category"]  = "power";   // all BLEPower devices (CPS/FTMS) are power
         o["rssi"]      = d.rssi;
         o["connected"] = ble.isConnected() && strcmp(g_config.sourceAddr, d.address.c_str()) == 0;
       }
