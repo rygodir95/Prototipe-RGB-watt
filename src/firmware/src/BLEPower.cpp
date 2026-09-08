@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "Config.h"
 #include <NimBLEDevice.h>
+#include "BleScanRouter.h"
 #include <map>
 
 BLEPower *BLEPower::instance = nullptr;
@@ -23,27 +24,9 @@ static void notifyCB(NimBLERemoteCharacteristic *chr, uint8_t *data, size_t len,
   if (BLEPower::instance) BLEPower::instance->onNotify(data, len);
 }
 
-static void scanCompleteCB(NimBLEScanResults results) {
-  (void)results;
-  if (BLEPower::instance) BLEPower::instance->onScanEnd();
-}
-
-class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
-  void onResult(NimBLEAdvertisedDevice *dev) override {
-    bool cps  = dev->isAdvertisingService(CPS_SERVICE);
-    bool ftms = dev->isAdvertisingService(FTMS_SERVICE);
-    if (!cps && !ftms) return;
-    std::string addr = dev->getAddress().toString();
-    std::string name = dev->getName();
-    if (name.empty()) name = "Unknown Power Source";
-    std::string type = cps ? "CPS" : "FTMS";   // prefer CPS when both advertised
-    portENTER_CRITICAL(&g_mux);
-    g_addrMap[addr] = dev->getAddress();
-    portEXIT_CRITICAL(&g_mux);
-    if (BLEPower::instance) BLEPower::instance->onDeviceFound(addr, name, type, dev->getRSSI());
-  }
-};
-static ScanCallbacks g_scanCB;
+// BLE scanning (callbacks, timing and the single advertised-device
+// registration) is owned by BleScanRouter: its one physical scan forwards
+// every advertiser to BLEPower::onScanResult() below.
 
 class ClientCallbacks : public NimBLEClientCallbacks {
   void onConnect(NimBLEClient *c) override {
@@ -68,13 +51,15 @@ void BLEPower::begin() {
 }
 
 void BLEPower::startScan(int seconds) {
-  if (_scanning) return;
-  NimBLEScan *s = NimBLEDevice::getScan();
-  s->setAdvertisedDeviceCallbacks(&g_scanCB, false);
-  s->setActiveScan(true);
-  s->setInterval(100);
-  s->setWindow(99);
-  s->clearResults();
+  // Scanning is owned by the unified BleScanRouter: one physical finite
+  // scan feeds every supported sensor category (Power + Heart Rate). The
+  // re-entry guard and the single timed NimBLE scan live there.
+  BleScanRouter::unifiedScan(seconds);
+}
+
+void BLEPower::onScanStart() {
+  // Scan preparation invoked by the router before the shared scan starts:
+  // drop stale results from the previous discovery run.
   portENTER_CRITICAL(&g_mux);
   g_addrMap.clear();
   _devices.clear();
@@ -82,7 +67,23 @@ void BLEPower::startScan(int seconds) {
   _scanning = true;
   if (!_connected) g_tel.state = DeviceState::SCANNING;
   Serial.println("[BLE] Scanning...");
-  s->start(seconds, scanCompleteCB, false);
+}
+
+void BLEPower::onScanResult(NimBLEAdvertisedDevice *dev) {
+  // Unchanged CPS/FTMS classification (moved verbatim from the driver's old
+  // private NimBLEAdvertisedDeviceCallbacks): the router forwards every
+  // advertiser of the unified scan, and only power devices pass this gate.
+  bool cps  = dev->isAdvertisingService(CPS_SERVICE);
+  bool ftms = dev->isAdvertisingService(FTMS_SERVICE);
+  if (!cps && !ftms) return;
+  std::string addr = dev->getAddress().toString();
+  std::string name = dev->getName();
+  if (name.empty()) name = "Unknown Power Source";
+  std::string type = cps ? "CPS" : "FTMS";   // prefer CPS when both advertised
+  portENTER_CRITICAL(&g_mux);
+  g_addrMap[addr] = dev->getAddress();
+  portEXIT_CRITICAL(&g_mux);
+  onDeviceFound(addr, name, type, dev->getRSSI());
 }
 
 std::vector<BLEDeviceInfo> BLEPower::getDevices() {
@@ -122,7 +123,7 @@ void BLEPower::connectToAddress(const std::string &addr, const std::string &name
   _targetAddr = addr;
   _targetName = name;
   _desired    = true;
-  if (_scanning) { NimBLEDevice::getScan()->stop(); _scanning = false; }
+  if (_scanning) { BleScanRouter::stop(); _scanning = false; }
   portENTER_CRITICAL(&g_mux);
   bool have = g_addrMap.find(addr) != g_addrMap.end();
   portEXIT_CRITICAL(&g_mux);
@@ -147,7 +148,7 @@ void BLEPower::shutdown() {
   // Full stop used when switching control source: no scan, no connection,
   // no reconnect attempts, no cached devices.
   disconnect();
-  if (_scanning) { NimBLEDevice::getScan()->stop(); _scanning = false; }
+  if (_scanning) { BleScanRouter::stop(); _scanning = false; }
   _doConnect = false;
   _targetAddr.clear();
   _targetName.clear();

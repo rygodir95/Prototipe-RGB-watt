@@ -1107,11 +1107,11 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/config":
             with sim.lock:
-                if doc.get("controlSource") is not None:
-                    # setControlSource() runs FIRST: fully disconnect the
-                    # active sensor before swapping to the new input.
-                    sim.switch_source(fw.SRC_HEART_RATE
-                                      if doc["controlSource"] == "hr" else fw.SRC_POWER)
+                # Parity with the firmware: the control source is derived
+                # state (category of the connected sensor, switched only via
+                # /api/connect). A controlSource field in the patch - from
+                # older clients or restored backups - is accepted but ignored.
+                doc.pop("controlSource", None)
                 fw.apply_config_patch(sim.cfg, doc)
                 sim.save()
                 sim.processor.set_smoothing(sim.cfg.smoothing)

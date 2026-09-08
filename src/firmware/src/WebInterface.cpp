@@ -5,6 +5,7 @@
 #include "Storage.h"
 #include "BLEPower.h"
 #include "HRSensor.h"
+#include "BleScanRouter.h"
 #include "Simulation.h"
 #include "Security.h"
 #include "FirmwareVersion.h"
@@ -17,6 +18,7 @@
 extern Storage    storage;
 extern BLEPower   ble;
 extern HRSensor   hrBle;
+extern BleScanRouter bleScan;
 extern Simulation sim;
 
 static AsyncWebServer server(80);
@@ -184,13 +186,10 @@ static void buildConfigJson(JsonDocument &doc) {
 // ---- POST /api/config -------------------------------------------------------
 
 static void applyConfigPatch(JsonDocument &doc) {
-  // Control source switch first: it fully tears down the other BLE module
-  // (disconnect, stop scan/reconnect, clear live state) and persists the mode.
-  if (!doc["controlSource"].isNull()) {
-    const char *s = doc["controlSource"].as<const char*>();
-    if (s && strcmp(s, "hr") == 0)          setControlSource(SRC_HEART_RATE);
-    else if (s && strcmp(s, "power") == 0)  setControlSource(SRC_POWER);
-  }
+  // The control source is derived state: it follows the category of the last
+  // connected sensor (set through /api/connect) and can no longer be
+  // switched manually. A controlSource field in the patch - sent by older
+  // clients or restored configuration backups - is accepted but ignored.
 
   int oldFtp = g_config.ftp;
   bool hasZoneCount = !doc["zoneCount"].isNull();
@@ -329,39 +328,43 @@ void WebInterface::setupRoutes() {
     req->send(200, "application/json", s);
   });
 
-  // Sensor routes operate on the ACTIVE control source only (mutual exclusion).
+  // Discovery scans EVERY supported sensor category in one finite unified
+  // scan (BleScanRouter), regardless of the active control source. The
+  // remaining sensor routes (connect/disconnect/forget) operate on the
+  // ACTIVE control source (mutual exclusion).
   server.on("/api/scan", HTTP_POST, [](AsyncWebServerRequest *req) {
-    if (g_config.controlSource == SRC_HEART_RATE) hrBle.startScan(6);
-    else                                          ble.startScan(6);
+    bleScan.startScan(6);
     req->send(200, "application/json", "{\"ok\":true}");
   });
 
   server.on("/api/devices", HTTP_GET, [](AsyncWebServerRequest *req) {
+    // One unified scan discovers BOTH categories; both result sets are
+    // returned together and the UI groups them with the category field.
     JsonDocument doc;
     JsonArray arr = doc["devices"].to<JsonArray>();
-    if (g_config.controlSource == SRC_HEART_RATE) {
-      doc["scanning"] = hrBle.isScanning();
-      auto devs = hrBle.getDevices();
-      for (auto &d : devs) {
-        JsonObject o = arr.add<JsonObject>();
-        o["address"]   = d.address;
-        o["name"]      = d.name;
-        o["type"]      = d.type;
-o["category"]  = "hr";      // all HRSensor devices (HRS) are heart rate
-        o["rssi"]      = d.rssi;
-        o["connected"] = hrBle.isConnected() && strcmp(g_config.hrSourceAddr, d.address.c_str()) == 0;
-      }
-    } else {
-      doc["scanning"] = ble.isScanning();
+    doc["scanning"] = bleScan.isScanning();
+    {
       auto devs = ble.getDevices();
       for (auto &d : devs) {
         JsonObject o = arr.add<JsonObject>();
         o["address"]   = d.address;
         o["name"]      = d.name;
         o["type"]      = d.type;
-o["category"]  = "power";   // all BLEPower devices (CPS/FTMS) are power
+        o["category"]  = "power";   // all BLEPower devices (CPS/FTMS) are power
         o["rssi"]      = d.rssi;
         o["connected"] = ble.isConnected() && strcmp(g_config.sourceAddr, d.address.c_str()) == 0;
+      }
+    }
+    {
+      auto devs = hrBle.getDevices();
+      for (auto &d : devs) {
+        JsonObject o = arr.add<JsonObject>();
+        o["address"]   = d.address;
+        o["name"]      = d.name;
+        o["type"]      = d.type;
+        o["category"]  = "hr";      // all HRSensor devices (HRS) are heart rate
+        o["rssi"]      = d.rssi;
+        o["connected"] = hrBle.isConnected() && strcmp(g_config.hrSourceAddr, d.address.c_str()) == 0;
       }
     }
     String out; serializeJson(doc, out);
@@ -372,7 +375,26 @@ o["category"]  = "power";   // all BLEPower devices (CPS/FTMS) are power
     const char *addr = doc["address"].as<const char*>();
     const char *name = doc["name"].isNull() ? "" : doc["name"].as<const char*>();
     if (!addr) { req->send(400, "application/json", "{\"ok\":false}"); return; }
-    if (g_config.controlSource == SRC_HEART_RATE) {
+    // Plug-and-play: the selected device's CATEGORY drives the active control
+    // source (power -> Power, hr -> Heart Rate). Older clients that omit the
+    // category fall back to the category the address was discovered as in
+    // the last unified scan.
+    uint8_t target = g_config.controlSource;
+    const char *cat = doc["category"].as<const char*>();
+    if (cat && strcmp(cat, "hr") == 0)         target = SRC_HEART_RATE;
+    else if (cat && strcmp(cat, "power") == 0) target = SRC_POWER;
+    else {
+      bool discovered = false;
+      for (auto &d : ble.getDevices())
+        if (d.address == addr) { target = SRC_POWER; discovered = true; break; }
+      if (!discovered)
+        for (auto &d : hrBle.getDevices())
+          if (d.address == addr) { target = SRC_HEART_RATE; break; }
+    }
+    // A category change switches the source with the existing teardown
+    // (restore=false: the explicit connect below follows right away).
+    if (target != g_config.controlSource) setControlSource(target, false);
+    if (target == SRC_HEART_RATE) {
       strncpy(g_config.hrSourceAddr, addr, sizeof(g_config.hrSourceAddr) - 1);
       g_config.hrSourceAddr[sizeof(g_config.hrSourceAddr) - 1] = '\0';
       strncpy(g_config.hrSourceName, name, sizeof(g_config.hrSourceName) - 1);

@@ -12,6 +12,7 @@
 #include "LightingOutputManager.h"
 #include "BLEPower.h"
 #include "HRSensor.h"
+#include "BleScanRouter.h"
 #include "Simulation.h"
 #include "WebInterface.h"
 #include "Security.h"
@@ -25,6 +26,7 @@ LightingOutputManager lighting;   // distributes state to all registered outputs
 PowerProcessor        processor;
 BLEPower       ble;
 HRSensor       hrBle;
+BleScanRouter  bleScan;   // single owner of the shared NimBLE scan
 Simulation     sim;
 WebInterface   web;
 
@@ -50,7 +52,7 @@ void scheduleReboot(uint32_t ms) { s_rebootAt = millis() + ms; }
 
 // ---- Control source switching (mutually exclusive modes) --------------------
 
-void setControlSource(uint8_t src) {
+void setControlSource(uint8_t src, bool restore) {
   if (src != SRC_POWER && src != SRC_HEART_RATE) src = SRC_POWER;
   if (src == g_config.controlSource) return;
 
@@ -81,7 +83,9 @@ void setControlSource(uint8_t src) {
                 src == SRC_HEART_RATE ? "Heart Rate" : "Power");
 
   // 4. Restore the selected source's own saved sensor (kept separate per mode).
-  if (g_config.autoReconnect) {
+  //    restore=false skips the auto-restore: an explicit connect (Devices
+  //    page -> a device of the new category) follows the switch right away.
+  if (restore && g_config.autoReconnect) {
     if (src == SRC_HEART_RATE && strlen(g_config.hrSourceAddr) > 0) {
       Serial.printf("[HR] Restoring saved source: %s\n", g_config.hrSourceName);
       hrBle.connectToAddress(g_config.hrSourceAddr, g_config.hrSourceName);
@@ -263,6 +267,7 @@ void setup() {
   ble.setAutoReconnect(g_config.autoReconnect);
   hrBle.begin();
   hrBle.setAutoReconnect(g_config.autoReconnect);
+  bleScan.begin(&ble, &hrBle);   // single owner of the shared NimBLE scan
 
   web.begin();
 

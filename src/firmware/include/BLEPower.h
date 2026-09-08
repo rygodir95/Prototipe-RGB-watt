@@ -4,6 +4,7 @@
 #include <string>
 
 class NimBLEClient;
+class NimBLEAdvertisedDevice;
 
 struct BLEDeviceInfo {
   std::string address;
@@ -12,8 +13,9 @@ struct BLEDeviceInfo {
   int         rssi;
 };
 
-// BLE Cycling Power Service (CPS) client. Scans for, connects to and receives
-// notifications from any device exposing service 0x1818 / characteristic 0x2A63.
+// BLE Cycling Power Service (CPS) client. Classifies unified-scan results,
+// connects to and receives notifications from any device exposing service
+// 0x1818 / characteristic 0x2A63. Physical scanning is owned by BleScanRouter.
 class BLEPower {
 public:
   static BLEPower *instance;
@@ -22,8 +24,12 @@ public:
   void begin();
   void update();                                   // call from loop(); non-blocking driver
 
-  void startScan(int seconds = 6);
+  void startScan(int seconds = 6);   // delegates to the unified BleScanRouter
   bool isScanning() const { return _scanning; }
+
+  // Unified-scan hooks, invoked by BleScanRouter (the single scan owner):
+  void onScanStart();                                // drop stale results, mark scanning
+  void onScanResult(NimBLEAdvertisedDevice *dev);    // unchanged CPS/FTMS classification
   std::vector<BLEDeviceInfo> getDevices();
 
   void connectToAddress(const std::string &addr, const std::string &name);

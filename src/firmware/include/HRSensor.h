@@ -4,6 +4,7 @@
 #include <string>
 
 class NimBLEClient;
+class NimBLEAdvertisedDevice;
 
 struct HRDeviceInfo {
   std::string address;
@@ -12,10 +13,11 @@ struct HRDeviceInfo {
   int         rssi;
 };
 
-// BLE Heart Rate Service (HRS) client. Scans for, connects to and receives
-// notifications from any device exposing service 0x180D / characteristic
-// 0x2A37. Mutually exclusive with BLEPower: only the module matching the
-// active ControlSource is ever scanned/connected/updated.
+// BLE Heart Rate Service (HRS) client. Classifies unified-scan results,
+// connects to and receives notifications from any device exposing service
+// 0x180D / characteristic 0x2A37. Physical scanning is owned by BleScanRouter;
+// connecting/processing stay mutually exclusive with BLEPower: only the module
+// matching the active ControlSource ever connects or runs.
 class HRSensor {
 public:
   static HRSensor *instance;
@@ -24,8 +26,12 @@ public:
   void begin();      // registers NimBLE callbacks; NimBLE init is owned by BLEPower
   void update();     // call from loop() when HR is the active source
 
-  void startScan(int seconds = 6);
+  void startScan(int seconds = 6);   // delegates to the unified BleScanRouter
   bool isScanning() const { return _scanning; }
+
+  // Unified-scan hooks, invoked by BleScanRouter (the single scan owner):
+  void onScanStart();                                // drop stale results, mark scanning
+  void onScanResult(NimBLEAdvertisedDevice *dev);    // unchanged HRS classification (+ dev diag)
   std::vector<HRDeviceInfo> getDevices();
 
   void connectToAddress(const std::string &addr, const std::string &name);

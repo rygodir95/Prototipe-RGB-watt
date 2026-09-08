@@ -158,16 +158,9 @@
       </section>
 
       <!-- SETTINGS -->
+      <!-- No manual control-source selector: the active source follows the
+           connected device's category automatically (see Devices -> Connect). -->
       <section class="view" id="view-settings">
-        <div class="card">
-          <div class="card-title">LED Control</div>
-          <p class="muted">Choose which measurement controls your lighting. Only one source is active at a time; switching disconnects the current sensor. You can also switch by connecting a device on the Devices page.</p>
-          <div class="seg" id="sourceSeg">
-            <button data-src="power" class="active" data-testid="src-power">Power</button>
-            <button data-src="hr" data-testid="src-hr">Heart Rate</button>
-          </div>
-        </div>
-
         <div class="card">
           <div class="card-title">Power Processing</div>
           <div class="field">

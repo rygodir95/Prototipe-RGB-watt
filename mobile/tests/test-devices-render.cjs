@@ -104,10 +104,11 @@ function makeContext(devicesPayload) {
 }
 
 // ---------------- fixtures: exact firmware payload shapes ----------------
-// The real firmware serves only the ACTIVE control source's devices in
-// /api/devices (mutual exclusion), so power mode returns only CPS/FTMS
-// and HR mode returns only HRS. The objects below mirror the serial-log
-// devices confirmed on hardware.
+// Since the unified scan, the real firmware serves BOTH categories in ONE
+// /api/devices response (power CPS/FTMS + heart rate HRS). The objects
+// below mirror the serial-log devices confirmed on hardware; the
+// single-category fixtures below are still valid response shapes (e.g.
+// when only sensors of one category are nearby).
 
 // POST-FIX power-mode response (what the patched WebInterface.cpp emits).
 const FW_POWER_FIXED = {
@@ -129,6 +130,12 @@ const FW_HR_FIXED = {
     { address: "f4:12:fa:ae:11:22", name: "HR Strap 0595", type: "HRS",
       category: "hr", rssi: -66, connected: true },
   ],
+};
+
+// Unified post-change response: BOTH categories in one scan result set.
+const FW_MIXED = {
+  scanning: false,
+  devices: FW_POWER_FIXED.devices.concat(FW_HR_FIXED.devices),
 };
 
 // PRE-FIX power-mode response (category missing) - what the bug looked like.
@@ -184,6 +191,21 @@ async function main() {
       "connected row shows the Connected state");
   }
 
+  // ---- 2b. Unified response: Power + HR devices render together ----
+  {
+    const env = makeContext(FW_MIXED);
+    await env.ctx.refreshDevices();
+    const power = env.elements.powerDeviceList;
+    const hr = env.elements.hrDeviceList;
+    assert(power.children.length === 3,
+      "unified payload renders all 3 POWER rows (CPS + FTMS)");
+    assert(hr.children.length === 1,
+      "unified payload renders the HEART RATE row in the same response");
+    assert(power.children.every((r) => r.innerHTML.indexOf("badge-power") !== -1) &&
+           hr.children[0].innerHTML.indexOf("badge-hr") !== -1,
+      "rows land in the right sections with the right badges");
+  }
+
   // ---- 3. Pre-fix payload (no category): nothing renders (the bug) ----
   {
     const env = makeContext(FW_POWER_PREFIX);
@@ -222,7 +244,13 @@ async function main() {
     assert(/o\["category"\]\s*=\s*"hr";/.test(region),
       "firmware /api/devices tags HR devices (category: \"hr\")");
     assert((region.match(/o\["category"\]/g) || []).length === 2,
-      "exactly one category assignment per control-source branch");
+      "exactly two category assignments in /api/devices (one per category)");
+    assert(/ble\.getDevices\(\)/.test(region) && /hrBle\.getDevices\(\)/.test(region),
+      "firmware /api/devices builds the list from BOTH drivers (merged)");
+    assert(/doc\["scanning"\] = bleScan\.isScanning\(\);/.test(region),
+      "the scanning flag reflects the unified scan");
+    assert(region.indexOf("g_config.controlSource == SRC_HEART_RATE") === -1,
+      "/api/devices no longer branches on the active control source");
 
     const sim = fs.readFileSync(SIMULATOR, "utf-8");
     assert(sim.indexOf('"category": "hr" if m["type"] == "HRS" else "power"') !== -1,

@@ -231,6 +231,17 @@ async function main() {
     assert(v.config.ftp === 300 && v.config.ledType === "SK6812",
       "validated config carries the imported values");
 
+    // controlSource is derived state on the Hub: optional in backups now.
+    const noCs = validBackup();
+    delete noCs.config.controlSource;
+    const v2 = env.ctx.validateImportedConfig(noCs);
+    assert(v2.ok, "backup WITHOUT controlSource validates (field now optional)");
+    assert(!("controlSource" in v2.config), "omitted controlSource is not fabricated");
+    const badCs = validBackup();
+    badCs.config.controlSource = "bogus";
+    assert(!env.ctx.validateImportedConfig(badCs).ok,
+      "a present-but-invalid controlSource is still rejected");
+
     const badCases = [
       [null, "not an object"],
       [[], "array"],
@@ -371,7 +382,7 @@ async function main() {
     env.ctx.startOnboarding(true);
     assert(env.elements.onboarding.hidden === false, "About can re-launch onboarding");
 
-    // Walk the setup: Welcome -> Hub -> Add Sensor (Scan) -> Source -> Zones -> Test -> Complete
+    // Walk the setup: Welcome -> Hub -> Add Sensor (Scan) -> Zones -> Test -> Complete
     const actions = env.elements.obActions;
     actions.children[0].click();          // "Get started"
     assert(env.elements.obTitle.textContent === "Your Hub", "step 2: Hub info");
@@ -384,10 +395,8 @@ async function main() {
     await settle();
     const list = env.elements.obDeviceList;
     assert(list.children.length === 2, "wizard scan lists found sensors");
-    actions.children[1].click();          // "Next" -> control source step
-    assert(env.elements.obTitle.textContent === "Select control source", "step 4: control source");
-    actions.children[1].click();          // "Next" -> zones step
-    assert(env.elements.obTitle.textContent === "Configure zones", "step 5: zone basics");
+    actions.children[1].click();          // "Next" -> zones step (no manual source selection any more)
+    assert(env.elements.obTitle.textContent === "Configure zones", "step 4: zone basics");
     // Quick FTP edit inside the wizard saves through POST /api/config
     const ftpIn = env.elements.obBody.children[0].children[0].children[1];   // .ob-zone-cfg -> FTP field -> input
     ftpIn.value = "275";
@@ -396,9 +405,9 @@ async function main() {
     assert(postsTo(env.posts, "/api/config").some((d) => d.ftp === 275),
       "wizard FTP field saves through POST /api/config");
     actions.children[1].click();          // "Next" -> test lighting step
-    assert(env.elements.obTitle.textContent === "Test lighting", "step 6: test lighting");
+    assert(env.elements.obTitle.textContent === "Test lighting", "step 5: test lighting");
     actions.children[1].click();          // "Next" -> setup complete step
-    assert(env.elements.obTitle.textContent === "Setup complete", "step 7: setup complete");
+    assert(env.elements.obTitle.textContent === "Setup complete", "step 6: setup complete");
     assert(env.elements.obText.textContent.indexOf("runs on its own") !== -1,
       "setup complete explains the Hub is standalone");
     actions.children[0].click();          // "Done"

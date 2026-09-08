@@ -80,18 +80,9 @@ async function postConfig(patch) {
   return config;
 }
 
-// ---------------- Control source (Settings) ----------------
-function initSourceSeg() {
-  document.querySelectorAll("#sourceSeg button").forEach((b) => {
-    b.addEventListener("click", async () => {
-      if (b.classList.contains("active")) return;
-      await postConfig({ controlSource: b.dataset.src });
-      // The device disconnected the previous sensor and cleared its state.
-      fillForms();
-      toast(isHrMode() ? "Switched to Heart Rate mode" : "Switched to Power mode");
-    });
-  });
-}
+// NOTE: there is no manual control-source selector any more. The active
+// source follows the connected device's category (Devices -> Connect); the
+// UI only READS config.controlSource for units/zones/state display.
 
 // ---------------- Populate forms ----------------
 function fillForms() {
@@ -121,9 +112,6 @@ function fillForms() {
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
   $("hysUnit").textContent = hr ? "BPM" : "W";
   $("sourceMiniLabel").textContent = hr ? "Heart Rate" : "Power Source";
-  document.querySelectorAll("#sourceSeg button").forEach((b) => {
-    b.classList.toggle("active", (b.dataset.src === "hr") === hr);
-  });
 
   // ---- Devices page: per-type saved source hints ----
   $("powerSavedHint").textContent = config.sourceName ? "Saved: " + config.sourceName : "No saved device";
@@ -585,7 +573,7 @@ function showHubReconnected() {
 
 // ---------------- First-run onboarding ----------------
 // Hardware setup wizard (setup, NOT workout onboarding):
-// Welcome -> Hub -> Add Sensor -> Control Source -> Zones -> Test Lighting -> Setup Complete.
+// Welcome -> Hub -> Add Sensor -> Zones -> Test Lighting -> Setup Complete.
 // Skippable at any time; completion persists in localStorage; re-runnable from
 // About. Uses only existing APIs (scan / connect / config / simulation).
 const ONBOARD_KEY = "zoneglow.onboarding.done";
@@ -651,26 +639,6 @@ function renderOnboarding() {
     obAddBtn("Back", "", back, actions);
     obAddBtn("Next", "primary", next, actions);
   } else if (s === 3) {
-    $("obTitle").textContent = "Select control source";
-    $("obText").textContent = "Choose what drives your lights: power or heart rate. Connecting the other sensor type later switches this automatically.";
-    const seg = document.createElement("div");
-    seg.className = "seg ob-seg";
-    ["power", "hr"].forEach((src) => {
-      const b = document.createElement("button");
-      b.dataset.src = src;
-      b.textContent = src === "hr" ? "Heart Rate" : "Power";
-      b.classList.toggle("active", (src === "hr") === isHrMode());
-      b.addEventListener("click", async () => {
-        await postConfig({ controlSource: src });
-        fillForms();
-        seg.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x === b));
-      });
-      seg.appendChild(b);
-    });
-    body.appendChild(seg);
-    obAddBtn("Back", "", back, actions);
-    obAddBtn("Next", "primary", next, actions);
-  } else if (s === 4) {
     // Zone basics: quick FTP / Max HR fields (the values the zone boundaries
     // are generated from). Full name/color editing stays on the Zones page.
     $("obTitle").textContent = "Configure zones";
@@ -701,13 +669,13 @@ function renderOnboarding() {
     body.appendChild(wrap);
     obAddBtn("Back", "", back, actions);
     obAddBtn("Next", "primary", next, actions);
-  } else if (s === 5) {
+  } else if (s === 4) {
     $("obTitle").textContent = "Test lighting";
     $("obText").textContent = "Run a quick test that cycles through every zone so you can verify the colors on your LED strip. It never changes your settings.";
     obAddBtn("Test all zones", "primary", () => startDemo(1), body);
     obAddBtn("Back", "", back, actions);
     obAddBtn("Next", "primary", next, actions);
-  } else if (s === 6) {
+  } else if (s === 5) {
     // Hardware-setup ending: the Hub is standalone and keeps running with the
     // app closed - clients are configurators, not the controller.
     $("obTitle").textContent = "Setup complete";
@@ -859,10 +827,15 @@ function validateImportedConfig(doc) {
     };
     const out = {};
 
-    const controlSource = c.controlSource === "hr" || c.controlSource === "power"
-      ? c.controlSource : null;
-    if (!controlSource) throw new Error("Control source must be power or heart rate");
-    out.controlSource = controlSource;
+    // The active control source is DERIVED on the Hub from the connected
+    // device's category, so the field is optional in backups. Old exports
+    // still carry it; it is forwarded for old-Hub compatibility.
+    if (c.controlSource !== undefined && c.controlSource !== null && c.controlSource !== "") {
+      if (c.controlSource !== "hr" && c.controlSource !== "power") {
+        throw new Error("Control source must be power or heart rate");
+      }
+      out.controlSource = c.controlSource;
+    }
 
     const ftp = int(c.ftp, 50, 1000);
     if (ftp === null) throw new Error("FTP must be a whole number between 50 and 1000");

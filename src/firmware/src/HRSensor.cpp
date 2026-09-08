@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "Config.h"
 #include <NimBLEDevice.h>
+#include "BleScanRouter.h"
 #include <map>
 
 HRSensor *HRSensor::instance = nullptr;
@@ -68,34 +69,9 @@ static void hrNotifyCB(NimBLERemoteCharacteristic *chr, uint8_t *data, size_t le
   if (HRSensor::instance) HRSensor::instance->onNotify(data, len);
 }
 
-static void hrScanCompleteCB(NimBLEScanResults results) {
-  (void)results;
-  if (HRSensor::instance) HRSensor::instance->onScanEnd();
-}
-
-class HRScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
-  void onResult(NimBLEAdvertisedDevice *dev) override {
-#if defined(BUILD_DEV)
-    // Dev-only per-advertiser dump, BEFORE the HRS gate below.
-    if (HRSensor::instance && HRSensor::instance->isScanning()) {
-      g_hrAdvSeen++;
-      hrLogAdvertiser(dev);
-    }
-#endif
-    if (!dev->isAdvertisingService(HRS_SERVICE)) return;
-#if defined(BUILD_DEV)
-    g_hrAdvMatched++;
-#endif
-    std::string addr = dev->getAddress().toString();
-    std::string name = dev->getName();
-    if (name.empty()) name = "Unknown HR Sensor";
-    portENTER_CRITICAL(&g_hrMux);
-    g_hrAddrMap[addr] = dev->getAddress();
-    portEXIT_CRITICAL(&g_hrMux);
-    if (HRSensor::instance) HRSensor::instance->onDeviceFound(addr, name, "HRS", dev->getRSSI());
-  }
-};
-static HRScanCallbacks g_hrScanCB;
+// BLE scanning (callbacks, timing and the single advertised-device
+// registration) is owned by BleScanRouter: its one physical scan forwards
+// every advertiser to HRSensor::onScanResult() below.
 
 class HRClientCallbacks : public NimBLEClientCallbacks {
   void onConnect(NimBLEClient *c) override {
@@ -119,13 +95,15 @@ void HRSensor::begin() {
 }
 
 void HRSensor::startScan(int seconds) {
-  if (_scanning) return;
-  NimBLEScan *s = NimBLEDevice::getScan();
-  s->setAdvertisedDeviceCallbacks(&g_hrScanCB, false);
-  s->setActiveScan(true);
-  s->setInterval(100);
-  s->setWindow(99);
-  s->clearResults();
+  // Scanning is owned by the unified BleScanRouter: one physical finite
+  // scan feeds every supported sensor category (Power + Heart Rate). The
+  // re-entry guard and the single timed NimBLE scan live there.
+  BleScanRouter::unifiedScan(seconds);
+}
+
+void HRSensor::onScanStart() {
+  // Scan preparation invoked by the router before the shared scan starts:
+  // drop stale results from the previous discovery run.
   portENTER_CRITICAL(&g_hrMux);
   g_hrAddrMap.clear();
   _devices.clear();
@@ -137,7 +115,31 @@ void HRSensor::startScan(int seconds) {
   _scanning = true;
   if (!_connected) g_tel.state = DeviceState::SCANNING;
   Serial.println("[HR] Scanning...");
-  s->start(seconds, hrScanCompleteCB, false);
+}
+
+void HRSensor::onScanResult(NimBLEAdvertisedDevice *dev) {
+  // Unchanged HRS classification (moved verbatim from the driver's old
+  // private NimBLEAdvertisedDeviceCallbacks). The router forwards EVERY
+  // advertiser of the unified scan, so the dev-only diagnostic dump below
+  // fires for every advertisement regardless of the active control source -
+  // the instrumentation for the Wahoo ELEMNT RIVAL investigation.
+#if defined(BUILD_DEV)
+  if (isScanning()) {
+    g_hrAdvSeen++;
+    hrLogAdvertiser(dev);
+  }
+#endif
+  if (!dev->isAdvertisingService(HRS_SERVICE)) return;
+#if defined(BUILD_DEV)
+  g_hrAdvMatched++;
+#endif
+  std::string addr = dev->getAddress().toString();
+  std::string name = dev->getName();
+  if (name.empty()) name = "Unknown HR Sensor";
+  portENTER_CRITICAL(&g_hrMux);
+  g_hrAddrMap[addr] = dev->getAddress();
+  portEXIT_CRITICAL(&g_hrMux);
+  onDeviceFound(addr, name, "HRS", dev->getRSSI());
 }
 
 std::vector<HRDeviceInfo> HRSensor::getDevices() {
@@ -181,7 +183,7 @@ void HRSensor::connectToAddress(const std::string &addr, const std::string &name
   _targetAddr = addr;
   _targetName = name;
   _desired    = true;
-  if (_scanning) { NimBLEDevice::getScan()->stop(); _scanning = false; }
+  if (_scanning) { BleScanRouter::stop(); _scanning = false; }
   portENTER_CRITICAL(&g_hrMux);
   bool have = g_hrAddrMap.find(addr) != g_hrAddrMap.end();
   portEXIT_CRITICAL(&g_hrMux);
@@ -206,7 +208,7 @@ void HRSensor::shutdown() {
   // Full stop used when switching control source: no scan, no connection,
   // no reconnect attempts, no cached devices.
   disconnect();
-  if (_scanning) { NimBLEDevice::getScan()->stop(); _scanning = false; }
+  if (_scanning) { BleScanRouter::stop(); _scanning = false; }
   _doConnect = false;
   _targetAddr.clear();
   _targetName.clear();
