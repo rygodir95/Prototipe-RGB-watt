@@ -127,7 +127,7 @@ console.log("4. Build ID (short Git commit SHA)");
     "FirmwareVersion.h defines an FW_BUILD_SHA fallback for local builds");
   assert(SRC.platformio.includes("extra_scripts = pre:tools/build_id.py"),
     "platformio.ini wires the build-id script into every build (incl. CI)");
-  assert(SRC.buildId.includes('env.Append(CPPDEFINES=[("FW_BUILD_SHA",')) &&
+  assert(SRC.buildId.includes('env.Append(CPPDEFINES=[("FW_BUILD_SHA",') &&
          SRC.buildId.includes('"local"'),
     "tools/build_id.py injects the short SHA as a string define");
   assert(SRC.web.includes('doc["buildId"]        = FW_BUILD_SHA;'),

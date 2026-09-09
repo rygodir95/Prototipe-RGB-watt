@@ -46,17 +46,17 @@ struct AppConfig {
   uint8_t controlSource;   // ControlSource: 0 = Power, 1 = Heart Rate
 
   // --- Power ---
-  int ftp;             // Functional Threshold Power (W); 0 = not set yet
+  int ftp;             // Functional Threshold Power (W)
   int smoothing;       // 0..100 smoothing strength (EMA)
   int powerTimeoutMs;  // stale-data timeout before LEDs fade out
-  int hysteresis;      // bpm hysteresis for HR zones (Power zones use 1.5 % of FTP)
+  int hysteresis;      // W (power) / bpm (HR) of hysteresis at zone boundaries
 
   // --- Power zones ---
   int  zoneCount;      // 5, 6 or 7
   Zone zones[MAX_ZONES];
 
   // --- Heart Rate ---
-  int     hrMax;      // maximum heart rate (bpm); 0 = not set yet
+  int     hrMax;      // maximum heart rate (bpm), default 190
   HRZone  hrZones[MAX_HR_ZONES];
 
   // --- LED ---
@@ -85,8 +85,9 @@ struct AppConfig {
 
 extern AppConfig g_config;
 
-// Populate a config with factory defaults (FTP/Max HR unset = 0, 7 zones,
-// GPIO5/60 WS2812B, Power as control source).
+// Populate a config with factory defaults (FTP 0 = "not set", 7 zones,
+// GPIO5/60 WS2812B, Max HR 0 = "not set" with the 5-zone HR colour template,
+// Power as control source).
 void configLoadDefaults(AppConfig &c);
 
 // Regenerate the power zones array for the current zoneCount from FTP-based

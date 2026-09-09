@@ -646,41 +646,57 @@ class Simulator:
         if have_data:
             smoothed = self.processor.update(raw)
             if hr:
-                zone = fw.hr_zone_index(self.cfg, smoothed, self.prev_zone_hr, True)
-                self.prev_zone_hr = zone
-                r, g, b = fw.hr_color_for(self.cfg, smoothed)
                 self.tel["rawBpm"] = raw
                 self.tel["smoothedBpm"] = smoothed
-                zone_name = self.cfg.hr_zones[zone].name
                 unit = "bpm"
             else:
-                zone = fw.zone_index(self.cfg, smoothed, self.prev_zone, True)
-                self.prev_zone = zone
-                r, g, b = fw.color_for(self.cfg, smoothed)
                 self.tel["rawPower"] = raw
                 self.tel["smoothedPower"] = smoothed
-                zone_name = self.cfg.zones[zone].name
                 unit = "W"
+            # 0 = "not set": while the active reference (FTP / Max HR) is
+            # unset the zone boundaries are trivial, so zone-driven lighting
+            # stays disabled and no zone is reported (mirrors main.cpp).
+            zones_ready = self.cfg.hr_max > 0 if hr else self.cfg.ftp > 0
+            zone = -1
+            r = g = b = 0
+            zone_name = ""
+            if zones_ready:
+                if hr:
+                    zone = fw.hr_zone_index(self.cfg, smoothed, self.prev_zone_hr, True)
+                    self.prev_zone_hr = zone
+                    r, g, b = fw.hr_color_for(self.cfg, smoothed)
+                    zone_name = self.cfg.hr_zones[zone].name
+                else:
+                    zone = fw.zone_index(self.cfg, smoothed, self.prev_zone, True)
+                    self.prev_zone = zone
+                    r, g, b = fw.color_for(self.cfg, smoothed)
+                    zone_name = self.cfg.zones[zone].name
+            else:
+                self.prev_zone = 0
+                self.prev_zone_hr = 0
             self.tel["zone"] = zone
             self.tel["r"], self.tel["g"], self.tel["b"] = r, g, b
             # Publish the zone result to all registered lighting outputs
             # (LightingOutputManager). Mirrors main.cpp processPipeline().
             st = self.lighting.state
-            st.active = True
-            st.r, st.g, st.b = r, g, b
-            st.zone = zone
-            st.control_source = (fw.SRC_HEART_RATE if hr
-                                 else fw.SRC_POWER)
-            self.lighting.apply_state(st)
+            if zones_ready:
+                st.active = True
+                st.r, st.g, st.b = r, g, b
+                st.zone = zone
+                st.control_source = (fw.SRC_HEART_RATE if hr
+                                     else fw.SRC_POWER)
+                self.lighting.apply_state(st)
+            else:
+                self.lighting.clear_active()
 
             if self.sim_enabled or connected:
                 self.set_state("RECEIVING_POWER")
 
-            if zone != getattr(self, "_last_zone_logged", None):
+            if zone >= 0 and zone != getattr(self, "_last_zone_logged", None):
                 self._last_zone_logged = zone
                 self.log("zone", "zone %d (%s)" % (zone + 1, zone_name))
             rgb_hex = fw.hex_from_rgb(r, g, b)
-            if rgb_hex != self._last_rgb and now - self._last_rgb_log > 0.4:
+            if zones_ready and rgb_hex != self._last_rgb and now - self._last_rgb_log > 0.4:
                 self._last_rgb = rgb_hex
                 self._last_rgb_log = now
                 self.log("rgb", "color %s" % rgb_hex)

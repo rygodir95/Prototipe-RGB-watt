@@ -198,21 +198,27 @@ static void applyConfigPatch(JsonDocument &doc) {
 
   if (hasZoneCount) {
     g_config.zoneCount = doc["zoneCount"].as<int>();
-    if (hasFtp) g_config.ftp = doc["ftp"].as<int>();
+    if (hasFtp) {
+      int f = doc["ftp"].as<int>();
+      g_config.ftp = (f == 0) ? 0 : constrain(f, 50, 1000);   // 0 = not set
+    }
     configApplyDefaultZones(g_config);       // regenerate on count change
   } else if (hasFtp) {
     int newFtp = doc["ftp"].as<int>();
-    if (!hasZones) {
-      // First real value after "not set" (0): regenerate the percentage
-      // template instead of scaling the trivial unset boundaries.
-      if (oldFtp <= 0 && newFtp > 0) {
-        g_config.ftp = newFtp;
-        configApplyDefaultZones(g_config);
-      } else {
-        configScaleZones(g_config, oldFtp, newFtp);
+    if (newFtp != 0) newFtp = constrain(newFtp, 50, 1000);   // 0 = not set
+    if (newFtp != oldFtp) {
+      if (!hasZones) {
+        if (oldFtp <= 0 && newFtp > 0) {
+          // First real FTP after "not set": regenerate the percentage
+          // template instead of scaling the trivial unset boundaries.
+          g_config.ftp = newFtp;
+          configApplyDefaultZones(g_config);
+        } else {
+          configScaleZones(g_config, oldFtp, newFtp);
+        }
       }
+      g_config.ftp = newFtp;
     }
-    g_config.ftp = newFtp;
   }
 
   if (hasZones) {
@@ -243,12 +249,12 @@ static void applyConfigPatch(JsonDocument &doc) {
     int oldMax = g_config.hrMax;
     int newMax = doc["hrMax"].as<int>();
     if (newMax != 0) newMax = constrain(newMax, 100, 230);   // 0 = not set
-    g_config.hrMax = newMax;
-    if (!doc["hrZones"].is<JsonArray>() && !hrReset) {
-      // First real value after "not set" (0): regenerate the percentage
-      // template instead of scaling the trivial unset boundaries.
-      if (oldMax <= 0 && newMax > 0) configApplyDefaultHrZones(g_config);
-      else configScaleHrZones(g_config, oldMax, newMax);      // rescale boundaries
+    if (newMax != oldMax) {
+      g_config.hrMax = newMax;
+      if (!doc["hrZones"].is<JsonArray>() && !hrReset) {
+        if (oldMax <= 0 && newMax > 0) configApplyDefaultHrZones(g_config);
+        else                          configScaleHrZones(g_config, oldMax, newMax);   // rescale custom boundaries
+      }
     }
   }
   if (doc["hrZones"].is<JsonArray>()) {

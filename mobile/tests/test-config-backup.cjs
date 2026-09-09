@@ -248,7 +248,7 @@ async function main() {
       [{ schema: "other" }, "wrong schema"],
       [Object.assign(validBackup(), { version: 99 }), "future version"],
       [Object.assign(validBackup(), { config: null }), "missing config"],
-      [Object.assign(validBackup(), { config: Object.assign({}, validBackup().config, { ftp: 5 }) }), "ftp out of range"],
+      [Object.assign(validBackup(), { config: Object.assign({}, validBackup().config, { ftp: 1001 }) }), "ftp out of range"],
       [Object.assign(validBackup(), { config: Object.assign({}, validBackup().config, { zoneCount: 4 }) }), "bad zone count"],
       [Object.assign(validBackup(), { config: Object.assign({}, validBackup().config, { ledType: "APA" }) }), "bad led type"],
       [Object.assign(validBackup(), { config: Object.assign({}, validBackup().config, { hrZones: validBackup().config.hrZones.slice(0, 4) }) }), "short hr zones"],
@@ -468,7 +468,7 @@ async function main() {
       source: "Power Meter" });
     const text = env.ctx.buildDiagnosticsText();
     assert(text.indexOf("ZoneGlow diagnostics") === 0, "diagnostics has a header");
-    assert(text.indexOf("App version: 1.2.0") !== -1, "diagnostics includes app version");
+    assert(text.indexOf("App version: 1.3.0") !== -1, "diagnostics includes app version");
     assert(text.indexOf("Hub firmware: 1.0.0") !== -1, "diagnostics includes firmware version");
     assert(text.indexOf("PC-SIMULATOR") !== -1, "diagnostics includes the device id");
     assert(text.indexOf("Control source: Power") !== -1, "diagnostics includes control source");

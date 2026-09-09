@@ -21,18 +21,18 @@ static const char *NAMES_5[5] = {
 };
 
 struct RGB { uint8_t r, g, b; };
-// Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Deep Red
+// Grey/White -> Blue -> Green -> Yellow -> Orange -> Red -> Purple
 static const RGB COLORS_7[7] = {
-  {  0,  90, 255}, {  0, 200, 200}, {  0, 220,  70}, {255, 220,   0},
-  {255, 120,   0}, {255,  25,   0}, {150,   0,   0}
+  {200, 200, 200}, {  0,  90, 255}, {  0, 220,  70}, {255, 220,   0},
+  {255, 140,   0}, {255,  25,   0}, {140,   0, 255}
 };
 static const RGB COLORS_6[6] = {
-  {  0,  90, 255}, {  0, 200, 200}, {  0, 220,  70}, {255, 220,   0},
-  {255, 120,   0}, {255,  25,   0}
+  {200, 200, 200}, {  0,  90, 255}, {  0, 220,  70}, {255, 220,   0},
+  {255, 140,   0}, {255,  25,   0}
 };
 static const RGB COLORS_5[5] = {
-  {  0,  90, 255}, {  0, 200, 200}, {  0, 220,  70}, {255, 140,   0},
-  {255,  25,   0}
+  {200, 200, 200}, {  0,  90, 255}, {  0, 220,  70}, {255, 220,   0},
+  {255, 140,   0}
 };
 
 // Heart-rate zones: lower bounds at 50/60/70/80/90 % of Max HR
@@ -41,9 +41,11 @@ static const int HR_PCT[MAX_HR_ZONES]     = { 50, 60, 70, 80, 90 };
 static const char *HR_NAMES[MAX_HR_ZONES] = {
   "Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold", "Z5 · Maximum"
 };
+// HR zones use the shared core progression (Blue..Red); no grey Z1 tint
+// because a heart rate is always live while a sensor is connected.
 static const RGB HR_COLORS[MAX_HR_ZONES] = {
-  {120, 130, 255}, {  0, 190, 255}, {  0, 230, 120},
-  {255, 200,   0}, {255,  40,  40}
+  {  0,  90, 255}, {  0, 220,  70}, {255, 220,   0},
+  {255, 140,   0}, {255,  25,   0}
 };
 
 void configApplyDefaultZones(AppConfig &c) {
@@ -108,7 +110,7 @@ void configScaleHrZones(AppConfig &c, int oldMax, int newMax) {
 }
 
 void configSanitizeHrZones(AppConfig &c) {
-  // hrMax == 0 means "not set": keep it unset, clamp only real values.
+  // 0 = "not set": keep it instead of clamping an unset Max HR up.
   if (c.hrMax != 0) {
     if (c.hrMax < 100) c.hrMax = 100;
     if (c.hrMax > 230) c.hrMax = 230;
@@ -127,17 +129,14 @@ void configLoadDefaults(AppConfig &c) {
 
   c.controlSource  = SRC_POWER;
 
-  // FTP / Max HR default to 0 = "not set". Zone boundaries stay trivial
-  // until the user configures a real value, which regenerates them from the
-  // percentage templates (applyConfigPatch handles the 0 -> value case).
-  c.ftp            = 0;
+  c.ftp            = 0;   // 0 = "not set" until the user configures it
   c.smoothing      = 45;
   c.powerTimeoutMs = 5000;
   c.hysteresis     = 5;
 
   c.zoneCount      = 7;
 
-  c.hrMax          = 0;
+  c.hrMax          = 0;   // 0 = "not set" until the user configures it
 
   c.ledPin         = 5;
   c.ledCount       = 60;

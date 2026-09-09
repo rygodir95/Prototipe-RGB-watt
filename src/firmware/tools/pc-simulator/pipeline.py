@@ -27,7 +27,7 @@ import time
 MIN_ZONES = 5
 MAX_ZONES = 7
 MAX_HR_ZONES = 5
-CONFIG_VERSION = 0x52474206  # 'RGB' + version 6
+CONFIG_VERSION = 0x52474205  # 'RGB' + version 5 (matches firmware Config.h)
 
 # ControlSource (include/Config.h): exactly one source active at a time.
 SRC_POWER, SRC_HEART_RATE = 0, 1
@@ -94,20 +94,21 @@ NAMES_6 = ["Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold"
 NAMES_5 = ["Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold",
            "Z5 · VO₂ Max"]
 
-# Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Deep Red
-COLORS_7 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 220, 0),
-            (255, 120, 0), (255, 25, 0), (150, 0, 0)]
-COLORS_6 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 220, 0),
-            (255, 120, 0), (255, 25, 0)]
-COLORS_5 = [(0, 90, 255), (0, 200, 200), (0, 220, 70), (255, 140, 0),
-             (255, 25, 0)]
+# Grey/White -> Blue -> Green -> Yellow -> Orange -> Red -> Purple
+COLORS_7 = [(200, 200, 200), (0, 90, 255), (0, 220, 70), (255, 220, 0),
+            (255, 140, 0), (255, 25, 0), (140, 0, 255)]
+COLORS_6 = [(200, 200, 200), (0, 90, 255), (0, 220, 70), (255, 220, 0),
+            (255, 140, 0), (255, 25, 0)]
+COLORS_5 = [(200, 200, 200), (0, 90, 255), (0, 220, 70), (255, 220, 0),
+            (255, 140, 0)]
 
 # Heart-rate zones: lower bounds at 50/60/70/80/90 % of Max HR
 # (Z1 spans everything below 60 %, Z5 everything at or above 90 %).
 HR_PCT = [50, 60, 70, 80, 90]
 HR_NAMES = ["Z1 · Recovery", "Z2 · Endurance", "Z3 · Tempo", "Z4 · Threshold", "Z5 · Maximum"]
-HR_COLORS = [(120, 130, 255), (0, 190, 255), (0, 230, 120),
-             (255, 200, 0), (255, 40, 40)]
+# HR zones use the shared core progression (Blue..Red); no grey Z1 tint.
+HR_COLORS = [(0, 90, 255), (0, 220, 70), (255, 220, 0),
+             (255, 140, 0), (255, 25, 0)]
 
 
 def parse_hr_measurement(data):
@@ -152,17 +153,15 @@ class AppConfig:
         self.load_defaults()
 
     def load_defaults(self):  # configLoadDefaults()
-        # FTP / Max HR default to 0 = "not set"; zone boundaries regenerate
-        # from the percentage templates when the first real value is set.
         self.version = CONFIG_VERSION
-        self.ftp = 0
+        self.ftp = 0   # 0 = "not set" until the user configures it
         self.smoothing = 45
         self.power_timeout_ms = 5000
         self.hysteresis = 5
         self.zone_count = 7
         self.zones = [Zone() for _ in range(MAX_ZONES)]
         self.control_source = SRC_POWER   # ControlSource
-        self.hr_max = 0
+        self.hr_max = 0   # 0 = "not set" until the user configures it
         self.hr_zones = [HRZone() for _ in range(MAX_HR_ZONES)]
         self.hr_zones_custom = False   # user edited boundaries: Max HR keeps them
         self.hr_source_addr = ""  # char[24]
@@ -231,7 +230,7 @@ class AppConfig:
         self.sanitize_hr_zones()
 
     def sanitize_hr_zones(self):  # configSanitizeHrZones()
-        # hr_max == 0 means "not set": keep it unset, clamp only real values.
+        # 0 = "not set": keep it instead of clamping an unset Max HR up.
         if self.hr_max != 0:
             if self.hr_max < 100:
                 self.hr_max = 100
@@ -273,7 +272,8 @@ class AppConfig:
             self.load_defaults()
             return False
         self.load_defaults()
-        self.ftp = to_int(data.get("ftp"), 0)
+        ftp = to_int(data.get("ftp"), 0)
+        self.ftp = 0 if ftp == 0 else constrain(ftp, 50, 1000)
         self.smoothing = to_int(data.get("smoothing"), 45)
         self.power_timeout_ms = to_int(data.get("powerTimeoutMs"), 5000)
         self.hysteresis = to_int(data.get("hysteresis"), 5)
@@ -303,9 +303,7 @@ class AppConfig:
         src = to_int(data.get("controlSource"), SRC_POWER)
         self.control_source = SRC_HEART_RATE if src == SRC_HEART_RATE else SRC_POWER
         hr_max = to_int(data.get("hrMax"), 0)
-        if hr_max != 0:
-            hr_max = constrain(hr_max, 100, 230)
-        self.hr_max = hr_max
+        self.hr_max = hr_max if hr_max == 0 else constrain(hr_max, 100, 230)
         self.hr_zones_custom = to_bool(data.get("hrZonesCustom"), False)
         hr_zones = data.get("hrZones")
         if isinstance(hr_zones, list):
@@ -407,19 +405,23 @@ def apply_config_patch(cfg, doc):  # applyConfigPatch()
     if has_zone_count:
         cfg.zone_count = to_int(doc["zoneCount"])
         if has_ftp:
-            cfg.ftp = to_int(doc["ftp"])
+            f = to_int(doc["ftp"])
+            cfg.ftp = 0 if f == 0 else constrain(f, 50, 1000)   # 0 = not set
         cfg.apply_default_zones()          # regenerate on count change
     elif has_ftp:
         new_ftp = to_int(doc["ftp"])
-        if not has_zones:
-            # First real value after "not set" (0): regenerate the percentage
-            # template instead of scaling the trivial unset boundaries.
-            if old_ftp <= 0 and new_ftp > 0:
-                cfg.ftp = new_ftp
-                cfg.apply_default_zones()
-            else:
-                cfg.scale_zones(old_ftp, new_ftp)
-        cfg.ftp = new_ftp
+        if new_ftp != 0:
+            new_ftp = constrain(new_ftp, 50, 1000)   # 0 = not set
+        if new_ftp != old_ftp:
+            if not has_zones:
+                if old_ftp <= 0 and new_ftp > 0:
+                    # First real FTP after "not set": regenerate the
+                    # percentage template instead of scaling trivial bounds.
+                    cfg.ftp = new_ftp
+                    cfg.apply_default_zones()
+                else:
+                    cfg.scale_zones(old_ftp, new_ftp)
+            cfg.ftp = new_ftp
 
     if has_zones:
         arr = doc["zones"]
@@ -443,14 +445,16 @@ def apply_config_patch(cfg, doc):  # applyConfigPatch()
     hr_reset = to_bool(doc.get("hrZonesReset"), False)
     has_hr_zones = isinstance(doc.get("hrZones"), list)
     if doc.get("hrMax") is not None:
+        old_max = cfg.hr_max
         new_max = to_int(doc["hrMax"])
         if new_max != 0:
             new_max = constrain(new_max, 100, 230)   # 0 = not set
-        cfg.hr_max = new_max
-        # Recalculate the zone table from the new Max HR unless the user has
-        # explicitly customised the boundaries (then leave them untouched).
-        if not cfg.hr_zones_custom and not has_hr_zones and not hr_reset:
-            cfg.apply_default_hr_zones()
+        if new_max != old_max:
+            cfg.hr_max = new_max
+            # Recalculate the zone table from the new Max HR unless the user
+            # has explicitly customised the boundaries (then leave them).
+            if new_max > 0 and not cfg.hr_zones_custom and not has_hr_zones and not hr_reset:
+                cfg.apply_default_hr_zones()
     if has_hr_zones:
         arr = doc["hrZones"]
         for i, z in enumerate(arr[:MAX_HR_ZONES]):
@@ -536,26 +540,26 @@ def _lerp8(a, b, t):
 
 
 def _plateau_color(zones, i, t):
-    """20 % center plateau (firmware colorForG): each zone shows its own exact
-    colour across the central 20 % of its span (t in [0.4, 0.6]) and blends
-    linearly towards the neighbouring zone's colour across the outer 40 % on
-    each side, hitting the exact midpoint of the two colours at the boundary
-    itself - continuous across boundaries, with a visible plateau per zone.
-    Zone 0 has no lower neighbour: its colour simply extends below 0.4."""
+    """20 % center plateau (mirrors PowerZones::colorForG): the zone's exact
+    colour across the central 20 % of its span, blending towards the
+    neighbouring zone across the outer 40 % on each side and hitting the
+    exact colour midpoint at each boundary."""
     cur = zones[i]
+    nxt = zones[i + 1]
+    prev = zones[i - 1] if i > 0 else cur
+    lo_mid = ((prev.r + cur.r) // 2, (prev.g + cur.g) // 2, (prev.b + cur.b) // 2)
+    hi_mid = ((cur.r + nxt.r) // 2, (cur.g + nxt.g) // 2, (cur.b + nxt.b) // 2)
     if t <= 0.4:
-        prev = zones[i - 1] if i > 0 else cur
         u = t / 0.4
-        return (_lerp8((prev.r + cur.r) // 2, cur.r, u),
-                _lerp8((prev.g + cur.g) // 2, cur.g, u),
-                _lerp8((prev.b + cur.b) // 2, cur.b, u))
+        return (_lerp8(lo_mid[0], cur.r, u),
+                _lerp8(lo_mid[1], cur.g, u),
+                _lerp8(lo_mid[2], cur.b, u))
     if t <= 0.6:
         return cur.r, cur.g, cur.b
-    nxt = zones[i + 1]
     u = (t - 0.6) / 0.4
-    return (_lerp8(cur.r, (cur.r + nxt.r) // 2, u),
-            _lerp8(cur.g, (cur.g + nxt.g) // 2, u),
-            _lerp8(cur.b, (cur.b + nxt.b) // 2, u))
+    return (_lerp8(cur.r, hi_mid[0], u),
+            _lerp8(cur.g, hi_mid[1], u),
+            _lerp8(cur.b, hi_mid[2], u))
 
 
 def zone_index(cfg, watts, prev_zone, use_hysteresis=True):
@@ -565,8 +569,7 @@ def zone_index(cfg, watts, prev_zone, use_hysteresis=True):
         if watts >= cfg.zones[i].min_watts:
             z = i
     if use_hysteresis and 0 <= prev_zone < n and z != prev_zone:
-        # Power hysteresis is FTP-relative: 1.5 % of FTP (0 while FTP is unset).
-        hys = 0.015 * cfg.ftp if cfg.ftp > 0 else 0.0
+        hys = 0.015 * cfg.ftp if cfg.ftp > 0 else 0.0   # FTP-relative margin
         if z > prev_zone:
             # moving up: require clearing the entered zone's lower bound by margin
             if watts < cfg.zones[z].min_watts + hys:
@@ -613,7 +616,6 @@ def hr_zone_index(cfg, bpm, prev_zone, use_hysteresis=True):
         if bpm >= cfg.hr_zones[i].min_bpm:
             z = i
     if use_hysteresis and 0 <= prev_zone < n and z != prev_zone:
-        # HR hysteresis stays an absolute bpm margin (config.hysteresis).
         hys = float(cfg.hysteresis)
         if z > prev_zone:
             # moving up: require clearing the entered zone's lower bound by margin

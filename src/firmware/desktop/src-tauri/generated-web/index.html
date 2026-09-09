@@ -167,15 +167,19 @@
             <label>Smoothing <span class="val" id="smoothVal"></span></label>
             <input type="range" min="0" max="100" id="smoothInput" class="slider" data-testid="smoothing-input" />
           </div>
-          <div class="field-row">
-            <div class="field">
-              <label>Data timeout (ms)</label>
-              <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
-            </div>
-            <div class="field">
-              <label>Hysteresis (<span id="hysUnit">BPM</span>)</label>
-              <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
-            </div>
+          <div class="field">
+            <label>Data timeout (ms)</label>
+            <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
+          </div>
+        </div>
+
+        <!-- Power hysteresis is FTP-relative (automatic); the absolute margin
+             applies to Heart Rate zones only. -->
+        <div class="card">
+          <div class="card-title">Heart Rate Processing</div>
+          <div class="field">
+            <label>Hysteresis (<span id="hysUnit">BPM</span>)</label>
+            <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
           </div>
         </div>
 
@@ -282,6 +286,7 @@
           <div class="about-rows">
             <div><span>App version</span><b id="aboutAppVersion" data-testid="about-app-version">—</b></div>
             <div><span>Hub firmware</span><b id="aboutFwVersion">—</b></div>
+            <div><span>Firmware build</span><b id="aboutFwBuild" data-testid="about-fw-build">—</b></div>
             <div><span>Hub device ID</span><b id="aboutDeviceId">—</b></div>
           </div>
           <button class="btn" id="onboardingRestartBtn" data-testid="onboarding-restart-btn">Run the getting-started guide</button>

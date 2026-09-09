@@ -8,14 +8,6 @@
 // Monotonic version code used for anti-rollback comparisons (10000*major + 100*minor + patch).
 #define FW_VERSION_CODE  (10000 * FW_VERSION_MAJOR + 100 * FW_VERSION_MINOR + FW_VERSION_PATCH)
 
-// Short Git commit SHA injected at build time by tools/build_id.py, a
-// PlatformIO pre-build step (runs on every `pio run`, locally and in CI).
-// Local builds outside a Git repository report "local". Exposed via
-// /api/info as "buildId" and the boot log.
-#ifndef FW_BUILD_SHA
-  #define FW_BUILD_SHA "local"
-#endif
-
 // Build type is selected by the PlatformIO environment (see platformio.ini).
 //   esp32dev-dev  -> BUILD_DEV   (USB flashing, verbose logs, unsigned OTA allowed)
 //   esp32dev-prod -> BUILD_PROD  (reduced logs, signed OTA enforced)
@@ -28,4 +20,11 @@
   #endif
   #define FW_BUILD_TYPE  "development"
   #define FW_VERSION_FULL FW_VERSION "-dev"
+#endif
+
+// Build ID: short Git commit SHA, injected at build time by
+// tools/build_id.py (platformio.ini extra_scripts -> CPPDEFINES). Falls
+// back to "local" for builds outside a Git repository.
+#ifndef FW_BUILD_SHA
+  #define FW_BUILD_SHA "local"
 #endif

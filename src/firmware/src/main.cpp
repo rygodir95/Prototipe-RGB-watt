@@ -178,34 +178,51 @@ static void processPipeline() {
 
   if (haveData) {
     float smoothed = processor.update(raw);
-    int zone;
-    uint8_t r, g, b;
     if (hr) {
-      zone = HRZones::zoneIndex(g_config, smoothed, s_prevZoneHr, true);
-      s_prevZoneHr = zone;
-      HRZones::colorFor(g_config, smoothed, r, g, b);
       g_tel.rawBpm      = raw;
       g_tel.smoothedBpm = smoothed;
     } else {
-      zone = PowerZones::zoneIndex(g_config, smoothed, s_prevZone, true);
-      s_prevZone = zone;
-      PowerZones::colorFor(g_config, smoothed, r, g, b);
       g_tel.rawPower      = raw;
       g_tel.smoothedPower = smoothed;
+    }
+
+    // 0 = "not set": while the active reference (FTP / Max HR) is unset the
+    // zone boundaries are trivial, so zone-driven lighting stays disabled and
+    // no zone is reported until the first real value is configured.
+    bool zonesReady = hr ? (g_config.hrMax > 0) : (g_config.ftp > 0);
+    int   zone = -1;
+    uint8_t r = 0, g = 0, b = 0;
+    if (zonesReady) {
+      if (hr) {
+        zone = HRZones::zoneIndex(g_config, smoothed, s_prevZoneHr, true);
+        s_prevZoneHr = zone;
+        HRZones::colorFor(g_config, smoothed, r, g, b);
+      } else {
+        zone = PowerZones::zoneIndex(g_config, smoothed, s_prevZone, true);
+        s_prevZone = zone;
+        PowerZones::colorFor(g_config, smoothed, r, g, b);
+      }
+    } else {
+      s_prevZone   = 0;
+      s_prevZoneHr = 0;
     }
     g_tel.zone = zone;
     g_tel.r = r; g_tel.g = g; g_tel.b = b;
 
-    // Publish the zone result to every registered lighting output (hub
-    // architecture): the local strip today, remote Light Nodes later.
-    LightingState st = lighting.state();
-    st.active        = true;
-    st.r             = r;
-    st.g             = g;
-    st.b             = b;
-    st.zone          = (int8_t)zone;
-    st.controlSource = g_config.controlSource;
-    lighting.applyState(st);
+    if (zonesReady) {
+      // Publish the zone result to every registered lighting output (hub
+      // architecture): the local strip today, remote Light Nodes later.
+      LightingState st = lighting.state();
+      st.active        = true;
+      st.r             = r;
+      st.g             = g;
+      st.b             = b;
+      st.zone          = (int8_t)zone;
+      st.controlSource = g_config.controlSource;
+      lighting.applyState(st);
+    } else {
+      lighting.clearActive();
+    }
 
     bool receiving = sim.enabled() || (hr ? hrBle.isConnected() : ble.isConnected());
     if (receiving) g_tel.state = DeviceState::RECEIVING_POWER;
@@ -214,12 +231,14 @@ static void processPipeline() {
       s_lastDebug = now;
       if (hr) {
         Serial.printf("[HR] %d bpm  Smoothed: %d bpm\n", (int)lroundf(raw), (int)lroundf(smoothed));
-        Serial.printf("[ZONE] Zone %d - %s\n", zone + 1, g_config.hrZones[zone].name);
       } else {
         Serial.printf("[POWER] %d W  Smoothed: %d W\n", (int)lroundf(raw), (int)lroundf(smoothed));
-        Serial.printf("[ZONE] Zone %d - %s\n", zone + 1, g_config.zones[zone].name);
       }
-      Serial.printf("[RGB] %d, %d, %d\n", r, g, b);
+      if (zone >= 0) {
+        if (hr) Serial.printf("[ZONE] Zone %d - %s\n", zone + 1, g_config.hrZones[zone].name);
+        else    Serial.printf("[ZONE] Zone %d - %s\n", zone + 1, g_config.zones[zone].name);
+        Serial.printf("[RGB] %d, %d, %d\n", r, g, b);
+      }
     }
   } else {
     // No fresh data -> fade LEDs out; keep last smoothed for display briefly.

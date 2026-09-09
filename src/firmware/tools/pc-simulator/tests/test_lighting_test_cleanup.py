@@ -33,6 +33,9 @@ def make_sim():
     s.cfg.smoothing = 0
     s.cfg.hysteresis = 0
     s.processor.set_smoothing(0)
+    # Zones configured (0 = "not set" at factory default): behaviour tests
+    # exercise the pipeline, not the unset-default gating.
+    fw.apply_config_patch(s.cfg, {"ftp": 221, "hrMax": 190})
     return s
 
 

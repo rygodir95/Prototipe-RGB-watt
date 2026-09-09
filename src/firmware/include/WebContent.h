@@ -172,15 +172,19 @@ const char INDEX_HTML[] = R"rgbwatt(
             <label>Smoothing <span class="val" id="smoothVal"></span></label>
             <input type="range" min="0" max="100" id="smoothInput" class="slider" data-testid="smoothing-input" />
           </div>
-          <div class="field-row">
-            <div class="field">
-              <label>Data timeout (ms)</label>
-              <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
-            </div>
-            <div class="field">
-              <label>Hysteresis (<span id="hysUnit">BPM</span>)</label>
-              <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
-            </div>
+          <div class="field">
+            <label>Data timeout (ms)</label>
+            <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
+          </div>
+        </div>
+
+        <!-- Power hysteresis is FTP-relative (automatic); the absolute margin
+             applies to Heart Rate zones only. -->
+        <div class="card">
+          <div class="card-title">Heart Rate Processing</div>
+          <div class="field">
+            <label>Hysteresis (<span id="hysUnit">BPM</span>)</label>
+            <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
           </div>
         </div>
 
@@ -287,6 +291,7 @@ const char INDEX_HTML[] = R"rgbwatt(
           <div class="about-rows">
             <div><span>App version</span><b id="aboutAppVersion" data-testid="about-app-version">—</b></div>
             <div><span>Hub firmware</span><b id="aboutFwVersion">—</b></div>
+            <div><span>Firmware build</span><b id="aboutFwBuild" data-testid="about-fw-build">—</b></div>
             <div><span>Hub device ID</span><b id="aboutDeviceId">—</b></div>
           </div>
           <button class="btn" id="onboardingRestartBtn" data-testid="onboarding-restart-btn">Run the getting-started guide</button>
@@ -780,7 +785,7 @@ function fillForms() {
   $("autoReconnect").checked = config.autoReconnect;
   $("debugToggle").checked = config.debug;
   $("wifiSsid").value = config.wifiSsid || "";
-  $("hrMaxInput").value = config.hrMax || 0;
+  $("hrMaxInput").value = config.hrMax;   // 0 = not set, shown as-is
 
   // ---- Dashboard adapts to the active control source ----
   const hr = isHrMode();
@@ -789,8 +794,7 @@ function fillForms() {
   $("statFtp").textContent = hr ? config.hrMax : config.ftp;
   $("statFtpUnit").textContent = hr ? "BPM" : "W";
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
-  // Hysteresis is a Heart Rate (bpm) setting; Power zone hysteresis is
-  // FTP-relative (1.5 % of FTP) and not user-configurable.
+  // Hysteresis applies to Heart Rate zones only (Power is FTP-relative).
   $("hysUnit").textContent = "BPM";
   $("sourceMiniLabel").textContent = hr ? "Heart Rate" : "Power Source";
 
@@ -799,10 +803,9 @@ function fillForms() {
   $("hrSavedHint").textContent = config.hrSourceName ? "Saved: " + config.hrSourceName : "No saved device";
 
   // ---- Zones page section subtitles ----
-  $("powerZoneSub").textContent = "FTP: " + (config.ftp ? config.ftp + " W" : "not set") +
-    " · " + config.zoneCount + " zones";
+  $("powerZoneSub").textContent = "FTP: " + (config.ftp > 0 ? config.ftp + " W" : "not set") + " · " + config.zoneCount + " zones";
   // ---- HR zones: header summary + how Max HR interacts with the boundaries ----
-  const hrSummary = "Max HR: " + (config.hrMax ? config.hrMax + " BPM" : "not set") + " · " +
+  const hrSummary = "Max HR: " + (config.hrMax > 0 ? config.hrMax : "not set") + " BPM · " +
     (config.hrZones ? config.hrZones.length : 5) + " zones. ";
   $("hrZoneNote").textContent = hrSummary + (config.hrZonesCustom
     ? "Boundaries customised — changing Max HR keeps them. Reset restores the defaults."
@@ -829,16 +832,15 @@ function renderHrZoneEditor() {
   const el = $("hrEditor");
   el.innerHTML = "";
   if (!config.hrZones) return;
-  const hrMax = config.hrMax || 0;   // 0 = not set: no percentages shown
+  const hrMax = config.hrMax || 190;
   config.hrZones.forEach((z, i) => {
     const isLast = i === config.hrZones.length - 1;
     // Z5 ends at Max HR; the server also reports max = hrMax for the last zone.
     const maxBpm = isLast || z.max < 0 ? hrMax : z.max;
-    const pct = hrMax > 0
-      ? Math.floor(z.min / hrMax * 100) + "–" + Math.round(maxBpm / hrMax * 100) + "% Max HR"
-      : null;
+    const pctLo = Math.floor(z.min / hrMax * 100);
+    const pctHi = Math.round(maxBpm / hrMax * 100);
     el.appendChild(zoneRow(z, i, "hr-zone", {
-      unit: "BPM", max: maxBpm, pct: pct,
+      unit: "BPM", max: maxBpm, pct: pctLo + "–" + pctHi + "% Max HR",
     }));
   });
   bindZoneEditor(el, config.hrZones);
@@ -1179,7 +1181,7 @@ function updateLive(t) {
     stateLabel = hr ? "No heart rate sensor connected" : "No power sensor connected";
   }
   $("powerWatts").textContent = t.smoothed;
-  $("zoneNum").textContent = "Z" + (t.zone + 1);
+  $("zoneNum").textContent = t.zone >= 0 ? "Z" + (t.zone + 1) : "—";
   $("zoneName").textContent = (t.zoneName || "—").replace(/^Z\d+\s·\s/, "");
   const s = STATE_MAP[t.state] || STATE_MAP.STARTING;
   const pill = $("statusPill");
@@ -1249,6 +1251,9 @@ function showHubReconnected() {
     b.classList.add("ok");
     b.hidden = false;
     hubOkTimer = setTimeout(() => { hubOkTimer = null; hideHubBanner(); }, HUB_OK_MS);
+    // The Hub may have rebooted (OTA, factory reset, power loss): re-read the
+    // config so pre-reboot values are never written back by a stale client.
+    getConfig().then(() => fillForms()).catch(() => {});
   } else if (!hubOkShowing) {
     hideHubBanner();   // normal connection, no loss seen: stay hidden
   }
@@ -1520,9 +1525,9 @@ function validateImportedConfig(doc) {
       out.controlSource = c.controlSource;
     }
 
-    // 0 = "not set": allowed (the Hub regenerates zones once a real FTP arrives).
     const ftp = int(c.ftp, 0, 1000);
-    if (ftp === null) throw new Error("FTP must be 0 (not set) or a whole number up to 1000");
+    if (ftp === null) throw new Error("FTP must be a whole number between 0 and 1000 (0 = not set)");
+    if (ftp !== 0 && ftp < 50) throw new Error("FTP must be 0 (not set) or between 50 and 1000 W");
     out.ftp = ftp;
 
     const smoothing = int(c.smoothing, 0, 100);
@@ -1561,9 +1566,9 @@ function validateImportedConfig(doc) {
       return { name: z.name.trim().slice(0, 23), min: min, color: z.color };
     });
 
-    // 0 = "not set": allowed (the Hub regenerates HR zones once a real Max HR arrives).
     const hrMax = int(c.hrMax, 0, 230);
-    if (hrMax === null) throw new Error("Max HR must be 0 (not set) or between 100 and 230");
+    if (hrMax === null) throw new Error("Max HR must be between 0 and 230 (0 = not set)");
+    if (hrMax !== 0 && hrMax < 100) throw new Error("Max HR must be 0 (not set) or between 100 and 230 BPM");
     out.hrMax = hrMax;
 
     if (!Array.isArray(c.hrZones) || c.hrZones.length !== 5) {
@@ -1682,9 +1687,8 @@ function wsStatusText() {
 function fillAbout() {
   if (!$("aboutAppVersion")) return;
   $("aboutAppVersion").textContent = UI_VERSION;
-  $("aboutFwVersion").textContent = hubInfo
-    ? (hubInfo.version + (hubInfo.build ? " (" + hubInfo.build + ")" : ""))
-    : "unavailable";
+  $("aboutFwVersion").textContent = hubInfo && hubInfo.version ? hubInfo.version : "unavailable";
+  $("aboutFwBuild").textContent = hubInfo && hubInfo.buildId ? hubInfo.buildId : "unknown";
   $("aboutDeviceId").textContent = (hubInfo && hubInfo.deviceId) || "unavailable";
   const connected = wsStatusText() === "connected";
   $("diagWs").textContent = connected ? "connected" : "reconnecting…";
@@ -1703,8 +1707,8 @@ function buildDiagnosticsText() {
     "ZoneGlow diagnostics",
     "Generated: " + new Date().toISOString(),
     "App version: " + UI_VERSION,
-    "Hub firmware: " + ((hubInfo && hubInfo.version) || "unknown") +
-      ((hubInfo && hubInfo.build) ? " (" + hubInfo.build + ")" : ""),
+    "Hub firmware: " + ((hubInfo && hubInfo.version) || "unknown"),
+    "Hub firmware build: " + ((hubInfo && hubInfo.buildId) || "unknown"),
     "Hub device ID: " + ((hubInfo && hubInfo.deviceId) || "unknown"),
     "Hub connection (WebSocket): " + wsStatusText(),
     "API (/api/info): " + (hubInfo ? "reachable" : "unreachable"),
