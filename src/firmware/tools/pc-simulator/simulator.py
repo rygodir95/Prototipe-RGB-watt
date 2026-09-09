@@ -1115,6 +1115,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/info":
             self._json(200, {
                 "version": SIM_VERSION, "versionCode": 10000, "build": "sim",
+                "buildId": "sim",
                 "production": False, "deviceId": "PC-SIMULATOR",
                 "serial": "SIM-000001", "provisioned": False,
                 "secureBoot": False, "flashEncrypted": False,

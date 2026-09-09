@@ -65,7 +65,7 @@
           </div>
 
           <div class="card stat-row" data-testid="stat-row">
-            <div class="stat"><div class="stat-k" id="statFtpLabel">FTP</div><div class="stat-v"><span id="statFtp">221</span> <span id="statFtpUnit">W</span></div></div>
+            <div class="stat"><div class="stat-k" id="statFtpLabel">FTP</div><div class="stat-v"><span id="statFtp">0</span> <span id="statFtpUnit">W</span></div></div>
             <div class="stat"><div class="stat-k">Zones</div><div class="stat-v" id="statZones">7</div></div>
             <div class="stat"><div class="stat-k">Brightness</div><div class="stat-v"><span id="statBright">100</span>%</div></div>
           </div>
@@ -119,7 +119,7 @@
           <div class="field-row">
             <div class="field">
               <label>FTP (W)</label>
-              <input type="number" id="ftpInput" data-testid="ftp-input" min="50" max="600" />
+              <input type="number" id="ftpInput" data-testid="ftp-input" min="0" max="1000" />
             </div>
             <div class="field">
               <label>Zone Count</label>
@@ -145,7 +145,7 @@
           <div class="field-row">
             <div class="field">
               <label>Max HR (BPM)</label>
-              <input type="number" id="hrMaxInput" data-testid="hr-max-input" min="100" max="230" />
+              <input type="number" id="hrMaxInput" data-testid="hr-max-input" min="0" max="230" />
             </div>
             <div class="field">
               <label>Zone Count</label>
@@ -173,7 +173,7 @@
               <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
             </div>
             <div class="field">
-              <label>Hysteresis (<span id="hysUnit">W</span>)</label>
+              <label>Hysteresis (<span id="hysUnit">BPM</span>)</label>
               <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
             </div>
           </div>

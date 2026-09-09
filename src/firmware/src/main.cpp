@@ -256,7 +256,7 @@ void setup() {
   Serial.begin(115200);
   delay(200);
   Serial.println("\n[BOOT] RGB Watt Controller");
-  Serial.printf("[FW] Version %s (%s)\n", FW_VERSION_FULL, FW_BUILD_TYPE);
+  Serial.printf("[FW] Version %s (%s) build %s\n", FW_VERSION_FULL, FW_BUILD_TYPE, FW_BUILD_SHA);
   g_tel.state = DeviceState::STARTING;
 
   Security::begin();   // device identity / security layer (non-destructive)

@@ -24,6 +24,9 @@ def make_sim():
     s = sim_mod.Simulator(cfg_path=cfg_path)
     s.cfg.smoothing = 0
     s.cfg.hysteresis = 0
+    # Factory defaults ship with FTP/Max HR unset (0); configure realistic
+    # values so the behavioural tests below stay meaningful.
+    fw.apply_config_patch(s.cfg, {"ftp": 250, "hrMax": 190})
     s.processor.set_smoothing(0)
     return s
 
@@ -71,7 +74,11 @@ class TestHrPacketParsing(unittest.TestCase):
 class TestHrZones(unittest.TestCase):
     def test_defaults_generated_from_hr_max(self):
         c = fw.AppConfig()
-        self.assertEqual(c.hr_max, 190)
+        self.assertEqual(c.hr_max, 0)   # 0 = not set
+        # Unset Max HR: boundaries stay trivial (sanitize keeps them ascending).
+        self.assertEqual([z.min_bpm for z in c.hr_zones], [0, 1, 2, 3, 4])
+        # First real Max HR regenerates the percentage template.
+        fw.apply_config_patch(c, {"hrMax": 190})
         # 50/60/70/80/90 % of 190, contiguous: Z1 95-114, Z2 115-133, Z3 134-152,
         # Z4 153-171, Z5 172-190
         self.assertEqual([z.min_bpm for z in c.hr_zones], [95, 115, 134, 153, 172])
@@ -108,16 +115,27 @@ class TestHrZones(unittest.TestCase):
         self.assertEqual(c.hr_max, 100)
         fw.apply_config_patch(c, {"hrMax": 999})
         self.assertEqual(c.hr_max, 230)
+        fw.apply_config_patch(c, {"hrMax": 0})
+        self.assertEqual(c.hr_max, 0)   # 0 = not set, accepted
 
     def test_hr_color_interpolation(self):
         c = fw.AppConfig()
+        fw.apply_config_patch(c, {"hrMax": 190})   # Z1/Z2 boundary: 115 bpm
         r, g, b = fw.hr_color_for(c, 999)
         self.assertEqual((r, g, b), (255, 40, 40))               # Maximum, solid
         r, g, b = fw.hr_color_for(c, 50)
         self.assertEqual((r, g, b), (120, 130, 255))             # below first
+        # 20 % center plateau: the zone's exact colour at its center.
+        r, g, b = fw.hr_color_for(c, 124.5)        # center of Z2 [115, 134)
+        self.assertEqual((r, g, b), (0, 190, 255))
+        # Boundary: the exact midpoint of the two adjacent zone colours.
+        r, g, b = fw.hr_color_for(c, 115)
+        self.assertEqual((r, g, b), ((120 + 0) // 2, (130 + 190) // 2, (255 + 255) // 2))
 
     def test_config_json_hr_section(self):
-        doc = fw.build_config_json(fw.AppConfig())
+        c = fw.AppConfig()
+        fw.apply_config_patch(c, {"hrMax": 190})
+        doc = fw.build_config_json(c)
         self.assertEqual(len(doc["hrZones"]), fw.MAX_HR_ZONES)
         self.assertEqual(doc["hrZones"][0]["name"], "Z1 · Recovery")
         self.assertFalse(doc["hrZonesCustom"])                   # generated, not custom
@@ -234,8 +252,8 @@ class TestHrPersistence(unittest.TestCase):
         fw.apply_config_patch(s2.cfg, {"hrMax": 205})
         self.assertEqual([z.min_bpm for z in s2.cfg.hr_zones], [90, 110, 130, 150, 170])
         # Power config untouched and separate
-        self.assertEqual(s2.cfg.ftp, 221)
-        self.assertEqual(s2.cfg.zones[1].min_watts, 124)
+        self.assertEqual(s2.cfg.ftp, 250)
+        self.assertEqual(s2.cfg.zones[1].min_watts, 140)   # 56 % of 250
 
     def test_hr_sensor_saved_separately(self):
         s = make_sim()

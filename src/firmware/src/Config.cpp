@@ -108,8 +108,11 @@ void configScaleHrZones(AppConfig &c, int oldMax, int newMax) {
 }
 
 void configSanitizeHrZones(AppConfig &c) {
-  if (c.hrMax < 100) c.hrMax = 100;
-  if (c.hrMax > 230) c.hrMax = 230;
+  // hrMax == 0 means "not set": keep it unset, clamp only real values.
+  if (c.hrMax != 0) {
+    if (c.hrMax < 100) c.hrMax = 100;
+    if (c.hrMax > 230) c.hrMax = 230;
+  }
   if (c.hrZones[0].minBpm < 0) c.hrZones[0].minBpm = 0;
   for (int i = 1; i < MAX_HR_ZONES; i++) {
     if (c.hrZones[i].minBpm <= c.hrZones[i - 1].minBpm) {
@@ -124,14 +127,17 @@ void configLoadDefaults(AppConfig &c) {
 
   c.controlSource  = SRC_POWER;
 
-  c.ftp            = 221;
+  // FTP / Max HR default to 0 = "not set". Zone boundaries stay trivial
+  // until the user configures a real value, which regenerates them from the
+  // percentage templates (applyConfigPatch handles the 0 -> value case).
+  c.ftp            = 0;
   c.smoothing      = 45;
   c.powerTimeoutMs = 5000;
   c.hysteresis     = 5;
 
   c.zoneCount      = 7;
 
-  c.hrMax          = 190;
+  c.hrMax          = 0;
 
   c.ledPin         = 5;
   c.ledCount       = 60;

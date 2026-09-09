@@ -34,6 +34,9 @@ def make_sim():
     s = sim_mod.Simulator(cfg_path=cfg_path)
     s.cfg.smoothing = 0
     s.cfg.hysteresis = 0
+    # Factory defaults ship with FTP unset (0); configure a realistic one so
+    # the zone-dependent lighting expectations stay meaningful.
+    fw.apply_config_patch(s.cfg, {"ftp": 250})
     s.processor.set_smoothing(0)
     return s
 

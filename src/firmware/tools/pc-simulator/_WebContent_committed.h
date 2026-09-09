@@ -70,7 +70,7 @@ const char INDEX_HTML[] = R"rgbwatt(
           </div>
 
           <div class="card stat-row" data-testid="stat-row">
-            <div class="stat"><div class="stat-k" id="statFtpLabel">FTP</div><div class="stat-v"><span id="statFtp">221</span> <span id="statFtpUnit">W</span></div></div>
+            <div class="stat"><div class="stat-k" id="statFtpLabel">FTP</div><div class="stat-v"><span id="statFtp">0</span> <span id="statFtpUnit">W</span></div></div>
             <div class="stat"><div class="stat-k">Zones</div><div class="stat-v" id="statZones">7</div></div>
             <div class="stat"><div class="stat-k">Brightness</div><div class="stat-v"><span id="statBright">100</span>%</div></div>
           </div>
@@ -124,7 +124,7 @@ const char INDEX_HTML[] = R"rgbwatt(
           <div class="field-row">
             <div class="field">
               <label>FTP (W)</label>
-              <input type="number" id="ftpInput" data-testid="ftp-input" min="50" max="600" />
+              <input type="number" id="ftpInput" data-testid="ftp-input" min="0" max="1000" />
             </div>
             <div class="field">
               <label>Zone Count</label>
@@ -150,7 +150,7 @@ const char INDEX_HTML[] = R"rgbwatt(
           <div class="field-row">
             <div class="field">
               <label>Max HR (BPM)</label>
-              <input type="number" id="hrMaxInput" data-testid="hr-max-input" min="100" max="230" />
+              <input type="number" id="hrMaxInput" data-testid="hr-max-input" min="0" max="230" />
             </div>
             <div class="field">
               <label>Zone Count</label>
@@ -178,7 +178,7 @@ const char INDEX_HTML[] = R"rgbwatt(
               <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
             </div>
             <div class="field">
-              <label>Hysteresis (<span id="hysUnit">W</span>)</label>
+              <label>Hysteresis (<span id="hysUnit">BPM</span>)</label>
               <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
             </div>
           </div>
@@ -684,7 +684,7 @@ const $ = (id) => document.getElementById(id);
 let config = null;
 let ws = null;
 
-const UI_VERSION = "1.2.0";   // Hub web UI version (About/Diagnostics)
+const UI_VERSION = "1.3.0";   // Hub web UI version (About/Diagnostics)
 let lastTel = null;           // last telemetry frame (Diagnostics)
 let activeView = "dashboard"; // current nav view
 let hubInfo = null;           // /api/info cache (About/Diagnostics)
@@ -780,7 +780,7 @@ function fillForms() {
   $("autoReconnect").checked = config.autoReconnect;
   $("debugToggle").checked = config.debug;
   $("wifiSsid").value = config.wifiSsid || "";
-  if (config.hrMax) $("hrMaxInput").value = config.hrMax;
+  $("hrMaxInput").value = config.hrMax || 0;
 
   // ---- Dashboard adapts to the active control source ----
   const hr = isHrMode();
@@ -789,7 +789,9 @@ function fillForms() {
   $("statFtp").textContent = hr ? config.hrMax : config.ftp;
   $("statFtpUnit").textContent = hr ? "BPM" : "W";
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
-  $("hysUnit").textContent = hr ? "BPM" : "W";
+  // Hysteresis is a Heart Rate (bpm) setting; Power zone hysteresis is
+  // FTP-relative (1.5 % of FTP) and not user-configurable.
+  $("hysUnit").textContent = "BPM";
   $("sourceMiniLabel").textContent = hr ? "Heart Rate" : "Power Source";
 
   // ---- Devices page: per-type saved source hints ----
@@ -797,9 +799,10 @@ function fillForms() {
   $("hrSavedHint").textContent = config.hrSourceName ? "Saved: " + config.hrSourceName : "No saved device";
 
   // ---- Zones page section subtitles ----
-  $("powerZoneSub").textContent = "FTP: " + config.ftp + " W · " + config.zoneCount + " zones";
+  $("powerZoneSub").textContent = "FTP: " + (config.ftp ? config.ftp + " W" : "not set") +
+    " · " + config.zoneCount + " zones";
   // ---- HR zones: header summary + how Max HR interacts with the boundaries ----
-  const hrSummary = "Max HR: " + (config.hrMax || 190) + " BPM · " +
+  const hrSummary = "Max HR: " + (config.hrMax ? config.hrMax + " BPM" : "not set") + " · " +
     (config.hrZones ? config.hrZones.length : 5) + " zones. ";
   $("hrZoneNote").textContent = hrSummary + (config.hrZonesCustom
     ? "Boundaries customised — changing Max HR keeps them. Reset restores the defaults."
@@ -826,15 +829,16 @@ function renderHrZoneEditor() {
   const el = $("hrEditor");
   el.innerHTML = "";
   if (!config.hrZones) return;
-  const hrMax = config.hrMax || 190;
+  const hrMax = config.hrMax || 0;   // 0 = not set: no percentages shown
   config.hrZones.forEach((z, i) => {
     const isLast = i === config.hrZones.length - 1;
     // Z5 ends at Max HR; the server also reports max = hrMax for the last zone.
     const maxBpm = isLast || z.max < 0 ? hrMax : z.max;
-    const pctLo = Math.floor(z.min / hrMax * 100);
-    const pctHi = Math.round(maxBpm / hrMax * 100);
+    const pct = hrMax > 0
+      ? Math.floor(z.min / hrMax * 100) + "–" + Math.round(maxBpm / hrMax * 100) + "% Max HR"
+      : null;
     el.appendChild(zoneRow(z, i, "hr-zone", {
-      unit: "BPM", max: maxBpm, pct: pctLo + "–" + pctHi + "% Max HR",
+      unit: "BPM", max: maxBpm, pct: pct,
     }));
   });
   bindZoneEditor(el, config.hrZones);
@@ -1516,8 +1520,9 @@ function validateImportedConfig(doc) {
       out.controlSource = c.controlSource;
     }
 
-    const ftp = int(c.ftp, 50, 1000);
-    if (ftp === null) throw new Error("FTP must be a whole number between 50 and 1000");
+    // 0 = "not set": allowed (the Hub regenerates zones once a real FTP arrives).
+    const ftp = int(c.ftp, 0, 1000);
+    if (ftp === null) throw new Error("FTP must be 0 (not set) or a whole number up to 1000");
     out.ftp = ftp;
 
     const smoothing = int(c.smoothing, 0, 100);
@@ -1556,8 +1561,9 @@ function validateImportedConfig(doc) {
       return { name: z.name.trim().slice(0, 23), min: min, color: z.color };
     });
 
-    const hrMax = int(c.hrMax, 100, 230);
-    if (hrMax === null) throw new Error("Max HR must be between 100 and 230");
+    // 0 = "not set": allowed (the Hub regenerates HR zones once a real Max HR arrives).
+    const hrMax = int(c.hrMax, 0, 230);
+    if (hrMax === null) throw new Error("Max HR must be 0 (not set) or between 100 and 230");
     out.hrMax = hrMax;
 
     if (!Array.isArray(c.hrZones) || c.hrZones.length !== 5) {

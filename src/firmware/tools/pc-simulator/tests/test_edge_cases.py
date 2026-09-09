@@ -222,7 +222,7 @@ class TestConfigPersistenceReload(unittest.TestCase):
         with open(path, "w", encoding="utf-8") as f:
             f.write("{ this is not json")
         s = sim_mod.Simulator(cfg_path=path)
-        self.assertEqual(s.cfg.ftp, 221)   # factory defaults, device still boots
+        self.assertEqual(s.cfg.ftp, 0)   # factory defaults (unset), device still boots
 
     def test_wrong_version_config_falls_back_to_defaults(self):
         d = tempfile.mkdtemp()
@@ -230,7 +230,7 @@ class TestConfigPersistenceReload(unittest.TestCase):
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"version": "999", "ftp": 400}, f)
         s = sim_mod.Simulator(cfg_path=path)
-        self.assertEqual(s.cfg.ftp, 221)
+        self.assertEqual(s.cfg.ftp, 0)
 
 
 class TestInvalidConfigPatch(unittest.TestCase):

@@ -202,7 +202,16 @@ static void applyConfigPatch(JsonDocument &doc) {
     configApplyDefaultZones(g_config);       // regenerate on count change
   } else if (hasFtp) {
     int newFtp = doc["ftp"].as<int>();
-    if (!hasZones) configScaleZones(g_config, oldFtp, newFtp);
+    if (!hasZones) {
+      // First real value after "not set" (0): regenerate the percentage
+      // template instead of scaling the trivial unset boundaries.
+      if (oldFtp <= 0 && newFtp > 0) {
+        g_config.ftp = newFtp;
+        configApplyDefaultZones(g_config);
+      } else {
+        configScaleZones(g_config, oldFtp, newFtp);
+      }
+    }
     g_config.ftp = newFtp;
   }
 
@@ -232,10 +241,15 @@ static void applyConfigPatch(JsonDocument &doc) {
   if (!doc["hrZonesReset"].isNull()) hrReset = doc["hrZonesReset"].as<bool>();
   if (!doc["hrMax"].isNull()) {
     int oldMax = g_config.hrMax;
-    int newMax = constrain(doc["hrMax"].as<int>(), 100, 230);
-    if (!doc["hrZones"].is<JsonArray>() && !hrReset)
-      configScaleHrZones(g_config, oldMax, newMax);   // rescale custom boundaries
+    int newMax = doc["hrMax"].as<int>();
+    if (newMax != 0) newMax = constrain(newMax, 100, 230);   // 0 = not set
     g_config.hrMax = newMax;
+    if (!doc["hrZones"].is<JsonArray>() && !hrReset) {
+      // First real value after "not set" (0): regenerate the percentage
+      // template instead of scaling the trivial unset boundaries.
+      if (oldMax <= 0 && newMax > 0) configApplyDefaultHrZones(g_config);
+      else configScaleHrZones(g_config, oldMax, newMax);      // rescale boundaries
+    }
   }
   if (doc["hrZones"].is<JsonArray>()) {
     JsonArray arr = doc["hrZones"].as<JsonArray>();
@@ -494,6 +508,7 @@ void WebInterface::setupRoutes() {
     doc["version"]        = FW_VERSION_FULL;
     doc["versionCode"]    = FW_VERSION_CODE;
     doc["build"]          = FW_BUILD_TYPE;
+    doc["buildId"]        = FW_BUILD_SHA;
     doc["production"]     = Security::isProduction();
     doc["deviceId"]       = Security::deviceId();
     doc["serial"]         = Security::serialNumber();
