@@ -21,5 +21,8 @@ def _git_sha():
 
 
 sha = _git_sha()
-env.Append(CPPDEFINES=[("FW_BUILD_SHA", '"%s"' % sha)])
+# Escape the quotes: SCons passes a CPPDEFINES tuple value through verbatim as
+# -D NAME=VALUE, so the C string quotes must survive shell transport themselves
+# (-D FW_BUILD_SHA=\"abc1234\" -> FW_BUILD_SHA is the C string "abc1234").
+env.Append(CPPDEFINES=[("FW_BUILD_SHA", '\\"%s\\"' % sha)])
 print("Firmware build ID (FW_BUILD_SHA): %s" % sha)
