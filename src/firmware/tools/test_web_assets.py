@@ -1,10 +1,12 @@
-"""Host regression for the actual asset handlers, generated arrays and filler.
+"""Host regression for actual asset handlers, arrays and TCP response state.
 
 Run: python tools/test_web_assets.py (g++ on PATH, or set CXX).
-The server double checks the chosen response overload; TCP itself needs the
-on-device check_web_assets.py smoke test.
+The transport double injects backpressure and ACKs; real ESP32/Wi-Fi still
+needs the on-device check_web_assets.py smoke test.
 """
 import importlib.util
+import http.client
+import io
 import os
 from pathlib import Path
 import re
@@ -12,6 +14,14 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class WireSocket:
+    def __init__(self, data):
+        self.data = data
+
+    def makefile(self, *args, **kwargs):
+        return io.BytesIO(self.data)
 
 
 def main():
@@ -42,8 +52,19 @@ def main():
         subprocess.run([str(binary), str(temp)], check=True)
         for filename, _ in embed.FILES:
             expected = ('\n' + (ROOT / 'data/web' / filename).read_text(encoding='utf-8')).encode('utf-8')
-            assert (temp / filename).read_bytes() == expected, 'Body mismatch: ' + filename
-            print(f'{filename}: Content-Length = {len(expected)}, complete UTF-8 body matches')
+            wire = (temp / (filename + '.http')).read_bytes()
+            response = http.client.HTTPResponse(WireSocket(wire))
+            response.begin()
+            assert response.status == 200
+            assert response.getheader('Content-Type') == {
+                'index.html': 'text/html', 'style.css': 'text/css',
+                'app.js': 'application/javascript'}[filename]
+            assert response.getheader('X-Firmware-Build') == 'local'
+            assert response.getheader('Content-Length') == str(len(expected))
+            assert response.getheader('Transfer-Encoding') is None
+            assert response.read() == expected, 'Body mismatch: ' + filename
+            assert wire.split(b'\r\n\r\n', 1)[1] == expected, 'Extra/missing response bytes'
+            print(f'{filename}: parsed HTTP 200, Content-Length = {len(expected)}, complete UTF-8 body matches')
 
 
 if __name__ == '__main__':

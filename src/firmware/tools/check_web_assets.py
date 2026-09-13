@@ -22,7 +22,8 @@ def check(base, asset):
         assert response.headers.get_content_type() == mime, (path, response.headers)
         assert response.headers.get('Content-Length') == str(len(expected)), (path, response.headers)
         assert response.read() == expected, 'Truncated/changed body: ' + path
-    return f'{path}: 200, {len(expected)} bytes, exact match'
+        build = response.headers.get('X-Firmware-Build', 'missing (older firmware)')
+    return f'{path}: 200, {len(expected)} bytes, exact match, build={build}'
 
 
 if __name__ == '__main__':
