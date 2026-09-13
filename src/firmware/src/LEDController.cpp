@@ -1,4 +1,5 @@
 #include "LEDController.h"
+#include "LedPin.h"
 
 static uint16_t neoType(int type) {
   // SK6812 (RGBW) vs WS2812B (RGB), both 800kHz.
@@ -6,6 +7,7 @@ static uint16_t neoType(int type) {
 }
 
 void LEDController::rebuild() {
+  _pin = sanitizeLedPin(_pin, "RGB");
   if (_strip) { delete _strip; _strip = nullptr; }
   if (_count < 1)   _count = 1;
   if (_count > 1000) _count = 1000;

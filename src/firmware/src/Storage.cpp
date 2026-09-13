@@ -1,4 +1,5 @@
 #include "Storage.h"
+#include "LedPin.h"
 
 static const char *NS  = "rgbwatt";
 static const char *KEY = "cfg";
@@ -19,6 +20,7 @@ void Storage::load(AppConfig &c) {
     _prefs.getBytes(KEY, &tmp, sizeof(AppConfig));
     if (tmp.version == CONFIG_VERSION) {
       c = tmp;
+      c.ledPin = sanitizeLedPin(c.ledPin, "STORE");
       if (c.controlSource != SRC_POWER && c.controlSource != SRC_HEART_RATE) c.controlSource = SRC_POWER;
       configSanitizeZones(c);
       configSanitizeHrZones(c);

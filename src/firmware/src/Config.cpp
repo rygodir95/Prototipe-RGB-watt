@@ -1,4 +1,5 @@
 #include "Config.h"
+#include "LedPin.h"
 #include "FirmwareVersion.h"
 
 AppConfig g_config;
@@ -138,7 +139,7 @@ void configLoadDefaults(AppConfig &c) {
 
   c.hrMax          = 0;   // 0 = "not set" until the user configures it
 
-  c.ledPin         = 5;
+  c.ledPin         = DEFAULT_LED_PIN;
   c.ledCount       = 60;
   c.brightness     = 100;
   c.ledType        = LED_WS2812B;

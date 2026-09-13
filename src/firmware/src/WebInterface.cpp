@@ -2,6 +2,7 @@
 #include "WebContent.h"
 #include "AppState.h"
 #include "Config.h"
+#include "LedPinConfig.h"
 #include "Storage.h"
 #include "BLEPower.h"
 #include "HRSensor.h"
@@ -282,7 +283,7 @@ static void applyConfigPatch(JsonDocument &doc) {
   if (!doc["smoothing"].isNull())    g_config.smoothing      = constrain(doc["smoothing"].as<int>(), 0, 100);
   if (!doc["powerTimeout"].isNull()) g_config.powerTimeoutMs = max(500, doc["powerTimeout"].as<int>());
   if (!doc["hysteresis"].isNull())   g_config.hysteresis     = max(0, doc["hysteresis"].as<int>());
-  if (!doc["ledPin"].isNull())       g_config.ledPin         = doc["ledPin"].as<int>();
+  applyLedPinConfig(doc.as<JsonObjectConst>(), g_config.ledPin);
   if (!doc["ledCount"].isNull())     g_config.ledCount       = constrain(doc["ledCount"].as<int>(), 1, 1000);
   if (!doc["brightness"].isNull())   g_config.brightness     = constrain(doc["brightness"].as<int>(), 0, 100);
   if (!doc["ledType"].isNull()) {
