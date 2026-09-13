@@ -28,3 +28,9 @@ jobs:
       - name: Simulator regression tests
         working-directory: src/firmware/tools/pc-simulator
         run: python -m unittest discover -s tests -v
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZoneGlow-Firmware-esp32dev-dev-${{ github.sha }}
+          path: src/firmware/.pio/build/esp32dev-dev/firmware.bin
+          if-no-files-found: error
