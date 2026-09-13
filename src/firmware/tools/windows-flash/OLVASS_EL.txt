@@ -1,0 +1,21 @@
+ZoneGlow - Windows frissitocsomag (64 bites Windows)
+
+1. A teljes ZIP-et csomagold ki egy mappaba.
+2. Csatlakoztasd az ESP32-t USB adatkabellel. Zard be a soros monitort.
+3. Dupla kattintas: flash.bat
+
+Egyetlen COM port eseten a frissites automatikusan indul. Ha tobb eszkoz
+van csatlakoztatva, a program keri az ESP32 COM portjat.
+Python es PlatformIO nem szukseges; az esptool.exe a csomag resze.
+USB-soros driver szukseges lehet a panelhez (pl. CP210x vagy CH340).
+Ha nem kapcsolodik, a Connecting... alatt tartsd nyomva a BOOT gombot.
+
+Ez a meglevo ZoneGlow ESP32 firmware frissitese, a min_spiffs kiosztassal.
+A program a firmware-t 0x10000 cimre irja, es 0xe000 cimen visszaallitja
+az OTA inditasi allapotot, hogy az uj firmware induljon korabbi OTA utan is.
+Az NVS, a Wi-Fi es mas mentett beallitasok megmaradnak.
+Nem teljes flash-torles es nem ures/mas particios kiosztasu panel telepitese.
+
+Sikertelen irasnal a program HIBA uzenettel zar; futtasd ujra a frissitot.
+A firmware.bin onallo OTA-frissiteshez is hasznalhato.
+Az esptool hivatalos forrasa: https://github.com/espressif/esptool/releases/tag/v4.11.0

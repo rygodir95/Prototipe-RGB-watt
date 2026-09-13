@@ -28,9 +28,27 @@ jobs:
       - name: Simulator regression tests
         working-directory: src/firmware/tools/pc-simulator
         run: python -m unittest discover -s tests -v
+      - name: Prepare Windows flash package
+        working-directory: src/firmware
+        run: |
+          pio run -t idedata
+          python tools/package_windows_flash.py --output .pio/build/esp32dev-dev/windows-flash
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: ZoneGlow-Firmware-esp32dev-dev-${{ github.sha }}
-          path: src/firmware/.pio/build/esp32dev-dev/firmware.bin
+          path: src/firmware/.pio/build/esp32dev-dev/windows-flash/
           if-no-files-found: error
+
+  windows-smoke:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ZoneGlow-Firmware-esp32dev-dev-${{ github.sha }}
+          path: flash package
+      - name: Test Windows updater without hardware
+        shell: powershell
+        run: ./src/firmware/tools/test_windows_flash.ps1 -Package './flash package'
