@@ -1,5 +1,6 @@
 #include "WebInterface.h"
 #include "WebContent.h"
+#include "EmbeddedAssetResponse.h"
 #include "AppState.h"
 #include "Config.h"
 #include "LedPinConfig.h"
@@ -327,13 +328,13 @@ static void attachJsonPost(const char *path, JsonHandler handler) {
 
 void WebInterface::setupRoutes() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
-    req->send(200, "text/html", INDEX_HTML);
+    sendEmbeddedAsset(req, "text/html", INDEX_HTML);
   });
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *req) {
-    req->send(200, "text/css", STYLE_CSS);
+    sendEmbeddedAsset(req, "text/css", STYLE_CSS);
   });
   server.on("/app.js", HTTP_GET, [](AsyncWebServerRequest *req) {
-    req->send(200, "application/javascript", APP_JS);
+    sendEmbeddedAsset(req, "application/javascript", APP_JS);
   });
 
   server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *req) {
