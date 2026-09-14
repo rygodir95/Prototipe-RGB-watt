@@ -31,6 +31,10 @@ jobs:
       - name: Lighting concurrency and strip shrink regression tests
         working-directory: src/firmware
         run: python tools/test_lighting.py
+      - name: Non-blocking config and simulation request regression tests
+        # Exercise real HTTP callbacks while deferred hardware work is blocked.
+        working-directory: src/firmware
+        run: python tools/test_request_paths.py
       - name: Simulator regression tests
         working-directory: src/firmware/tools/pc-simulator
         run: python -m unittest discover -s tests -v

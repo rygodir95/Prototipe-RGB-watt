@@ -1,6 +1,7 @@
 #include "WebInterface.h"
 #include "WebContent.h"
 #include "EmbeddedAssetResponse.h"
+#include "JsonPostBody.h"
 #include "AppState.h"
 #include "Config.h"
 #include "LedPinConfig.h"
@@ -298,9 +299,6 @@ static void applyConfigPatch(JsonDocument &doc) {
     g_config.theme[sizeof(g_config.theme) - 1] = '\0';
   }
   if (!doc["debug"].isNull()) g_config.debug = doc["debug"].as<bool>();
-
-  storage.save(g_config);
-  applyRuntimeConfig();
 }
 
 // Generic JSON body accumulator for POST handlers.
@@ -311,16 +309,7 @@ static void attachJsonPost(const char *path, JsonHandler handler) {
     [](AsyncWebServerRequest *req) {},
     NULL,
     [handler](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t index, size_t total) {
-      if (index == 0) req->_tempObject = new std::string();
-      std::string *body = (std::string *)req->_tempObject;
-      body->append((const char *)data, len);
-      if (index + len == total) {
-        JsonDocument doc;
-        DeserializationError err = deserializeJson(doc, *body);
-        delete body; req->_tempObject = nullptr;
-        if (err) { req->send(400, "application/json", "{\"ok\":false,\"error\":\"bad json\"}"); return; }
-        handler(req, doc);
-      }
+      receiveJsonBody(req, data, len, index, total, handler);
     });
 }
 
@@ -348,6 +337,7 @@ void WebInterface::setupRoutes() {
     JsonDocument out; buildConfigJson(out);
     String s; serializeJson(out, s);
     req->send(200, "application/json", s);
+    scheduleRuntimeConfig(g_config);
   });
 
   // Discovery scans EVERY supported sensor category in one finite unified

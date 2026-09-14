@@ -37,12 +37,15 @@ void Storage::load(AppConfig &c) {
 }
 
 void Storage::save(const AppConfig &c) {
-  if (!_prefs.begin(NS, false)) {          // read-write
+  // Saves can now originate from loop(); do not share an open Preferences
+  // handle with other routes which persist their own settings.
+  Preferences prefs;
+  if (!prefs.begin(NS, false)) {          // read-write
     Serial.println("[STORE] NVS open failed on save");
     return;
   }
-  _prefs.putBytes(KEY, &c, sizeof(AppConfig));
-  _prefs.end();
+  prefs.putBytes(KEY, &c, sizeof(AppConfig));
+  prefs.end();
   Serial.println("[STORE] Configuration saved");
 }
 

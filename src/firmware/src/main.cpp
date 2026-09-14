@@ -3,6 +3,7 @@
 #include <ESPmDNS.h>
 
 #include "Config.h"
+#include "DeferredConfig.h"
 #include "AppState.h"
 #include "Storage.h"
 #include "PowerProcessor.h"
@@ -39,13 +40,27 @@ static uint32_t s_lastProc     = 0;
 static uint32_t s_lastDebug    = 0;
 
 // ---- Config application -----------------------------------------------------
-void applyRuntimeConfig() {
-  g_logEnabled = g_config.debug;
-  processor.setSmoothing(g_config.smoothing);
-  localLed.reconfigure(g_config.ledPin, g_config.ledCount, g_config.ledType);
-  lighting.applyConfig(g_config.brightness, g_config.ledEffect);
-  ble.setAutoReconnect(g_config.autoReconnect);
-  hrBle.setAutoReconnect(g_config.autoReconnect);
+static DeferredConfig pendingConfig;
+
+void scheduleRuntimeConfig(const AppConfig &config) {
+  pendingConfig.publish(config);
+}
+
+static void applyRuntimeConfig(const AppConfig &config) {
+  g_logEnabled = config.debug;
+  processor.setSmoothing(config.smoothing);
+  localLed.reconfigure(config.ledPin, config.ledCount, config.ledType);
+  lighting.applyConfig(config.brightness, config.ledEffect);
+  ble.setAutoReconnect(config.autoReconnect);
+  hrBle.setAutoReconnect(config.autoReconnect);
+}
+
+static void servicePendingConfig() {
+  AppConfig config;
+  if (!pendingConfig.take(config)) return;
+  // loop-task only. The mailbox lock is released before any hardware/NVS work.
+  applyRuntimeConfig(config);
+  storage.save(config);
 }
 
 void scheduleReboot(uint32_t ms) { s_rebootAt = millis() + ms; }
@@ -323,6 +338,7 @@ void setup() {
 }
 
 void loop() {
+  servicePendingConfig();
   // Only the active control source's BLE module is ever serviced.
   if (g_config.controlSource == SRC_HEART_RATE) hrBle.update();
   else                                         ble.update();

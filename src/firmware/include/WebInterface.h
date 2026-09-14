@@ -15,8 +15,9 @@ private:
   uint32_t _lastCleanup   = 0;
 };
 
-// Implemented in main.cpp: re-applies runtime-affecting config to subsystems.
-void applyRuntimeConfig();
+struct AppConfig;
+// Request-safe: copies a validated snapshot; loop() persists/applies it later.
+void scheduleRuntimeConfig(const AppConfig &config);
 // Implemented in main.cpp: switches the active control source (Power <-> HR),
 // fully tearing down the previously active BLE module (mutual exclusion).
 // restore=false skips auto-restoring the new source's saved sensor: an
