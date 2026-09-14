@@ -35,6 +35,9 @@ jobs:
         # Exercise real HTTP callbacks while deferred hardware work is blocked.
         working-directory: src/firmware
         run: python tools/test_request_paths.py
+      - name: Sustained demo client backpressure tests
+        working-directory: src/firmware
+        run: node tools/test_demo.cjs
       - name: Simulator regression tests
         working-directory: src/firmware/tools/pc-simulator
         run: python -m unittest discover -s tests -v

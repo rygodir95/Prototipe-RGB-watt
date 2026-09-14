@@ -523,7 +523,8 @@ void WebInterface::setupRoutes() {
 // ---- telemetry --------------------------------------------------------------
 
 void WebInterface::broadcastTelemetry() {
-  if (ws.count() == 0) return;
+  // Telemetry is replaceable: skip a sample rather than fill a slow client's queue.
+  if (ws.count() == 0 || !ws.availableForWriteAll()) return;
   bool hr = (g_config.controlSource == SRC_HEART_RATE);
   JsonDocument doc;
   doc["mode"]      = hr ? "hr" : "power";
@@ -556,6 +557,7 @@ void WebInterface::broadcastTelemetry() {
 void WebInterface::begin() {
   ws.onEvent([](AsyncWebSocket *s, AsyncWebSocketClient *c,
                 AwsEventType type, void *arg, uint8_t *data, size_t len) {
+    if (type == WS_EVT_CONNECT) c->setCloseClientOnQueueFull(false);
     (void)s; (void)c; (void)arg; (void)data; (void)len;
   });
   server.addHandler(&ws);

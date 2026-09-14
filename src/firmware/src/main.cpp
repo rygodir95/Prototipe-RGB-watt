@@ -349,8 +349,8 @@ void loop() {
     processPipeline();
   }
 
-  lighting.update();
   web.loop();
+  lighting.update();
   delay(1);  // Let Wi-Fi/AsyncTCP and idle tasks run during continuous lighting.
 
   if (s_rebootAt && millis() >= s_rebootAt) {

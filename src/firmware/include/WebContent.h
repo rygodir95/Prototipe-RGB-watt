@@ -1418,17 +1418,34 @@ function obRenderDevices(devices) {
 // color on the strip. It is a lighting test tool, NOT a simulated workout;
 // stopping it returns control to the real sensor untouched. The developer
 // Simulation Mode (PC simulator /dev panel) remains separate.
-const DEMO_STEP_MS = 1200;
+const DEMO_STEP_MS = 1200; // Minimum rest AFTER a complete response.
+const DEMO_REQUEST_TIMEOUT_MS = 4000;
 let demoTimer = null;
+let demoRunning = false;
+let demoStopping = null;
+let demoRequest = null;
 let demoPos = 0;
 let demoCyclesLeft = 0;
 
-async function postSimulation(patch, opts) {
-  return fetch("/api/simulation", Object.assign({
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  }, opts || {}));
+function postSimulation(patch, opts) {
+  if (demoRequest) return Promise.reject(new Error("Simulation request already pending"));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEMO_REQUEST_TIMEOUT_MS);
+  demoRequest = (async () => {
+    const response = await fetch("/api/simulation", Object.assign({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+      signal: controller.signal,
+    }, opts || {}));
+    const result = await response.json(); // Include body transfer in backpressure/timeout.
+    if (!response.ok || result.ok !== true) throw new Error("Simulation request failed");
+    return result;
+  })().finally(() => {
+    clearTimeout(timeout);
+    demoRequest = null;
+  });
+  return demoRequest;
 }
 function demoSequence() {
   // One value per zone: a little above each zone's lower bound, so the cycle
@@ -1439,38 +1456,43 @@ function demoSequence() {
   return vals.concat(vals.slice(0, -1).reverse());
 }
 async function startDemo(cycles) {
-  if (demoTimer || !config) return;   // already running
+  if (demoRunning || demoStopping || !config) return;
+  demoRunning = true; // Guard double clicks even while the enable POST is pending.
   demoPos = 0;
-  demoCyclesLeft = cycles || 1;   // dashboard runs exactly ONE automatic cycle, then stops
+  demoCyclesLeft = cycles || 1;
   try { await postSimulation({ enabled: true }); }
-  catch (_) { toast("Cannot reach the Hub"); return; }
+  catch (_) { await stopDemo(); toast("Cannot reach the Hub"); return; }
+  if (!demoRunning) return;
   $("demoBanner").hidden = false;
   await demoTick();
-  demoTimer = setInterval(demoTick, DEMO_STEP_MS);
 }
-async function stopDemo() {
-  if (demoTimer) { clearInterval(demoTimer); demoTimer = null; }
+function stopDemo(opts) {
+  demoRunning = false;
+  if (demoTimer !== null) { clearTimeout(demoTimer); demoTimer = null; }
   $("demoBanner").hidden = true;
-  try { await postSimulation({ enabled: false }); } catch (_) {}
+  if (demoStopping) return demoStopping;
+  demoStopping = (async () => {
+    // The final disable must follow any pending enable/value, never race it.
+    if (demoRequest) { try { await demoRequest; } catch (_) {} }
+    try { await postSimulation({ enabled: false }, opts); } catch (_) {}
+  })().finally(() => { demoStopping = null; });
+  return demoStopping;
 }
 async function demoTick() {
+  if (!demoRunning || demoRequest || demoStopping) return;
+  if (demoTimer !== null) { clearTimeout(demoTimer); demoTimer = null; }
   const seq = demoSequence();
   if (!seq.length || demoPos >= seq.length * demoCyclesLeft) { await stopDemo(); return; }
   const v = seq[demoPos % seq.length];
-  demoPos++;
   const patch = isHrMode() ? { bpm: v } : { watts: v };
   try { await postSimulation(patch); }
-  catch (_) { await stopDemo(); toast("Connection to Hub lost — lighting test stopped"); }
+  catch (_) { await stopDemo(); toast("Connection to Hub lost — lighting test stopped"); return; }
+  demoPos++;
+  if (demoRunning) demoTimer = setTimeout(demoTick, DEMO_STEP_MS);
 }
-// Best effort: never leave the Hub in Demo Mode when the UI goes away.
-document.addEventListener("pagehide", () => {
-  if (!demoTimer) return;
-  try {
-    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-      navigator.sendBeacon("/api/simulation",
-        new Blob([JSON.stringify({ enabled: false })], { type: "application/json" }));
-    }
-  } catch (_) {}
+// Best effort, using the same serialized stop path on navigation.
+window.addEventListener("pagehide", () => {
+  if (demoRunning) void stopDemo({ keepalive: true });
 });
 
 // ---------------- Configuration backup (export / import) ----------------
@@ -1775,7 +1797,7 @@ async function init() {
 
   // ---- Demo Mode ----
   $("demoBtn").addEventListener("click", () => startDemo());
-  $("demoExitBtn").addEventListener("click", stopDemo);
+  $("demoExitBtn").addEventListener("click", () => stopDemo());
 
   // ---- About / Diagnostics ----
   $("copyDiagBtn").addEventListener("click", copyDiagnostics);
@@ -1798,4 +1820,5 @@ async function init() {
   loadHubInfo();   // available for the onboarding Hub step + About
   if (!onboardingDone()) startOnboarding();
 }
-document.addEventListener("DOMContentLoaded", init);)rgbwatt";
+document.addEventListener("DOMContentLoaded", init);
+)rgbwatt";

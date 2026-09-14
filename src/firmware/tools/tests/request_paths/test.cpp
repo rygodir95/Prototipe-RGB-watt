@@ -12,6 +12,8 @@
 #include "LedPinConfig.h"
 #include "DeferredConfig.h"
 #include "Simulation.h"
+#include "WebInterface.h"
+#include "AppState.h"
 
 std::map<void *, size_t> allocations;
 bool failAllocation = false;
@@ -31,6 +33,19 @@ void trackedFree(void *p) {
 #undef malloc
 #undef free
 
+Telemetry g_tel;
+const char *deviceStateName(DeviceState) { return "TEST"; }
+struct TestWebSocket {
+  bool writable=true;
+  int frames=0, cleanups=0;
+  size_t count() { return 1; }
+  bool availableForWriteAll() { return writable; }
+  void textAll(const std::string &body) {
+    assert(writable);
+    JsonDocument doc; assert(!deserializeJson(doc,body)); ++frames;
+  }
+  void cleanupClients() { ++cleanups; }
+} ws;
 TestSerial Serial;
 Simulation sim;
 bool g_logEnabled = true;
@@ -114,6 +129,21 @@ int main() {
   post("/api/config", R"({"ledPin":255,"ledCount":10000})");
   assert(g_config.ledPin==5 && g_config.ledCount==1000);
   servicePendingConfig();
+  // Two minutes of loop time: real request handlers and telemetry scheduling.
+  WebInterface web;
+  const uint32_t started=millis();
+  for(uint32_t elapsed=0;elapsed<=120000;elapsed+=20) {
+    testMillis()=started+elapsed;
+    if(elapsed%1200==0) post("/api/simulation", "{\"enabled\":true,\"watts\":"+std::to_string(elapsed%500)+"}");
+    if(elapsed%1000==0) {
+      JsonDocument reply; buildConfigJson(reply); // Same GET /api/config builder.
+      assert(reply["ledCount"].as<int>()==g_config.ledCount);
+    }
+    // A slow browser stops reading for ten seconds; telemetry must be dropped.
+    ws.writable=elapsed<30000 || elapsed>=40000;
+    web.loop();
+  }
+  assert(ws.frames>=549 && ws.frames<=551 && ws.cleanups==60);
   const auto handler=handlers.at("/api/config");
   const uint8_t data[]={'{','}'};
   for(int i=0;i<1000;++i) {
@@ -129,5 +159,5 @@ int main() {
   { AsyncWebServerRequest req; failAllocation=true;
     receiveJsonBody(&req,data,2,0,2,handler); assert(req.status==503); failAllocation=false; }
   assert(allocations.empty());
-  std::cout << "PASS: 2000 config saves and 3000 Lighting Test calls during blocked runtime/NVS work; latest intent, validation, upload cleanup/errors\n";
+  std::cout << "PASS: 2000 config saves and 3000 Lighting Test calls during blocked runtime/NVS work; 120s simulated config/telemetry service with slow-client backpressure; upload cleanup/errors\n";
 }

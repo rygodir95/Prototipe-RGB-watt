@@ -13,11 +13,14 @@ assert re.search(r'void loop\(\)\s*\{\s*servicePendingConfig\(\);', main)
 helpers = web[web.index('static void hexFromRGB'):web.index('// ---- Secure OTA')]
 config = web[web.index('static void buildConfigJson'):web.index('// Generic JSON')]
 service = main[main.index('static DeferredConfig pendingConfig;'):main.index('void scheduleReboot')]
+telemetry = web[web.index('void WebInterface::broadcastTelemetry()'):web.index('void WebInterface::begin()')]
+telemetry += web[web.index('void WebInterface::loop()'):web.index('size_t WebInterface::clientCount()')]
+assert main.index('web.loop();', main.index('void loop()')) < main.index('lighting.update();', main.index('void loop()'))
 routes = [re.search(r'attachJsonPost\("/api/' + path + r'",.*?\n  \}\);', web, re.S).group()
           for path in ('config', 'simulation')]
 with tempfile.TemporaryDirectory(prefix='request-paths-') as directory:
     temp = Path(directory)
-    (temp / 'production.h').write_text(service + helpers + config + '\nvoid registerRoutes() {\n' + '\n'.join(routes) + '\n}\n')
+    (temp / 'production.h').write_text(service + helpers + config + telemetry + '\nvoid registerRoutes() {\n' + '\n'.join(routes) + '\n}\n')
     binary = temp / ('test.exe' if os.name == 'nt' else 'test')
     subprocess.run([os.environ.get('CXX', 'g++'), '-std=c++11', '-pthread', '-Wall', '-Wextra',
         '-DARDUINOJSON_ENABLE_ARDUINO_STRING=0', '-DARDUINOJSON_ENABLE_ARDUINO_STREAM=0',
