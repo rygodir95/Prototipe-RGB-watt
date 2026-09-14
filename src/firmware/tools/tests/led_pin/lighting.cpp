@@ -3,6 +3,7 @@
 #include <thread>
 #include "Config.h"
 #include "Simulation.h"
+#include "RuntimeMetrics.h"
 #include "LocalLedOutput.h"
 #include "LightingOutputManager.h"
 #include <ArduinoJson.h>
@@ -24,6 +25,21 @@ void attachJsonPost(const char *path, decltype(simulationHandler) handler) {
 #include "simulation_route.h"
 
 int main() {
+  // Two minutes of animated rendering: bounded duty cycle even at 1000 pixels.
+  {
+    LEDController animated;
+    animated.begin(5,1000,1,100); animated.setEffect(1);
+    animated.setColor(255,0,0); animated.setActive(true);
+    const auto before=Runtime::snapshot().values[Runtime::LedShow].calls;
+    for(int i=0;i<120000;i+=2) { testMillis()+=2; animated.update(); }
+    const auto frames=Runtime::snapshot().values[Runtime::LedShow].calls-before;
+    assert(frames>=1490 && frames<=1500); // 40ms wire time, >=80ms frame period.
+    animated.setActive(false);
+    testMillis()+=1000; animated.update();
+    const auto black=Runtime::snapshot().values[Runtime::LedShow].calls;
+    for(int i=0;i<1000;++i) { testMillis()+=40; animated.update(); }
+    assert(Runtime::snapshot().values[Runtime::LedShow].calls==black);
+  }
   LEDController led;
   assert(led.begin(5, 100, 0, 100));
   led.setColor(255, 0, 0); led.setActive(true);

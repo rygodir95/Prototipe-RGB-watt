@@ -3,6 +3,7 @@
 #include <ESPAsyncWebServer.h>
 #include <cstdlib>
 #include <cstring>
+#include "RuntimeMetrics.h"
 
 struct JsonPostBody {
   size_t total;
@@ -41,6 +42,7 @@ void receiveJsonBody(AsyncWebServerRequest *req, const uint8_t *data,
   if (len) memcpy(body->bytes + index, data, len);
   body->received += len;
   if (body->received != total) return;
+  Runtime::Scope timing(Runtime::JsonRequest);
   JsonDocument doc;
   // Const input makes ArduinoJson own its strings before the buffer is freed.
   auto error = deserializeJson(doc, static_cast<const char *>(body->bytes), total);

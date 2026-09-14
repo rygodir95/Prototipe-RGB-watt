@@ -1,5 +1,22 @@
 #include "LEDController.h"
 #include "LedPin.h"
+#include "RuntimeMetrics.h"
+
+bool LEDController::ownsDriver() const {
+#ifdef ESP32
+  if (_ownerTask != xTaskGetCurrentTaskHandle()) {
+    Runtime::record(Runtime::WrongLedTask);
+    return false;
+  }
+#endif
+  return true;
+}
+
+void LEDController::show() {
+  Runtime::Scope timing(Runtime::LedShow);
+  _strip->show();
+  _lastShow = millis();
+}
 
 static uint16_t neoType(int type) {
   // SK6812 (RGBW) vs WS2812B (RGB), both 800kHz.
@@ -7,13 +24,14 @@ static uint16_t neoType(int type) {
 }
 
 void LEDController::rebuild() {
+  Runtime::Scope timing(Runtime::LedRebuild);
   _pin = sanitizeLedPin(_pin, "RGB");
   if (_count < 1)   _count = 1;
   if (_count > 1000) _count = 1000;
   if (_strip) {
     if (_count < _strip->numPixels()) {
       _strip->clear();
-      _strip->show();  // Clock zeros through the OLD length before deleting it.
+      show();  // Clock zeros through the OLD length before deleting it.
     }
     delete _strip;
     _strip = nullptr;
@@ -23,7 +41,7 @@ void LEDController::rebuild() {
   if (_strip) {
     _strip->begin();
     _strip->clear();
-    _strip->show();
+    show();
     _ok = true;
   } else {
     _ok = false;
@@ -32,6 +50,10 @@ void LEDController::rebuild() {
 }
 
 bool LEDController::begin(int pin, int count, int type, int brightnessPct) {
+#ifdef ESP32
+  if (!_ownerTask) _ownerTask = xTaskGetCurrentTaskHandle();
+#endif
+  if (!ownsDriver()) return false;
   _pin        = pin;
   _count      = count;
   _type       = type;
@@ -41,6 +63,7 @@ bool LEDController::begin(int pin, int count, int type, int brightnessPct) {
 }
 
 void LEDController::reconfigure(int pin, int count, int type) {
+  if (!ownsDriver()) return;
   if (pin == _pin && count == _count && type == _type && _strip) return;
   _pin   = pin;
   _count = count;
@@ -61,8 +84,12 @@ void LEDController::setActive(bool active) {
 }
 
 void LEDController::update() {
+  if (!ownsDriver()) return;
   uint32_t now = millis();
-  if (now - _lastUpdate < 16) return;   // ~60 FPS cap
+  // At most 30 FPS; long strips get at least as much idle time as wire time.
+  const uint32_t wireMs = (_count * (_type == 1 ? 40u : 30u) + 999u) / 1000u;
+  const uint32_t interval = max(33u, wireMs * 2u);
+  if (now - _lastUpdate < interval || now - _lastShow < 10) return;
   float dt = (now - _lastUpdate) / 1000.0f;
   _lastUpdate = now;
   if (!_ok || !_strip) return;
@@ -75,6 +102,13 @@ void LEDController::update() {
   float base = (_brightness / 100.0f) * _fade;   // 0..1 master scale
   bool rgbw = (_type == 1);
 
+  // An inactive/black animation does not need repeated RMT transfers.
+  if (base == 0 || (_r == 0 && _g == 0 && _b == 0)) {
+    if (!_hasSolidFrame || _lastSolidFrame != 0) { _strip->clear(); show(); }
+    _hasSolidFrame = true; _lastSolidFrame = 0;
+    return;
+  }
+
   if (_effect == 1) {                            // ---- BREATHING ----
     _hasSolidFrame = false;
     _animPhase += dt * 2.0f;                     // ~3.1s period
@@ -85,7 +119,7 @@ void LEDController::update() {
     uint8_t b = (uint8_t)lroundf(_b * base * breath);
     uint32_t c = rgbw ? _strip->Color(r, g, b, 0) : _strip->Color(r, g, b);
     _strip->fill(c, 0, _count);
-    _strip->show();
+    show();
     return;
   }
 
@@ -106,7 +140,7 @@ void LEDController::update() {
       uint8_t b = (uint8_t)lroundf(_b * f);
       _strip->setPixelColor(i, rgbw ? _strip->Color(r, g, b, 0) : _strip->Color(r, g, b));
     }
-    _strip->show();
+    show();
     return;
   }
 
@@ -117,7 +151,7 @@ void LEDController::update() {
   uint32_t color = rgbw ? _strip->Color(r, g, b, 0) : _strip->Color(r, g, b);
   if (_hasSolidFrame && color == _lastSolidFrame) return;
   _strip->fill(color, 0, _count);
-  _strip->show();
+  show();
   _lastSolidFrame = color;
   _hasSolidFrame = true;
 }

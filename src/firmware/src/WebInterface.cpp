@@ -2,6 +2,8 @@
 #include "WebContent.h"
 #include "EmbeddedAssetResponse.h"
 #include "JsonPostBody.h"
+#include "RuntimeDiagnostics.h"
+#include "WebCommands.h"
 #include "AppState.h"
 #include "Config.h"
 #include "LedPinConfig.h"
@@ -313,6 +315,78 @@ static void attachJsonPost(const char *path, JsonHandler handler) {
     });
 }
 
+static WebCommands webCommands;
+static bool enqueueCommand(AsyncWebServerRequest *req, const WebCommand &command) {
+  if (webCommands.push(command)) return true;
+  req->send(503, "application/json", "{\"ok\":false,\"error\":\"busy; retry later\"}");
+  return false;
+}
+static void serviceWebCommand() {
+  WebCommand command;
+  if (!webCommands.take(command)) return;
+  switch(command.type) {
+    case WebCommandType::Scan: bleScan.startScan(6); break;
+    case WebCommandType::Connect: {
+      const char *addr=command.address, *name=command.name;
+      // Plug-and-play: the selected device's CATEGORY drives the active control
+      // source (power -> Power, hr -> Heart Rate). Older clients that omit the
+      // category fall back to the category the address was discovered as in
+      // the last unified scan.
+      uint8_t target = g_config.controlSource;
+      const char *cat = command.category;
+      if (cat && strcmp(cat, "hr") == 0)         target = SRC_HEART_RATE;
+      else if (cat && strcmp(cat, "power") == 0) target = SRC_POWER;
+      else {
+        bool discovered = false;
+        for (auto &d : ble.getDevices())
+          if (d.address == addr) { target = SRC_POWER; discovered = true; break; }
+        if (!discovered)
+          for (auto &d : hrBle.getDevices())
+            if (d.address == addr) { target = SRC_HEART_RATE; break; }
+      }
+      // A category change switches the source with the existing teardown
+      // (restore=false: the explicit connect below follows right away).
+      if (target != g_config.controlSource) setControlSource(target, false);
+      if (target == SRC_HEART_RATE) {
+        strncpy(g_config.hrSourceAddr, addr, sizeof(g_config.hrSourceAddr) - 1);
+        g_config.hrSourceAddr[sizeof(g_config.hrSourceAddr) - 1] = '\0';
+        strncpy(g_config.hrSourceName, name, sizeof(g_config.hrSourceName) - 1);
+        g_config.hrSourceName[sizeof(g_config.hrSourceName) - 1] = '\0';
+        storage.save(g_config);
+        hrBle.connectToAddress(addr, name);
+      } else {
+        strncpy(g_config.sourceAddr, addr, sizeof(g_config.sourceAddr) - 1);
+        g_config.sourceAddr[sizeof(g_config.sourceAddr) - 1] = '\0';
+        strncpy(g_config.sourceName, name, sizeof(g_config.sourceName) - 1);
+        g_config.sourceName[sizeof(g_config.sourceName) - 1] = '\0';
+        storage.save(g_config);
+        ble.connectToAddress(addr, name);
+      }
+      break;
+    }
+    case WebCommandType::Disconnect: {
+      if (g_config.controlSource == SRC_HEART_RATE) hrBle.disconnect();
+      else                                          ble.disconnect();
+      break;
+    }
+    case WebCommandType::Forget: {
+      if (g_config.controlSource == SRC_HEART_RATE) {
+        hrBle.forget();
+        g_config.hrSourceAddr[0] = '\0';
+        g_config.hrSourceName[0] = '\0';
+      } else {
+        ble.forget();
+        g_config.sourceAddr[0] = '\0';
+        g_config.sourceName[0] = '\0';
+      }
+      storage.save(g_config);
+      break;
+    }
+    case WebCommandType::SaveWifi: storage.save(g_config); scheduleReboot(1500); break;
+    case WebCommandType::FactoryReset: storage.factoryReset(g_config); scheduleReboot(1500); break;
+  }
+}
+
 // ---- routes -----------------------------------------------------------------
 
 void WebInterface::setupRoutes() {
@@ -327,6 +401,7 @@ void WebInterface::setupRoutes() {
   });
 
   server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *req) {
+    Runtime::Scope timing(Runtime::ConfigRead);
     JsonDocument doc; buildConfigJson(doc);
     String out; serializeJson(doc, out);
     req->send(200, "application/json", out);
@@ -345,7 +420,8 @@ void WebInterface::setupRoutes() {
   // remaining sensor routes (connect/disconnect/forget) operate on the
   // ACTIVE control source (mutual exclusion).
   server.on("/api/scan", HTTP_POST, [](AsyncWebServerRequest *req) {
-    bleScan.startScan(6);
+    WebCommand command; command.type=WebCommandType::Scan;
+    if (!enqueueCommand(req,command)) return;
     req->send(200, "application/json", "{\"ok\":true}");
   });
 
@@ -384,67 +460,31 @@ void WebInterface::setupRoutes() {
   });
 
   attachJsonPost("/api/connect", [](AsyncWebServerRequest *req, JsonDocument &doc) {
-    const char *addr = doc["address"].as<const char*>();
-    const char *name = doc["name"].isNull() ? "" : doc["name"].as<const char*>();
+    const char *addr=doc["address"].as<const char*>();
     if (!addr) { req->send(400, "application/json", "{\"ok\":false}"); return; }
-    // Plug-and-play: the selected device's CATEGORY drives the active control
-    // source (power -> Power, hr -> Heart Rate). Older clients that omit the
-    // category fall back to the category the address was discovered as in
-    // the last unified scan.
-    uint8_t target = g_config.controlSource;
-    const char *cat = doc["category"].as<const char*>();
-    if (cat && strcmp(cat, "hr") == 0)         target = SRC_HEART_RATE;
-    else if (cat && strcmp(cat, "power") == 0) target = SRC_POWER;
-    else {
-      bool discovered = false;
-      for (auto &d : ble.getDevices())
-        if (d.address == addr) { target = SRC_POWER; discovered = true; break; }
-      if (!discovered)
-        for (auto &d : hrBle.getDevices())
-          if (d.address == addr) { target = SRC_HEART_RATE; break; }
-    }
-    // A category change switches the source with the existing teardown
-    // (restore=false: the explicit connect below follows right away).
-    if (target != g_config.controlSource) setControlSource(target, false);
-    if (target == SRC_HEART_RATE) {
-      strncpy(g_config.hrSourceAddr, addr, sizeof(g_config.hrSourceAddr) - 1);
-      g_config.hrSourceAddr[sizeof(g_config.hrSourceAddr) - 1] = '\0';
-      strncpy(g_config.hrSourceName, name, sizeof(g_config.hrSourceName) - 1);
-      g_config.hrSourceName[sizeof(g_config.hrSourceName) - 1] = '\0';
-      storage.save(g_config);
-      hrBle.connectToAddress(addr, name);
-    } else {
-      strncpy(g_config.sourceAddr, addr, sizeof(g_config.sourceAddr) - 1);
-      g_config.sourceAddr[sizeof(g_config.sourceAddr) - 1] = '\0';
-      strncpy(g_config.sourceName, name, sizeof(g_config.sourceName) - 1);
-      g_config.sourceName[sizeof(g_config.sourceName) - 1] = '\0';
-      storage.save(g_config);
-      ble.connectToAddress(addr, name);
-    }
+    WebCommand command; command.type=WebCommandType::Connect;
+    strncpy(command.address,addr,sizeof(command.address)-1);
+    const char *name=doc["name"] | ""; const char *category=doc["category"] | "";
+    strncpy(command.name,name,sizeof(command.name)-1);
+    strncpy(command.category,category,sizeof(command.category)-1);
+    if (!enqueueCommand(req,command)) return;
     req->send(200, "application/json", "{\"ok\":true}");
   });
 
   server.on("/api/disconnect", HTTP_POST, [](AsyncWebServerRequest *req) {
-    if (g_config.controlSource == SRC_HEART_RATE) hrBle.disconnect();
-    else                                          ble.disconnect();
+    WebCommand command; command.type=WebCommandType::Disconnect;
+    if (!enqueueCommand(req,command)) return;
     req->send(200, "application/json", "{\"ok\":true}");
   });
 
   server.on("/api/forget", HTTP_POST, [](AsyncWebServerRequest *req) {
-    if (g_config.controlSource == SRC_HEART_RATE) {
-      hrBle.forget();
-      g_config.hrSourceAddr[0] = '\0';
-      g_config.hrSourceName[0] = '\0';
-    } else {
-      ble.forget();
-      g_config.sourceAddr[0] = '\0';
-      g_config.sourceName[0] = '\0';
-    }
-    storage.save(g_config);
+    WebCommand command; command.type=WebCommandType::Forget;
+    if (!enqueueCommand(req,command)) return;
     req->send(200, "application/json", "{\"ok\":true}");
   });
 
   attachJsonPost("/api/simulation", [](AsyncWebServerRequest *req, JsonDocument &doc) {
+    Runtime::Scope timing(Runtime::SimulationRequest);
     const bool hr = g_config.controlSource == SRC_HEART_RATE;
     JsonVariantConst value = doc[hr ? "bpm" : "watts"];
     // Copy intent only. Processing and all physical LED work belong to loop().
@@ -462,15 +502,15 @@ void WebInterface::setupRoutes() {
       strncpy(g_config.wifiPass, doc["pass"].as<const char*>(), sizeof(g_config.wifiPass) - 1);
       g_config.wifiPass[sizeof(g_config.wifiPass) - 1] = '\0';
     }
-    storage.save(g_config);
+    WebCommand command; command.type=WebCommandType::SaveWifi;
+    if (!enqueueCommand(req,command)) return;
     req->send(200, "application/json", "{\"ok\":true,\"reboot\":true}");
-    scheduleReboot(1500);
   });
 
   server.on("/api/factory-reset", HTTP_POST, [](AsyncWebServerRequest *req) {
-    storage.factoryReset(g_config);
+    WebCommand command; command.type=WebCommandType::FactoryReset;
+    if (!enqueueCommand(req,command)) return;
     req->send(200, "application/json", "{\"ok\":true,\"reboot\":true}");
-    scheduleReboot(1500);
   });
 
   // Over-the-air firmware update: POST a compiled .bin as multipart upload.
@@ -498,6 +538,22 @@ void WebInterface::setupRoutes() {
     });
 
   // Device / firmware / security information.
+  server.on("/api/diagnostics", HTTP_GET, [](AsyncWebServerRequest *req) {
+    const auto h=runtimeHealth(); const auto m=Runtime::snapshot();
+    JsonDocument doc;
+    doc["uptimeMs"]=millis(); doc["sampleMs"]=h.uptimeMs;
+    doc["resetReason"]=runtimeResetName(h.resetReason); doc["resetCode"]=h.resetReason;
+    doc["freeHeap"]=h.freeHeap; doc["minHeap"]=h.minHeap; doc["largestBlock"]=h.largestBlock;
+    doc["stackFree"]=h.stackFree; doc["wifiMode"]=h.wifiMode; doc["wifiStatus"]=h.wifiStatus;
+    doc["wifiEvents"]=h.wifiEvents; doc["lostEvents"]=h.lostEvents;
+    static const char *names[]={"loop","web","ledShow","ledRebuild","configApply","jsonRequest",
+                                "simulation","configRead","wsSent","wsSkipped","wrongLedTask"};
+    for(int i=0;i<Runtime::Count;++i) {
+      doc[names[i]]["calls"]=m.values[i].calls; doc[names[i]]["maxUs"]=m.values[i].maxUs;
+    }
+    String out; serializeJson(doc,out); req->send(200,"application/json",out);
+  });
+
   server.on("/api/info", HTTP_GET, [](AsyncWebServerRequest *req) {
     JsonDocument doc;
     doc["version"]        = FW_VERSION_FULL;
@@ -524,9 +580,9 @@ void WebInterface::setupRoutes() {
 
 void WebInterface::broadcastTelemetry() {
   // Telemetry is replaceable: skip a sample rather than fill a slow client's queue.
-  if (ws.count() == 0 || !ws.availableForWriteAll()) return;
+  if (ws.count() == 0 || !ws.availableForWriteAll()) { Runtime::record(Runtime::WsSkipped); return; }
   bool hr = (g_config.controlSource == SRC_HEART_RATE);
-  JsonDocument doc;
+  static JsonDocument doc; // Retain slots/keys across broadcasts; no clear/free per tick.
   doc["mode"]      = hr ? "hr" : "power";
   doc["state"]     = deviceStateName(g_tel.state);
   doc["connected"] = g_tel.connected;
@@ -550,8 +606,13 @@ void WebInterface::broadcastTelemetry() {
   doc["source"]    = g_tel.sourceName;
   char hex[8]; hexFromRGB(hex, g_tel.r, g_tel.g, g_tel.b);
   doc["color"]     = hex;
-  String out; serializeJson(doc, out);
+  static String out, previous;
+  static uint32_t lastSent=0;
+  out = ""; serializeJson(doc, out);
+  if (out == previous && millis()-lastSent < 2000) { Runtime::record(Runtime::WsSkipped); return; }
   ws.textAll(out);
+  previous = out; lastSent = millis();
+  Runtime::record(Runtime::WsSent);
 }
 
 void WebInterface::begin() {
@@ -567,8 +628,9 @@ void WebInterface::begin() {
 }
 
 void WebInterface::loop() {
+  Runtime::Scope timing(Runtime::Web);
   uint32_t now = millis();
-  if (now - _lastBroadcast >= 200) {
+  if (now - _lastBroadcast >= 500) {
     _lastBroadcast = now;
     broadcastTelemetry();
   }
@@ -576,6 +638,7 @@ void WebInterface::loop() {
     _lastCleanup = now;
     ws.cleanupClients();
   }
+  serviceWebCommand();
 }
 
 size_t WebInterface::clientCount() const { return ws.count(); }

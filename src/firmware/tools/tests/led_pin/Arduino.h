@@ -11,6 +11,7 @@ template<typename T> T constrain(T x, T lo, T hi) { return min(max(x, lo), hi); 
 static constexpr float TWO_PI = 6.28318530718f;
 inline uint32_t &testMillis() { static uint32_t value = 0; return value; }
 inline uint32_t millis() { return testMillis(); }
+inline uint32_t micros() { return testMillis() * 1000; }
 struct TestSerial {
   std::string log;
   void println(const char *s) { log += std::string(s) + "\n"; }

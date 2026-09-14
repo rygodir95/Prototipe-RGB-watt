@@ -62,7 +62,7 @@ function fixture() {
   await f.advance(120000); // Two minutes, body transfer slower than old interval.
   assert(f.calls.length>30); assert.equal(f.maxActive(),1);
   const values=f.calls.filter(c=>'watts' in c.patch);
-  for(let i=1;i<values.length;i++) assert(values[i].start-values[i-1].end>=1200);
+  for(let i=1;i<values.length;i++) assert(values[i].start-values[i-1].end>=1500);
   f.run('void stopDemo()'); f.run('void stopDemo()'); f.run('void startDemo(100)');
   await f.advance(10000);
   assert.equal(f.calls.at(-1).patch.enabled,false); assert.equal(f.active(),0);

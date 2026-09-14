@@ -6,6 +6,7 @@
 #include <iostream>
 #include <map>
 #include <thread>
+#include <vector>
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include "Config.h"
@@ -14,6 +15,7 @@
 #include "Simulation.h"
 #include "WebInterface.h"
 #include "AppState.h"
+#include "WebCommands.h"
 
 std::map<void *, size_t> allocations;
 bool failAllocation = false;
@@ -63,10 +65,20 @@ struct LocalLed {
 struct Lighting {
   void applyConfig(int, int) { assert(!inRequest); }
 } lighting;
+int commandCalls=0;
+struct Device { std::string address; };
 struct Ble {
+  std::vector<Device> getDevices() { return {}; }
+  void connectToAddress(const char *, const char *) { assert(!inRequest); ++commandCalls; }
+  void disconnect() { assert(!inRequest); ++commandCalls; }
+  void forget() { assert(!inRequest); ++commandCalls; }
   void setAutoReconnect(bool) { assert(!inRequest); }
 } ble, hrBle;
+struct Scan { void startScan(int) { assert(!inRequest); ++commandCalls; } } bleScan;
+void setControlSource(uint8_t src, bool) { assert(!inRequest); g_config.controlSource=src; }
+void scheduleReboot(uint32_t) { assert(!inRequest); ++commandCalls; }
 struct Storage {
+  void factoryReset(AppConfig &config) { assert(!inRequest); configLoadDefaults(config); ++commandCalls; }
   void save(const AppConfig &config) {
     assert(!inRequest); if(blockStorage) blockStorage(); saved=config; ++saves;
   }
@@ -74,6 +86,12 @@ struct Storage {
 using Handler = std::function<void(AsyncWebServerRequest *, JsonDocument &)>;
 std::map<std::string, Handler> handlers;
 void attachJsonPost(const char *path, Handler handler) { handlers[path]=handler; }
+constexpr int HTTP_POST=1;
+struct Server {
+  void on(const char *path,int,std::function<void(AsyncWebServerRequest *)> handler) {
+    handlers[path]=[handler](AsyncWebServerRequest *req,JsonDocument &) {handler(req);};
+  }
+} server;
 #include "production.h"
 
 void post(const char *path, const std::string &body) {
@@ -93,6 +111,11 @@ void post(const char *path, const std::string &body) {
 }
 
 int main() {
+  WebCommands commands;
+  for(int i=0;i<8;++i) { WebCommand c; c.address[0]=static_cast<char>(i); assert(commands.push(c)); }
+  assert(!commands.push(WebCommand{})); // Backpressure instead of an unbounded queue.
+  for(int i=0;i<8;++i) { WebCommand c; assert(commands.take(c)); assert(c.address[0]==i); }
+  WebCommand empty; assert(!commands.take(empty));
   configLoadDefaults(g_config); registerRoutes();
   post("/api/config", R"({"ledCount":100,"theme":"light"})");
   assert(runtimeCalls==0 && saves==0 && std::string(g_config.theme)=="light");
@@ -143,7 +166,15 @@ int main() {
     ws.writable=elapsed<30000 || elapsed>=40000;
     web.loop();
   }
-  assert(ws.frames>=549 && ws.frames<=551 && ws.cleanups==60);
+  assert(ws.frames>=54 && ws.frames<=56 && ws.cleanups==60);
+  const int callsBefore=commandCalls;
+  for(const char *path : {"/api/scan","/api/disconnect","/api/forget","/api/factory-reset"}) post(path,"{}");
+  post("/api/connect",R"({"address":"AA:BB:CC:DD:EE:FF","name":"Test HR","category":"hr"})");
+  post("/api/wifi",R"({"ssid":"test","pass":"test"})");
+  assert(commandCalls==callsBefore); // Real route callbacks only store commands.
+  for(int i=0;i<6;++i) serviceWebCommand();
+  assert(commandCalls>callsBefore);
+  assert(std::string(g_config.hrSourceAddr)=="AA:BB:CC:DD:EE:FF");
   const auto handler=handlers.at("/api/config");
   const uint8_t data[]={'{','}'};
   for(int i=0;i<1000;++i) {

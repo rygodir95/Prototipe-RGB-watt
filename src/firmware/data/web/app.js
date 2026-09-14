@@ -733,7 +733,7 @@ function obRenderDevices(devices) {
 // color on the strip. It is a lighting test tool, NOT a simulated workout;
 // stopping it returns control to the real sensor untouched. The developer
 // Simulation Mode (PC simulator /dev panel) remains separate.
-const DEMO_STEP_MS = 1200; // Minimum rest AFTER a complete response.
+const DEMO_STEP_MS = 1500; // Minimum rest AFTER a complete response.
 const DEMO_REQUEST_TIMEOUT_MS = 4000;
 let demoTimer = null;
 let demoRunning = false;

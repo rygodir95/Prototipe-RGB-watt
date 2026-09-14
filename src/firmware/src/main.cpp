@@ -19,6 +19,7 @@
 #include "Security.h"
 #include "FirmwareVersion.h"
 #include "Log.h"
+#include "RuntimeDiagnostics.h"
 
 // ---- Global subsystems ------------------------------------------------------
 Storage               storage;
@@ -58,6 +59,7 @@ static void applyRuntimeConfig(const AppConfig &config) {
 static void servicePendingConfig() {
   AppConfig config;
   if (!pendingConfig.take(config)) return;
+  Runtime::Scope timing(Runtime::ConfigApply);
   // loop-task only. The mailbox lock is released before any hardware/NVS work.
   applyRuntimeConfig(config);
   storage.save(config);
@@ -294,6 +296,8 @@ void setup() {
   Serial.printf("[FW] Version %s (%s) build %s\n", FW_VERSION_FULL, FW_BUILD_TYPE, FW_BUILD_SHA);
   g_tel.state = DeviceState::STARTING;
 
+  beginRuntimeDiagnostics();
+
   Security::begin();   // device identity / security layer (non-destructive)
 
   storage.begin();
@@ -338,6 +342,7 @@ void setup() {
 }
 
 void loop() {
+  Runtime::Scope timing(Runtime::Loop);
   servicePendingConfig();
   // Only the active control source's BLE module is ever serviced.
   if (g_config.controlSource == SRC_HEART_RATE) hrBle.update();
@@ -351,7 +356,8 @@ void loop() {
 
   web.loop();
   lighting.update();
-  delay(1);  // Let Wi-Fi/AsyncTCP and idle tasks run during continuous lighting.
+  serviceRuntimeDiagnostics();
+  delay(2);  // Let Wi-Fi/AsyncTCP and idle tasks run during continuous lighting.
 
   if (s_rebootAt && millis() >= s_rebootAt) {
     Serial.println("[SYS] Rebooting...");

@@ -13,12 +13,16 @@ public:
   void setEffect(int effect) { _effect = effect; }
   void setColor(uint8_t r, uint8_t g, uint8_t b);
   void setActive(bool active);   // controls fade target (1=on, 0=off)
-  void update();                 // non-blocking: advances fade + refreshes
+  void update();                 // loop owner only; bounded frame cadence
   void getColor(uint8_t &r, uint8_t &g, uint8_t &b) const { r = _r; g = _g; b = _b; }
   bool isOk() const { return _ok; }   // hardware initialised (LightingOutput::isAvailable)
 
 private:
   void rebuild();
+  void show();
+  bool ownsDriver() const;
+  void *_ownerTask = nullptr;
+  uint32_t _lastShow = 0;
 
   Adafruit_NeoPixel *_strip = nullptr;
   int      _pin        = 5;
