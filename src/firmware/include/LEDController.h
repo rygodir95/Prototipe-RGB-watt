@@ -33,4 +33,6 @@ private:
   float    _cometPos   = 0.0f;  // comet head position
   uint32_t _lastUpdate = 0;
   bool     _ok         = false;
+  bool     _hasSolidFrame = false;
+  uint32_t _lastSolidFrame = 0;
 };

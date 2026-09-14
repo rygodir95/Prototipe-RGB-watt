@@ -8,9 +8,17 @@ static uint16_t neoType(int type) {
 
 void LEDController::rebuild() {
   _pin = sanitizeLedPin(_pin, "RGB");
-  if (_strip) { delete _strip; _strip = nullptr; }
   if (_count < 1)   _count = 1;
   if (_count > 1000) _count = 1000;
+  if (_strip) {
+    if (_count < _strip->numPixels()) {
+      _strip->clear();
+      _strip->show();  // Clock zeros through the OLD length before deleting it.
+    }
+    delete _strip;
+    _strip = nullptr;
+  }
+  _hasSolidFrame = false;
   _strip = new Adafruit_NeoPixel(_count, _pin, neoType(_type));
   if (_strip) {
     _strip->begin();
@@ -68,6 +76,7 @@ void LEDController::update() {
   bool rgbw = (_type == 1);
 
   if (_effect == 1) {                            // ---- BREATHING ----
+    _hasSolidFrame = false;
     _animPhase += dt * 2.0f;                     // ~3.1s period
     if (_animPhase > TWO_PI) _animPhase -= TWO_PI;
     float breath = 0.25f + 0.75f * (0.5f + 0.5f * sinf(_animPhase));
@@ -81,6 +90,7 @@ void LEDController::update() {
   }
 
   if (_effect == 2) {                            // ---- COMET ----
+    _hasSolidFrame = false;
     float tail = max(3.0f, _count / 6.0f);
     _cometPos += dt * (_count * 0.6f + 4.0f);    // head speed (leds/sec)
     if (_count > 0) { while (_cometPos >= _count) _cometPos -= _count; }
@@ -105,6 +115,9 @@ void LEDController::update() {
   uint8_t g = (uint8_t)lroundf(_g * base);
   uint8_t b = (uint8_t)lroundf(_b * base);
   uint32_t color = rgbw ? _strip->Color(r, g, b, 0) : _strip->Color(r, g, b);
+  if (_hasSolidFrame && color == _lastSolidFrame) return;
   _strip->fill(color, 0, _count);
   _strip->show();
+  _lastSolidFrame = color;
+  _hasSolidFrame = true;
 }

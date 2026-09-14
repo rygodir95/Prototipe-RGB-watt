@@ -2,17 +2,18 @@
 #include <string.h>
 
 LightingOutputManager::LightingOutputManager() : _count(0) {
-  memset(&_state, 0, sizeof(_state));
-  _state.brightness = 100;
-  _state.effect     = LED_EFFECT_SOLID;
-  _state.zone       = -1;
+  _state.access([](LightingState &state) {
+    state.brightness = 100;
+    state.effect = LED_EFFECT_SOLID;
+    state.zone = -1;
+  });
 }
 
 bool LightingOutputManager::registerOutput(LightingOutput* out) {
   if (!out || _count >= LIGHTING_OUTPUT_MAX) return false;
   if (find(out->id()) != nullptr) return false;         // duplicate id
   _outputs[_count++] = out;
-  out->apply(_state);          // bring the new output up to the current state
+  out->apply(_state.read());   // bring the new output up to the current state
   return true;
 }
 
@@ -34,27 +35,32 @@ LightingOutput* LightingOutputManager::find(const char* id) {
 }
 
 void LightingOutputManager::applyState(const LightingState& state) {
-  _state = state;              // version/timestamp are rewritten on distribute
+  _state.access([&](LightingState &current) { current = state; });
   distribute();
 }
 
 void LightingOutputManager::applyConfig(uint8_t brightness, uint8_t effect) {
-  _state.brightness = brightness;
-  _state.effect     = effect;
+  _state.access([&](LightingState &state) { state.brightness = brightness; state.effect = effect; });
   distribute();
 }
 
 void LightingOutputManager::clearActive() {
-  _state.active = false;
+  _state.access([](LightingState &state) { state.active = false; });
   distribute();
 }
 
 void LightingOutputManager::distribute() {
-  _state.version++;
-  _state.timestampMs = millis();
+  LightingState next;
+  const uint32_t now = millis();
+  _state.access([&](LightingState &state) {
+    state.version++;
+    state.timestampMs = now;
+    next = state;
+  });
+  // Output callbacks run after releasing the state-copy lock.
   for (int i = 0; i < _count; i++)
     if (_outputs[i]->isEnabled())
-      _outputs[i]->apply(_state);
+      _outputs[i]->apply(next);
 }
 
 void LightingOutputManager::update() {

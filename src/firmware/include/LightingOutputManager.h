@@ -1,5 +1,6 @@
 #pragma once
 #include "LightingOutput.h"
+#include "LightingMailbox.h"
 
 #define LIGHTING_OUTPUT_MAX 4   // hub-local strip today + future light nodes
 
@@ -21,7 +22,7 @@ public:
   void applyState(const LightingState& state);          // store + distribute
   void applyConfig(uint8_t brightness, uint8_t effect); // config fields only
   void clearActive();                                   // immediate fade-out
-  const LightingState& state() const { return _state; }
+  LightingState state() const { return _state.read(); }
 
   // -- lifecycle --------------------------------------------------------------
   void update();                          // non-blocking refresh of all outputs
@@ -34,5 +35,5 @@ private:
 
   LightingOutput* _outputs[LIGHTING_OUTPUT_MAX];
   int             _count;
-  LightingState   _state;
+  LightingMailbox<LightingState> _state;
 };

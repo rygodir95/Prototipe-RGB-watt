@@ -156,8 +156,9 @@ static void processPipeline() {
   bool  haveData = false;
   float raw      = 0;
 
-  if (sim.enabled()) {
-    raw      = hr ? sim.bpm() : sim.watts();
+  const auto simulation = sim.snapshot();
+  if (simulation.enabled) {
+    raw      = hr ? simulation.bpm : simulation.watts;
     haveData = true;
     g_tel.simMode = true;
   } else {
@@ -224,7 +225,7 @@ static void processPipeline() {
       lighting.clearActive();
     }
 
-    bool receiving = sim.enabled() || (hr ? hrBle.isConnected() : ble.isConnected());
+    bool receiving = simulation.enabled || (hr ? hrBle.isConnected() : ble.isConnected());
     if (receiving) g_tel.state = DeviceState::RECEIVING_POWER;
 
     if (g_config.debug && now - s_lastDebug > 1000) {
@@ -334,6 +335,7 @@ void loop() {
 
   lighting.update();
   web.loop();
+  delay(1);  // Let Wi-Fi/AsyncTCP and idle tasks run during continuous lighting.
 
   if (s_rebootAt && millis() >= s_rebootAt) {
     Serial.println("[SYS] Rebooting...");

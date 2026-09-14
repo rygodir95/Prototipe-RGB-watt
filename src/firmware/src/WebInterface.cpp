@@ -455,14 +455,11 @@ void WebInterface::setupRoutes() {
   });
 
   attachJsonPost("/api/simulation", [](AsyncWebServerRequest *req, JsonDocument &doc) {
-    bool en = doc["enabled"].isNull() ? sim.enabled() : doc["enabled"].as<bool>();
-    if (g_config.controlSource == SRC_HEART_RATE) {
-      float b = doc["bpm"].isNull() ? sim.bpm() : doc["bpm"].as<float>();
-      sim.setHr(en, b);
-    } else {
-      float w = doc["watts"].isNull() ? sim.watts() : doc["watts"].as<float>();
-      sim.set(en, w);
-    }
+    const bool hr = g_config.controlSource == SRC_HEART_RATE;
+    JsonVariantConst value = doc[hr ? "bpm" : "watts"];
+    // Copy intent only. Processing and all physical LED work belong to loop().
+    sim.patch(hr, !doc["enabled"].isNull(), doc["enabled"].as<bool>(),
+              !value.isNull(), value.as<float>());
     req->send(200, "application/json", "{\"ok\":true}");
   });
 
