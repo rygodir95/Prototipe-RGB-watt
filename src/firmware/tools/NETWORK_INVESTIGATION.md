@@ -52,7 +52,9 @@ The runner retains the existing 4-second request timeout, 500 ms rest between
 config reads and 1500 ms between simulation updates. Each worker consumes its
 full response before another request. It records every failure, does not
 reconnect the WebSocket, and attempts to disable simulation on exit. It does
-not change saved config. Failed bootstrap requests abort before simulation.
+not change saved config. Setup permits eight bounded attempts per endpoint;
+each failed attempt remains in the report and prevents a passing result.
+Simulation is enabled once, followed by value-only updates, as in the UI.
 
 Reports include individual full-response latencies, p50/p95/p99/max/mean,
 10-second health samples, WS frame gaps and disconnects. A transport pass is
@@ -60,5 +62,7 @@ not sufficient: review serial reset/AP logs, heap/largest-block trends, PCB
 counts and sample freshness before declaring full acceptance. Sampled minimum
 heap alone is a historical low-water mark, not evidence of a continuing leak.
 
-The instrumented two-minute and ten-minute physical runs, root-cause proof,
-and final stability fix are still pending.
+See `NETWORK_HARDWARE_RESULTS.md` for the physical comparisons. The AP-path
+failure must not be declared fixed merely because a router-path test passes.
+The exact AP failure mechanism and any justified firmware correction remain
+separate from validating the working network path.
