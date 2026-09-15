@@ -1,4 +1,5 @@
 #include "RuntimeDiagnostics.h"
+#include "NetworkDiagnostics.h"
 #include <WiFi.h>
 #include <esp_system.h>
 #include <esp_heap_caps.h>
@@ -8,7 +9,7 @@ struct Event { uint32_t at=0; int id=0, reason=0; };
 struct Events { Event items[16]; uint8_t head=0, size=0; uint32_t seen=0, lost=0; };
 LightingMailbox<Events> events;
 LightingMailbox<RuntimeHealth> health;
-char output[1024];
+char output[1536];
 size_t pending=0, offset=0;
 uint32_t lastReport=0;
 }
@@ -57,6 +58,7 @@ void beginRuntimeDiagnostics() {
 }
 
 void serviceRuntimeDiagnostics() {
+  serviceNetworkDiagnostics();
   // Never wait for the USB/UART consumer, including when it is disconnected.
   if(offset<pending) {
     const int room=Serial.availableForWrite();
@@ -99,5 +101,17 @@ void serviceRuntimeDiagnostics() {
     (unsigned long)m.values[Runtime::ConfigRead].calls,(unsigned long)m.values[Runtime::ConfigRead].maxUs,
     (unsigned long)m.values[Runtime::WsSent].calls,(unsigned long)m.values[Runtime::WsSkipped].calls,
     (unsigned long)m.values[Runtime::WrongLedTask].calls);
+  pending=min(pending,sizeof(output)-1);
+  const auto n=networkHealth();
+  pending+=snprintf(output+pending,sizeof(output)-pending,
+    "[NET] sample=%lu pcb=%lu tw=%lu syn=%lu established=%lu closing=%lu retry=%lu/%lu "
+    "unacked=%lu unsent=%lu zero_window=%lu drops=%lu dispatch=%lu/%luus closed=%lu/%lums ws=%lu/%lu/%lu active=%lu\n",
+    (unsigned long)n.sampleMs,(unsigned long)n.active,(unsigned long)n.timeWait,
+    (unsigned long)n.synReceived,(unsigned long)n.established,(unsigned long)n.closing,
+    (unsigned long)n.retransmitting,(unsigned long)n.maxRetries,(unsigned long)n.unacked,
+    (unsigned long)n.unsent,(unsigned long)n.zeroWindow,(unsigned long)n.sampleDrops,
+    (unsigned long)n.dispatches,(unsigned long)n.dispatchMaxUs,(unsigned long)n.closed,
+    (unsigned long)n.lifetimeMaxMs,(unsigned long)n.wsOpened,(unsigned long)n.wsClosed,
+    (unsigned long)n.wsErrors,(unsigned long)n.wsActive);
   pending=min(pending,sizeof(output)-1); offset=0;
 }

@@ -34,7 +34,7 @@ async function request(path, patch) {
     socket.addEventListener('error', () => { fault=new Error('WebSocket error'); });
     await new Promise((resolve,reject) => {
       const timer=setTimeout(()=>reject(new Error('WebSocket open timeout')),4000);
-      socket.addEventListener('open',()=>{clearTimeout(timer);resolve();},{once:true});
+      socket.addEventListener('open',()=>{clearTimeout(timer);lastFrame=Date.now();resolve();},{once:true});
     });
     assert.equal((await request('/api/simulation',{enabled:true})).ok,true);
     const end = Date.now()+120000;

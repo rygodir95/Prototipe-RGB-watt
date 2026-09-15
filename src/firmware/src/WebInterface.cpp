@@ -3,6 +3,7 @@
 #include "EmbeddedAssetResponse.h"
 #include "JsonPostBody.h"
 #include "RuntimeDiagnostics.h"
+#include "NetworkDiagnostics.h"
 #include "WebCommands.h"
 #include "AppState.h"
 #include "Config.h"
@@ -546,6 +547,17 @@ void WebInterface::setupRoutes() {
     doc["freeHeap"]=h.freeHeap; doc["minHeap"]=h.minHeap; doc["largestBlock"]=h.largestBlock;
     doc["stackFree"]=h.stackFree; doc["wifiMode"]=h.wifiMode; doc["wifiStatus"]=h.wifiStatus;
     doc["wifiEvents"]=h.wifiEvents; doc["lostEvents"]=h.lostEvents;
+    const auto n=networkHealth();
+    auto net=doc["network"].to<JsonObject>();
+    net["sampleMs"]=n.sampleMs; net["active"]=n.active; net["timeWait"]=n.timeWait;
+    net["synReceived"]=n.synReceived; net["established"]=n.established; net["closing"]=n.closing;
+    net["retransmitting"]=n.retransmitting; net["maxRetries"]=n.maxRetries;
+    net["unacked"]=n.unacked; net["unsent"]=n.unsent; net["zeroWindow"]=n.zeroWindow;
+    net["sampleDrops"]=n.sampleDrops; net["dispatches"]=n.dispatches; net["closed"]=n.closed;
+    net["dispatchMaxUs"]=n.dispatchMaxUs; net["lifetimeMaxMs"]=n.lifetimeMaxMs;
+    net["wsOpened"]=n.wsOpened; net["wsClosed"]=n.wsClosed; net["wsErrors"]=n.wsErrors;
+    net["wsActive"]=n.wsActive;
+    doc["diagnosticRevision"]="tcp-lifecycle-1";
     static const char *names[]={"loop","web","ledShow","ledRebuild","configApply","jsonRequest",
                                 "simulation","configRead","wsSent","wsSkipped","wrongLedTask"};
     for(int i=0;i<Runtime::Count;++i) {
@@ -616,8 +628,19 @@ void WebInterface::broadcastTelemetry() {
 }
 
 void WebInterface::begin() {
+  server.addMiddleware([](AsyncWebServerRequest *req, ArMiddlewareNext next) {
+    // This starts at parsed-request dispatch, not TCP accept. onDisconnect is
+    // observational; leave the library's AsyncClient callbacks intact.
+    const uint32_t started=millis(), startUs=micros();
+    if(req->url()!="/ws") req->onDisconnect([started]() {
+      networkRequestClosed(millis()-started);
+    });
+    next();
+    networkDispatch(micros()-startUs);
+  });
   ws.onEvent([](AsyncWebSocket *s, AsyncWebSocketClient *c,
                 AwsEventType type, void *arg, uint8_t *data, size_t len) {
+    networkWebSocketEvent(type==WS_EVT_CONNECT,type==WS_EVT_DISCONNECT,type==WS_EVT_ERROR);
     if (type == WS_EVT_CONNECT) c->setCloseClientOnQueueFull(false);
     (void)s; (void)c; (void)arg; (void)data; (void)len;
   });
