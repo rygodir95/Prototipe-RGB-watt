@@ -79,6 +79,15 @@ int main() {
     assert(stripEvents().size()==before); // HTTP / pending config never touches hardware.
   }
   assert(request.replies==1000);
+  JsonDocument test; test["enabled"]=true; test["lightingTest"]=true;
+  simulationHandler(&request,test);
+  assert(sim.snapshot().lightingTest);
+  JsonDocument point; point["watts"]=225;
+  simulationHandler(&request,point);
+  assert(sim.snapshot().lightingTest && sim.watts()==225);
+  JsonDocument ordinary; ordinary["enabled"]=true; ordinary["watts"]=999;
+  simulationHandler(&request,ordinary);
+  assert(!sim.snapshot().lightingTest);
   bool called=false;
   showHook() = [&] {
     if (called) return;

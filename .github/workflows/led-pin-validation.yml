@@ -38,6 +38,9 @@ jobs:
       - name: Sustained demo client backpressure tests
         working-directory: src/firmware
         run: node tools/test_demo.cjs
+      - name: Deterministic Lighting Test sequence and smoothing tests
+        working-directory: src/firmware
+        run: python tools/test_lighting_sequence.py
       - name: Network diagnostic concurrency tests
         working-directory: src/firmware
         run: python tools/test_network_diagnostics.py

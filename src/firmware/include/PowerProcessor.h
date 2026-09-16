@@ -6,7 +6,7 @@ class PowerProcessor {
 public:
   void  setSmoothing(int strength0to100);
   void  reset();
-  float update(float raw);   // feed a new raw sample, returns smoothed value
+  float update(float raw, bool lightingTest = false);   // feed a new raw sample, returns smoothed value
   float value() const { return _init ? _v : 0.0f; }
 
 private:

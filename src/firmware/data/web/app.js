@@ -729,7 +729,7 @@ function obRenderDevices(devices) {
 
 // ---------------- Lighting Test (user-facing "Test Lighting") ----------------
 // A hardware verification sweep driven through the EXISTING /api/simulation
-// endpoint: cycles Z1..Zmax and back down so the user can check every zone's
+// endpoint: cycles Z1..Zmax and back to Z1 so the user can check every zone's
 // color on the strip. It is a lighting test tool, NOT a simulated workout;
 // stopping it returns control to the real sensor untouched. The developer
 // Simulation Mode (PC simulator /dev panel) remains separate.
@@ -763,23 +763,42 @@ function postSimulation(patch, opts) {
   return demoRequest;
 }
 function demoSequence() {
-  // One value per zone: a little above each zone's lower bound, so the cycle
-  // walks Z1 -> Z2 -> ... -> Zmax and then back down (Zmax-1 ... Z1).
-  const zones = isHrMode() ? (config.hrZones || []) : (config.zones || []);
-  const vals = zones.map((z) => (z.min || 0) + (isHrMode() ? 3 : 10));
-  if (!vals.length) return [];
-  return vals.concat(vals.slice(0, -1).reverse());
+  const hr = isHrMode();
+  const zones = hr ? (config.hrZones || []) : (config.zones || []).slice(0, config.zoneCount);
+  if (!zones.length) return [];
+  const vals = [];
+  zones.forEach((z, i) => {
+    const lo = z.min;
+    if (i < zones.length - 1 || hr) {
+      // Adjacent lower bounds are the real continuous zone boundaries.
+      // HR has a configured maximum; Power's final zone is unbounded.
+      const hi = i < zones.length - 1 ? zones[i + 1].min : Math.max(lo, config.hrMax);
+      [0.2, 0.5, 0.8].forEach(t => vals.push(lo + (hi - lo) * t));
+    } else {
+      // colorForG blends toward the top color only in the previous zone's
+      // outer 40%. At/above lo the top color is already solid. Sample the
+      // early part of that transition, cross its endpoint, then return.
+      const transitionWidth = (lo - zones[i - 1].min) * 0.4;
+      vals.push(lo - transitionWidth * 0.75, lo + transitionWidth * 0.5,
+                lo - transitionWidth * 0.25);
+    }
+  });
+  vals.push(vals[0]); // Hold Z1 visibly even at the end of a finite test.
+  return vals;
 }
 async function startDemo(cycles) {
   if (demoRunning || demoStopping || !config) return;
+  const seq = demoSequence();
+  if (!seq.length) return;
   demoRunning = true; // Guard double clicks even while the enable POST is pending.
-  demoPos = 0;
+  demoPos = 1;
   demoCyclesLeft = cycles || 1;
-  try { await postSimulation({ enabled: true }); }
+  const first = isHrMode() ? { bpm: seq[0] } : { watts: seq[0] };
+  try { await postSimulation(Object.assign({ enabled: true, lightingTest: true }, first)); }
   catch (_) { await stopDemo(); toast("Cannot reach the Hub"); return; }
   if (!demoRunning) return;
   $("demoBanner").hidden = false;
-  await demoTick();
+  demoTimer = setTimeout(demoTick, DEMO_STEP_MS);
 }
 function stopDemo(opts) {
   demoRunning = false;

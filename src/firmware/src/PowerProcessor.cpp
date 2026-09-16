@@ -12,7 +12,9 @@ void PowerProcessor::reset() {
   _v    = 0.0f;
 }
 
-float PowerProcessor::update(float raw) {
+float PowerProcessor::update(float raw, bool lightingTest) {
+  // Diagnostic points bypass the EMA without contaminating sensor history.
+  if (lightingTest) return raw;
   if (!_init) {
     _v    = raw;
     _init = true;

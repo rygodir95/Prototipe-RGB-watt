@@ -195,7 +195,8 @@ static void processPipeline() {
   g_tel.hasData   = haveData;
 
   if (haveData) {
-    float smoothed = processor.update(raw);
+    const bool lightingTest = simulation.enabled && simulation.lightingTest;
+    float smoothed = processor.update(raw, lightingTest);
     if (hr) {
       g_tel.rawBpm      = raw;
       g_tel.smoothedBpm = smoothed;
@@ -212,12 +213,12 @@ static void processPipeline() {
     uint8_t r = 0, g = 0, b = 0;
     if (zonesReady) {
       if (hr) {
-        zone = HRZones::zoneIndex(g_config, smoothed, s_prevZoneHr, true);
-        s_prevZoneHr = zone;
+        zone = HRZones::zoneIndex(g_config, smoothed, s_prevZoneHr, !lightingTest);
+        if (!lightingTest) s_prevZoneHr = zone;
         HRZones::colorFor(g_config, smoothed, r, g, b);
       } else {
-        zone = PowerZones::zoneIndex(g_config, smoothed, s_prevZone, true);
-        s_prevZone = zone;
+        zone = PowerZones::zoneIndex(g_config, smoothed, s_prevZone, !lightingTest);
+        if (!lightingTest) s_prevZone = zone;
         PowerZones::colorFor(g_config, smoothed, r, g, b);
       }
     } else {

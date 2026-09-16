@@ -490,7 +490,8 @@ void WebInterface::setupRoutes() {
     JsonVariantConst value = doc[hr ? "bpm" : "watts"];
     // Copy intent only. Processing and all physical LED work belong to loop().
     sim.patch(hr, !doc["enabled"].isNull(), doc["enabled"].as<bool>(),
-              !value.isNull(), value.as<float>());
+              !value.isNull(), value.as<float>(),
+              !doc["lightingTest"].isNull(), doc["lightingTest"].as<bool>());
     req->send(200, "application/json", "{\"ok\":true}");
   });
 

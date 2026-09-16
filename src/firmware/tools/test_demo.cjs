@@ -13,7 +13,7 @@ function fixture() {
   function clearTimeout(key) { timers.delete(key); }
   const context = vm.createContext({
     setTimeout, clearTimeout, AbortController,
-    config:{zones:[{min:0},{min:100},{min:200}]}, isHrMode:()=>false,
+    config:{zoneCount:5,zones:[{min:0},{min:100},{min:200},{min:300},{min:400}]}, isHrMode:()=>false,
     $:()=>banner, toast:s=>messages.push(s), window:{addEventListener(){}},
     fetch: (url, options) => {
       assert.equal(url, '/api/simulation');
@@ -61,6 +61,8 @@ function fixture() {
   assert.equal(f.calls.length,1); // No reentrant requests while enable body is pending.
   await f.advance(120000); // Two minutes, body transfer slower than old interval.
   assert(f.calls.length>30); assert.equal(f.maxActive(),1);
+  assert.equal(f.calls[0].patch.lightingTest,true);
+  assert.equal(f.calls[0].patch.watts,20);
   const values=f.calls.filter(c=>'watts' in c.patch);
   for(let i=1;i<values.length;i++) assert(values[i].start-values[i-1].end>=1500);
   f.run('void stopDemo()'); f.run('void stopDemo()'); f.run('void startDemo(100)');
@@ -82,8 +84,8 @@ function fixture() {
     const stopped=midRun.calls.length; await midRun.advance(10000); assert.equal(midRun.calls.length,stopped);
   }
   const finite=fixture(); finite.setMode('fast'); finite.run('void startDemo(1)');
-  await finite.advance(20000);
-  assert.equal(finite.calls.filter(c=>'watts' in c.patch).length,5);
+  await finite.advance(40000);
+  assert.equal(finite.calls.filter(c=>'watts' in c.patch).length,16);
   assert.equal(finite.calls.at(-1).patch.enabled,false);
   const stopping=fixture(); stopping.run('void startDemo(100)');
   stopping.run('void stopDemo()'); stopping.run('void startDemo(100)');
