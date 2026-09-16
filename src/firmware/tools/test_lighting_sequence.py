@@ -24,11 +24,19 @@ for is_hr, count in [(False, 5), (False, 6), (False, 7), (True, 5)]:
     seq = json.loads(subprocess.check_output(['node', '-e', js, str(app),
                     json.dumps(cfg), 'hr' if is_hr else 'power'], text=True))
     bounds = hr if is_hr else power[:count]
-    assert len(seq) == count * 3 + 1
+    assert len(seq) == (2 * count - 1) * 3
     for i in range(count if is_hr else count - 1):
         lo, hi = bounds[i], (bounds[i+1] if i+1 < count else cfg['hrMax'])
         for j, t in enumerate([.2, .5, .8]):
             assert abs(seq[i*3+j] - (lo+(hi-lo)*t)) < 1e-6
+    for step, i in enumerate(range(count - 2, -1, -1)):
+        lo, hi = bounds[i], bounds[i+1]
+        for j, t in enumerate([.8, .5, .2]):
+            assert abs(seq[count*3 + step*3+j] - (lo+(hi-lo)*t)) < 1e-6
+    if not is_hr:
+        lo=bounds[-1]; width=(lo-bounds[-2])*.4
+        expected_top=[lo-width*.75, lo+width*.5, lo-width*.25]
+        assert all(abs(a-b)<1e-6 for a,b in zip(seq[(count-1)*3:count*3], expected_top))
     assert seq[-1] == seq[0]
     cases.append((is_hr, count, seq))
 
@@ -38,6 +46,8 @@ start = main.index('const bool lightingTest = simulation.enabled')
 selection = main[start:main.index('    if (hr)', start)]
 assert 'smoothed, s_prevZone, !lightingTest)' in main
 assert 'smoothed, s_prevZoneHr, !lightingTest)' in main
+assert 'PowerZones::colorFor(g_config, smoothed, r, g, b, zone)' in main
+assert 'HRZones::colorFor(g_config, smoothed, r, g, b, zone)' in main
 code = r"""
 #include <cassert>
 #include <cmath>
@@ -45,7 +55,9 @@ code = r"""
 #include "Simulation.h"
 #include "PowerProcessor.h"
 #include "PowerZones.h"
+void testZoneGradient();
 int main() {
+testZoneGradient();
 AppConfig c{}; c.ftp=260; c.hrMax=201; c.hysteresis=100;
 int power[]={0,83,157,214,289,361,477}, hr[]={70,103,129,154,178};
 for(int i=0;i<7;++i) {c.zones[i].minWatts=power[i]; c.zones[i].r=20+i*30; c.zones[i].b=240-i*30;}
@@ -54,17 +66,20 @@ for(int i=0;i<5;++i) {c.hrZones[i].minBpm=hr[i]; c.hrZones[i].g=20+i*40; c.hrZon
 for is_hr, count, seq in cases:
     ns = 'HRZones' if is_hr else 'PowerZones'
     code += '{ c.zoneCount=%d; float points[]={%s};\n' % (count, ','.join(str(x)+'f' if '.' in str(x) else str(x)+'.0f' for x in seq))
+    expected = list(range(count)) + list(range(count-2, -1, -1))
+    code += 'int expected[]={' + ','.join(map(str,expected)) + '};\n'
     code += r"""
-for(int strength : {0,50,90,100}) {
+for(int strength : {0,50,75,90,100}) {
 PowerProcessor processor; processor.setSmoothing(strength); processor.update(17);
 Simulation sim; sim.patch(false,true,true,false,0,true,true);
-bool visited[7]={}; int index=0;
+bool visited[7]={}; int index=0; int previous=-1; int traversalIndex=0;
 for(float raw : points) {
 const auto simulation=sim.snapshot();
 """ + selection + f"""
 assert(smoothed==raw); assert(processor.value()==17);
 int zone={ns}::zoneIndex(c,smoothed,0,!lightingTest); visited[zone]=true;
-uint8_t r,g,b; {ns}::colorFor(c,smoothed,r,g,b);
+if(zone!=previous) {{ assert(traversalIndex<{2*count-1}); assert(zone==expected[traversalIndex++]); previous=zone; }}
+uint8_t r,g,b; {ns}::colorFor(c,smoothed,r,g,b,zone);
 """
     if not is_hr:
         code += f"""
@@ -77,6 +92,7 @@ assert(zone=={count-2}); assert(r>c.zones[zone].r && r<c.zones[zone+1].r);
 if(index=={len(seq)-1}) assert(zone==0);
 ++index;
 }}
+assert(traversalIndex=={2*count-1});
 for(int i=0;i<{count};++i) assert(visited[i]);
 """ + r"""
 // Ordinary simulation enables clear test mode; normal smoothing/history survives.
@@ -89,11 +105,12 @@ sim.patch(false,true,false,false,0); assert(!sim.snapshot().lightingTest);
 }
 }
 """
-code += 'std::cout << "PASS: actual browser points, Power 5/6/7, HR, gradient/solid/wrap, all smoothing strengths and normal EMA preservation\\n"; }'
+code += 'std::cout << "PASS: actual browser points, Power 5/6/7, HR, full round trips, 90% dominant gradients, all smoothing strengths and normal EMA preservation\\n"; }'
 with tempfile.TemporaryDirectory() as temp:
     temp=Path(temp); source=temp/'sequence.cpp'; source.write_text(code)
     binary=temp/('sequence.exe' if os.name=='nt' else 'sequence')
     subprocess.run([os.environ.get('CXX','g++'),'-std=c++11','-pthread',
         '-I'+str(root/'tools/tests/led_pin'),'-I'+str(root/'include'),str(source),
-        str(root/'src/PowerProcessor.cpp'),str(root/'src/PowerZones.cpp'),'-o',str(binary)],check=True)
+        str(root/'src/PowerProcessor.cpp'),str(root/'src/PowerZones.cpp'),
+        str(root/'tools/tests/led_pin/zone_gradient.cpp'),'-o',str(binary)],check=True)
     subprocess.run([str(binary)],check=True)

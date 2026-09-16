@@ -215,11 +215,11 @@ static void processPipeline() {
       if (hr) {
         zone = HRZones::zoneIndex(g_config, smoothed, s_prevZoneHr, !lightingTest);
         if (!lightingTest) s_prevZoneHr = zone;
-        HRZones::colorFor(g_config, smoothed, r, g, b);
+        HRZones::colorFor(g_config, smoothed, r, g, b, zone);
       } else {
         zone = PowerZones::zoneIndex(g_config, smoothed, s_prevZone, !lightingTest);
         if (!lightingTest) s_prevZone = zone;
-        PowerZones::colorFor(g_config, smoothed, r, g, b);
+        PowerZones::colorFor(g_config, smoothed, r, g, b, zone);
       }
     } else {
       s_prevZone   = 0;

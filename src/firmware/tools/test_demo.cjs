@@ -84,8 +84,8 @@ function fixture() {
     const stopped=midRun.calls.length; await midRun.advance(10000); assert.equal(midRun.calls.length,stopped);
   }
   const finite=fixture(); finite.setMode('fast'); finite.run('void startDemo(1)');
-  await finite.advance(40000);
-  assert.equal(finite.calls.filter(c=>'watts' in c.patch).length,16);
+  await finite.advance(50000);
+  assert.equal(finite.calls.filter(c=>'watts' in c.patch).length,27);
   assert.equal(finite.calls.at(-1).patch.enabled,false);
   const stopping=fixture(); stopping.run('void startDemo(100)');
   stopping.run('void stopDemo()'); stopping.run('void startDemo(100)');

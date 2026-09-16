@@ -11,8 +11,9 @@ int zoneIndex(const AppConfig &c, float watts, int prevZone, bool useHysteresis)
 // Computes the smoothly interpolated colour for a given wattage: the zone's
 // exact colour across the central 20 % of its span (plateau), blending
 // towards the neighbouring zone's colour across the outer 40 % on each side
-// and hitting the exact colour midpoint at each boundary.
-void colorFor(const AppConfig &c, float watts, uint8_t &r, uint8_t &g, uint8_t &b);
+// with at most 10% neighbour contribution. activeZone preserves the already
+// detected logical zone (including hysteresis); -1 selects by value.
+void colorFor(const AppConfig &c, float watts, uint8_t &r, uint8_t &g, uint8_t &b, int activeZone = -1);
 
 } // namespace PowerZones
 
@@ -21,6 +22,6 @@ void colorFor(const AppConfig &c, float watts, uint8_t &r, uint8_t &g, uint8_t &
 namespace HRZones {
 
 int  zoneIndex(const AppConfig &c, float bpm, int prevZone, bool useHysteresis);
-void colorFor(const AppConfig &c, float bpm, uint8_t &r, uint8_t &g, uint8_t &b);
+void colorFor(const AppConfig &c, float bpm, uint8_t &r, uint8_t &g, uint8_t &b, int activeZone = -1);
 
 } // namespace HRZones

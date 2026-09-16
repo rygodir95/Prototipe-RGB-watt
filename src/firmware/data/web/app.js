@@ -783,7 +783,11 @@ function demoSequence() {
                 lo - transitionWidth * 0.25);
     }
   });
-  vals.push(vals[0]); // Hold Z1 visibly even at the end of a finite test.
+  // Complete the return through every bounded lower zone, in reverse order.
+  for (let i = zones.length - 2; i >= 0; i--) {
+    const lo = zones[i].min, hi = zones[i + 1].min;
+    [0.8, 0.5, 0.2].forEach(t => vals.push(lo + (hi - lo) * t));
+  }
   return vals;
 }
 async function startDemo(cycles) {
