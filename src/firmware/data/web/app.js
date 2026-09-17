@@ -24,7 +24,7 @@ function applyTheme(theme) {
   });
 }
 function initTheme() {
-  const saved = localStorage.getItem("theme") || "system";
+  const saved = localStorage.getItem("theme") || "dark";
   applyTheme(saved);
   document.querySelectorAll("#themeSwitch button").forEach((b) => {
     b.addEventListener("click", () => {
@@ -35,7 +35,7 @@ function initTheme() {
     });
   });
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    if ((localStorage.getItem("theme") || "system") === "system") applyTheme("system");
+    if ((localStorage.getItem("theme") || "dark") === "system") applyTheme("system");
   });
 }
 
@@ -62,6 +62,10 @@ function initNav() {
       if (activeView === "about") refreshAbout();
     });
   });
+  document.querySelectorAll("[data-open-view]").forEach((b) => b.addEventListener("click", () => {
+    document.querySelector('.nav-btn[data-view="' + b.dataset.openView + '"]').click();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }));
 }
 
 // ---------------- API ----------------
@@ -91,13 +95,15 @@ function fillForms() {
   $("smoothInput").value = config.smoothing;
   $("smoothVal").textContent = config.smoothing;
   $("timeoutInput").value = config.powerTimeout;
-  $("hysInput").value = config.hysteresis;
   $("ledPinInput").value = config.ledPin;
   $("ledCountInput").value = config.ledCount;
   $("ledTypeSel").value = config.ledType;
   $("ledEffectSel").value = config.ledEffect;
   $("brightInput").value = config.brightness;
   $("brightVal").textContent = config.brightness + "%";
+  $("hubBrightness").value = config.brightness;
+  $("statBright").textContent = config.brightness;
+  $("hubLedCount").textContent = config.ledCount;
   $("autoReconnect").checked = config.autoReconnect;
   $("debugToggle").checked = config.debug;
   $("wifiSsid").value = config.wifiSsid || "";
@@ -110,9 +116,8 @@ function fillForms() {
   $("statFtp").textContent = hr ? config.hrMax : config.ftp;
   $("statFtpUnit").textContent = hr ? "BPM" : "W";
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
-  // Hysteresis applies to Heart Rate zones only (Power is FTP-relative).
-  $("hysUnit").textContent = "BPM";
-  $("sourceMiniLabel").textContent = hr ? "Heart Rate" : "Power Source";
+  $("sourceMiniLabel").textContent = hr ? "Heart Rate controls lighting" : "Power controls lighting";
+  $("sourceIcon").classList.toggle("hr", hr);
 
   // ---- Devices page: per-type saved source hints ----
   $("powerSavedHint").textContent = config.sourceName ? "Saved: " + config.sourceName : "No saved device";
@@ -236,7 +241,6 @@ async function saveSettings() {
   await postConfig({
     smoothing: +$("smoothInput").value,
     powerTimeout: +$("timeoutInput").value,
-    hysteresis: +$("hysInput").value,
     ledPin: +$("ledPinInput").value,
     ledCount: +$("ledCountInput").value,
     ledType: $("ledTypeSel").value,
@@ -465,9 +469,9 @@ function armWsWatchdog() {
 function initWs() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(proto + "://" + location.host + "/ws");
-  ws.onmessage = (e) => { armWsWatchdog(); showHubReconnected(); try { updateLive(JSON.parse(e.data)); } catch (_) {} };
+  ws.onmessage = (e) => { armWsWatchdog(); showHubReconnected(); setHubConnected(true); try { updateLive(JSON.parse(e.data)); } catch (_) {} };
   ws.onerror = () => { try { ws.close(); } catch (_) {} };
-  ws.onclose = () => { clearTimeout(wsWatchdog); showHubBanner(true); setTimeout(initWs, 2000); };
+  ws.onclose = () => { clearTimeout(wsWatchdog); showHubBanner(true); setHubConnected(false); setTimeout(initWs, 2000); };
   armWsWatchdog();   // a socket that never opens at all must not hang either
 }
 const STATE_MAP = {
@@ -496,9 +500,9 @@ function updateLive(t) {
   if (t.state === "DISCONNECTED") {
     stateLabel = hr ? "No heart rate sensor connected" : "No power sensor connected";
   }
-  $("powerWatts").textContent = t.smoothed;
-  $("zoneNum").textContent = t.zone >= 0 ? "Z" + (t.zone + 1) : "—";
-  $("zoneName").textContent = (t.zoneName || "—").replace(/^Z\d+\s·\s/, "");
+  $("powerWatts").textContent = t.hasData ? t.smoothed : "—";
+  $("zoneNum").textContent = t.hasData && t.zone >= 0 ? "Z" + (t.zone + 1) : "—";
+  $("zoneName").textContent = t.hasData ? (t.zoneName || "—").replace(/^Z\d+\s·\s/, "") : "—";
   const s = STATE_MAP[t.state] || STATE_MAP.STARTING;
   const pill = $("statusPill");
   pill.className = "status-pill " + s.cls;
@@ -511,12 +515,18 @@ function updateLive(t) {
   // zone number = zone name = displayed colour.
   const zones = hr ? (config.hrZones || []) : (config.zones || []);
   const zoneColor = (t.zone >= 0 && t.zone < zones.length) ? zones[t.zone].color : t.color;
-  $("powerGlow").style.background = "radial-gradient(circle, " + zoneColor + "cc, transparent 70%)";
-  $("brandDot").style.background = zoneColor;
-  $("brandDot").style.boxShadow = "0 0 24px " + zoneColor + "88";
+  $("zoneBadge").style.setProperty("--zone-color", t.hasData ? zoneColor : "var(--muted)");
+  $("lightingState").textContent = t.sim ? "Test active" : (t.hasData ? "Active" : "Waiting for data");
+  if (typeof t.brightness === "number" && document.activeElement !== $("hubBrightness")) {
+    config.brightness = t.brightness;
+    $("hubBrightness").value = t.brightness;
+    $("statBright").textContent = t.brightness;
+    $("brightInput").value = t.brightness;
+    $("brightVal").textContent = t.brightness + "%";
+  }
 
   // Dashboard source
-  $("dashSourceName").textContent = t.source || (t.sim ? "Simulation" : "—");
+  $("dashSourceName").textContent = t.sim ? "Lighting test" : (t.source || (hr ? config.hrSourceName : config.sourceName) || "No sensor selected");
   const ds = $("dashSourceState");
   ds.querySelector("span:last-child").textContent = t.sim ? "Lighting test" : stateLabel;
   ds.querySelector(".pill-dot").style.background = s.cls === "live" || s.cls === "ok" ? "var(--ok)" : "var(--muted)";
@@ -1034,7 +1044,14 @@ function importConfigFile(file) {
 async function loadHubInfo() {
   try { const r = await fetch("/api/info"); hubInfo = await r.json(); }
   catch (_) { hubInfo = null; }
+  $("hubDeviceId").textContent = hubInfo && hubInfo.deviceId ? hubInfo.deviceId : "Hub";
+  $("hubVersion").textContent = "Firmware " + (hubInfo && hubInfo.version ? hubInfo.version : "—");
   return hubInfo;
+}
+function setHubConnected(connected) {
+  $("hubConnection").textContent = connected ? "Connected" : "Offline";
+  $("hubIndicator").classList.toggle("connected", connected);
+  $("demoBtn").disabled = !connected;
 }
 function refreshAbout() {
   loadHubInfo().then(fillAbout, fillAbout);
@@ -1115,6 +1132,7 @@ async function init() {
   // Sync stored theme with device config (device is source of truth on first load if set)
   if (config.theme && !localStorage.getItem("theme")) { localStorage.setItem("theme", config.theme); applyTheme(config.theme); }
   fillForms();
+  void loadHubInfo();
   initWs();
 
   $("ftpInput").addEventListener("change", async () => { await postConfig({ ftp: +$("ftpInput").value }); fillForms(); toast("FTP updated"); });
@@ -1132,6 +1150,12 @@ async function init() {
   $("scanBtn").addEventListener("click", scan);
   $("smoothInput").addEventListener("input", () => ($("smoothVal").textContent = $("smoothInput").value));
   $("brightInput").addEventListener("input", () => ($("brightVal").textContent = $("brightInput").value + "%"));
+  $("hubBrightness").addEventListener("input", () => ($("statBright").textContent = $("hubBrightness").value));
+  $("hubBrightness").addEventListener("change", async () => {
+    await postConfig({ brightness: +$("hubBrightness").value });
+    fillForms();
+    toast("Brightness saved");
+  });
 
   // ---- Demo Mode ----
   $("demoBtn").addEventListener("click", () => startDemo());

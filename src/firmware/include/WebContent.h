@@ -8,7 +8,7 @@ const char INDEX_HTML[] PROGMEM = R"rgbwatt(
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZoneGlow</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
@@ -20,7 +20,7 @@ const char INDEX_HTML[] PROGMEM = R"rgbwatt(
         <span class="brand-dot" id="brandDot"></span>
         <div>
           <h1>ZoneGlow</h1>
-          <p class="brand-sub">Training Zone Lighting</p>
+          <p class="brand-sub">Hub companion</p>
         </div>
       </div>
       <div class="topbar-right">
@@ -37,8 +37,8 @@ const char INDEX_HTML[] PROGMEM = R"rgbwatt(
 
     <!-- Nav -->
     <nav class="nav" id="nav">
-      <button class="nav-btn active" data-view="dashboard" data-testid="nav-dashboard">Dashboard</button>
-      <button class="nav-btn" data-view="devices" data-testid="nav-devices">Devices</button>
+      <button class="nav-btn active" data-view="dashboard" data-testid="nav-dashboard">Hub</button>
+      <button class="nav-btn" data-view="devices" data-testid="nav-devices">Sensors</button>
       <button class="nav-btn" data-view="zones" data-testid="nav-zones">Zones</button>
       <button class="nav-btn" data-view="settings" data-testid="nav-settings">Settings</button>
       <button class="nav-btn" data-view="about" data-testid="nav-about">About</button>
@@ -54,28 +54,25 @@ const char INDEX_HTML[] PROGMEM = R"rgbwatt(
 
       <!-- DASHBOARD -->
       <section class="view active" id="view-dashboard">
-        <div class="grid">
-          <div class="card power-card" id="powerCard" data-testid="power-card">
-            <div class="power-glow" id="powerGlow"></div>
-            <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em id="powerUnit">W</em></div>
-            <div class="zone-badge" id="zoneBadge" data-testid="zone-badge">
-              <span id="zoneNum">Z1</span> · <span id="zoneName">—</span>
-            </div>
-          </div>
-
-          <div class="card source-mini" data-testid="source-mini">
-            <div class="card-label" id="sourceMiniLabel">Power Source</div>
-            <div class="source-name" id="dashSourceName">—</div>
+        <div class="hub-intro"><p class="eyebrow">YOUR DEVICE</p><h2>Hub overview</h2><p>Connect, configure, verify. Your Hub runs independently after setup.</p></div>
+        <div class="hub-grid">
+          <div class="card hub-status"><div class="card-header"><div><div class="card-label">Hub status</div><div class="card-title" id="hubConnection">Connecting…</div></div><span class="hub-indicator" id="hubIndicator"></span></div><div class="hub-meta"><span id="hubDeviceId">Hub</span><span id="hubVersion">Firmware —</span></div></div>
+          <div class="card hub-source" data-testid="source-mini">
+            <div class="card-header"><div><div class="card-label">Control source</div><div class="card-title" id="sourceMiniLabel">Power controls lighting</div></div><div class="source-icon" id="sourceIcon" aria-hidden="true"><svg id="powerIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 5 13h6l-1 9 9-12h-6l0-8Z"/></svg><svg id="hrIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg></div></div>
+            <div class="source-detail"><span class="detail-label">Selected sensor</span><strong id="dashSourceName">—</strong></div>
             <div class="source-state" id="dashSourceState"><span class="pill-dot"></span><span>Disconnected</span></div>
-            <button class="btn demo-btn" id="demoBtn" data-testid="demo-btn">Test Lighting</button>
+            <div class="live-strip" id="powerCard" data-testid="power-card"><div><span class="detail-label">Current value</span><div class="live-value"><span id="powerWatts" data-testid="power-watts">—</span> <em id="powerUnit">W</em></div></div><div class="zone-badge" id="zoneBadge" data-testid="zone-badge"><span id="zoneNum">—</span> · <span id="zoneName">—</span></div></div>
+            <span class="visually-hidden" id="powerGlow"></span>
           </div>
-
-          <div class="card stat-row" data-testid="stat-row">
-            <div class="stat"><div class="stat-k" id="statFtpLabel">FTP</div><div class="stat-v"><span id="statFtp">0</span> <span id="statFtpUnit">W</span></div></div>
-            <div class="stat"><div class="stat-k">Zones</div><div class="stat-v" id="statZones">7</div></div>
-            <div class="stat"><div class="stat-k">Brightness</div><div class="stat-v"><span id="statBright">100</span>%</div></div>
+          <div class="card hub-lighting" data-testid="stat-row">
+            <div class="card-header"><div><div class="card-label">Lighting</div><div class="card-title" id="lightingState">Waiting for data</div></div></div>
+            <div class="lighting-bright"><label for="hubBrightness">Brightness</label><strong><span id="statBright">—</span>%</strong></div>
+            <input type="range" min="0" max="100" id="hubBrightness" class="slider" aria-label="Brightness" />
+            <div class="lighting-meta"><span>LED count</span><strong id="hubLedCount">—</strong></div>
+            <span class="visually-hidden" id="statFtpLabel">FTP</span><span class="visually-hidden" id="statFtp">0</span><span class="visually-hidden" id="statFtpUnit">W</span><span class="visually-hidden" id="statZones">7</span>
           </div>
-
+          <div class="card hub-test"><div><div class="card-label">Lighting test</div><p class="muted">Cycle through your configured zones to check the physical lights.</p></div><button class="btn primary" id="demoBtn" data-testid="demo-btn">Start</button></div>
+          <div class="card hub-links"><div class="card-label">Configure</div><button class="hub-link" data-open-view="zones">Zones <span>›</span></button><button class="hub-link" data-open-view="devices">Sensors <span>›</span></button><button class="hub-link" data-open-view="settings">Settings &amp; connectivity <span>›</span></button><button class="hub-link" data-open-view="about">Device &amp; firmware <span>›</span></button></div>
         </div>
       </section>
 
@@ -176,16 +173,6 @@ const char INDEX_HTML[] PROGMEM = R"rgbwatt(
           <div class="field">
             <label>Data timeout (ms)</label>
             <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
-          </div>
-        </div>
-
-        <!-- Power hysteresis is FTP-relative (automatic); the absolute margin
-             applies to Heart Rate zones only. -->
-        <div class="card">
-          <div class="card-title">Heart Rate Processing</div>
-          <div class="field">
-            <label>Hysteresis (<span id="hysUnit">BPM</span>)</label>
-            <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
           </div>
         </div>
 
@@ -329,7 +316,8 @@ const char INDEX_HTML[] PROGMEM = R"rgbwatt(
   </div>
   <script src="/app.js"></script>
 </body>
-</html>)rgbwatt";
+</html>
+)rgbwatt";
 
 const char STYLE_CSS[] PROGMEM = R"rgbwatt(
 :root {
@@ -680,7 +668,74 @@ input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
   .ob-card { padding: 20px; }
   .ob-zone-cfg { flex-direction: column; }
   .about-rows b { font-size: 13px; }
-})rgbwatt";
+}
+/* Hub companion screen */
+.app { max-width: 1040px; }
+.topbar { padding-top: 24px; }
+.brand-dot { width: 34px; height: 34px; border-radius: 10px; background: var(--text) !important; box-shadow: none !important; }
+.brand-sub { letter-spacing: .06em; text-transform: none; }
+.status-pill.live .pill-dot { animation: none; box-shadow: none; }
+#statusPill { display: none; }
+.nav { margin-bottom: 28px; }
+.nav-btn { min-width: 78px; }
+.nav-btn.active { box-shadow: none; }
+.card { box-shadow: none; }
+.hub-intro { margin: 0 0 22px; }
+.hub-intro .eyebrow { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .16em; }
+.hub-intro h2 { margin: 7px 0 5px; font-size: clamp(25px, 5vw, 32px); font-weight: 700; letter-spacing: -.04em; }
+.hub-intro p:last-child { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.hub-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.hub-grid .card { margin: 0; padding: 20px; }
+.hub-grid .card-header { align-items: center; margin-bottom: 14px; }
+.hub-grid .card-title { margin-top: 6px; font-size: 18px; letter-spacing: -.02em; }
+.hub-status, .hub-source { grid-column: 1 / -1; }
+.hub-indicator { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.hub-indicator.connected { background: var(--ok); }
+.hub-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 15px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.hub-meta span:first-child { color: var(--text); }
+.source-icon { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 11px; color: var(--text); }
+.source-icon svg { width: 22px; height: 22px; }
+.source-icon #hrIcon, .source-icon.hr #powerIcon { display: none; }
+.source-icon.hr #hrIcon { display: block; }
+.detail-label { display: block; color: var(--muted); font-size: 12px; }
+.source-detail strong { display: block; margin-top: 5px; font-size: 16px; overflow-wrap: anywhere; }
+.source-state { margin-top: 8px; }
+.live-strip { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.live-value { margin-top: 3px; font-size: 27px; font-weight: 700; line-height: 1.1; letter-spacing: -.04em; }
+.live-value em { font-size: 14px; font-style: normal; font-weight: 500; color: var(--muted); }
+.zone-badge { margin: 0; padding: 7px 10px; border-color: var(--zone-color, var(--border)); color: var(--text); background: transparent; font-size: 12px; white-space: nowrap; }
+.lighting-bright, .lighting-meta { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; }
+.lighting-bright strong { color: var(--text); font-size: 24px; letter-spacing: -.04em; }
+.hub-lighting .slider { margin: 14px 0 20px; width: 100%; }
+.lighting-meta { padding-top: 14px; border-top: 1px solid var(--border); }
+.lighting-meta strong { color: var(--text); font-size: 14px; }
+.hub-test { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 22px; }
+.hub-test .muted { margin-top: 8px; }
+.hub-test .btn { min-width: 90px; }
+.hub-links { grid-column: 1 / -1; }
+.hub-links .card-label { margin-bottom: 8px; }
+.hub-link { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 13px 0; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.hub-link:last-child { border-bottom: 0; padding-bottom: 2px; }
+.hub-link span { color: var(--muted); font-size: 22px; line-height: 1; }
+.hub-link:hover { color: var(--accent); }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+[hidden] { display: none !important; }
+@media (max-width: 640px) {
+  .app { padding: 0 16px 48px; }
+  .topbar { gap: 12px; }
+  .brand h1 { font-size: 17px; }
+  .brand-sub { font-size: 10px; }
+  .status-pill { padding: 7px 9px; font-size: 11px; }
+  .topbar-right { gap: 6px; }
+  .theme-switch { display: none; }
+  .nav { gap: 2px; padding: 4px; }
+  .nav-btn { min-width: 0; padding: 9px 5px; font-size: 12px; }
+  .hub-grid { grid-template-columns: 1fr; gap: 12px; }
+  .hub-grid .card { grid-column: 1; padding: 18px; }
+  .hub-test { flex-direction: row; align-items: center; gap: 12px; }
+  .hub-test .btn { flex: 0 0 auto; }
+}
+)rgbwatt";
 
 const char APP_JS[] PROGMEM = R"rgbwatt(
 // ESP32 RGB Watt Zone Controller - Web UI
@@ -709,7 +764,7 @@ function applyTheme(theme) {
   });
 }
 function initTheme() {
-  const saved = localStorage.getItem("theme") || "system";
+  const saved = localStorage.getItem("theme") || "dark";
   applyTheme(saved);
   document.querySelectorAll("#themeSwitch button").forEach((b) => {
     b.addEventListener("click", () => {
@@ -720,7 +775,7 @@ function initTheme() {
     });
   });
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    if ((localStorage.getItem("theme") || "system") === "system") applyTheme("system");
+    if ((localStorage.getItem("theme") || "dark") === "system") applyTheme("system");
   });
 }
 
@@ -747,6 +802,10 @@ function initNav() {
       if (activeView === "about") refreshAbout();
     });
   });
+  document.querySelectorAll("[data-open-view]").forEach((b) => b.addEventListener("click", () => {
+    document.querySelector('.nav-btn[data-view="' + b.dataset.openView + '"]').click();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }));
 }
 
 // ---------------- API ----------------
@@ -776,13 +835,15 @@ function fillForms() {
   $("smoothInput").value = config.smoothing;
   $("smoothVal").textContent = config.smoothing;
   $("timeoutInput").value = config.powerTimeout;
-  $("hysInput").value = config.hysteresis;
   $("ledPinInput").value = config.ledPin;
   $("ledCountInput").value = config.ledCount;
   $("ledTypeSel").value = config.ledType;
   $("ledEffectSel").value = config.ledEffect;
   $("brightInput").value = config.brightness;
   $("brightVal").textContent = config.brightness + "%";
+  $("hubBrightness").value = config.brightness;
+  $("statBright").textContent = config.brightness;
+  $("hubLedCount").textContent = config.ledCount;
   $("autoReconnect").checked = config.autoReconnect;
   $("debugToggle").checked = config.debug;
   $("wifiSsid").value = config.wifiSsid || "";
@@ -795,9 +856,8 @@ function fillForms() {
   $("statFtp").textContent = hr ? config.hrMax : config.ftp;
   $("statFtpUnit").textContent = hr ? "BPM" : "W";
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
-  // Hysteresis applies to Heart Rate zones only (Power is FTP-relative).
-  $("hysUnit").textContent = "BPM";
-  $("sourceMiniLabel").textContent = hr ? "Heart Rate" : "Power Source";
+  $("sourceMiniLabel").textContent = hr ? "Heart Rate controls lighting" : "Power controls lighting";
+  $("sourceIcon").classList.toggle("hr", hr);
 
   // ---- Devices page: per-type saved source hints ----
   $("powerSavedHint").textContent = config.sourceName ? "Saved: " + config.sourceName : "No saved device";
@@ -921,7 +981,6 @@ async function saveSettings() {
   await postConfig({
     smoothing: +$("smoothInput").value,
     powerTimeout: +$("timeoutInput").value,
-    hysteresis: +$("hysInput").value,
     ledPin: +$("ledPinInput").value,
     ledCount: +$("ledCountInput").value,
     ledType: $("ledTypeSel").value,
@@ -1150,9 +1209,9 @@ function armWsWatchdog() {
 function initWs() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(proto + "://" + location.host + "/ws");
-  ws.onmessage = (e) => { armWsWatchdog(); showHubReconnected(); try { updateLive(JSON.parse(e.data)); } catch (_) {} };
+  ws.onmessage = (e) => { armWsWatchdog(); showHubReconnected(); setHubConnected(true); try { updateLive(JSON.parse(e.data)); } catch (_) {} };
   ws.onerror = () => { try { ws.close(); } catch (_) {} };
-  ws.onclose = () => { clearTimeout(wsWatchdog); showHubBanner(true); setTimeout(initWs, 2000); };
+  ws.onclose = () => { clearTimeout(wsWatchdog); showHubBanner(true); setHubConnected(false); setTimeout(initWs, 2000); };
   armWsWatchdog();   // a socket that never opens at all must not hang either
 }
 const STATE_MAP = {
@@ -1181,9 +1240,9 @@ function updateLive(t) {
   if (t.state === "DISCONNECTED") {
     stateLabel = hr ? "No heart rate sensor connected" : "No power sensor connected";
   }
-  $("powerWatts").textContent = t.smoothed;
-  $("zoneNum").textContent = t.zone >= 0 ? "Z" + (t.zone + 1) : "—";
-  $("zoneName").textContent = (t.zoneName || "—").replace(/^Z\d+\s·\s/, "");
+  $("powerWatts").textContent = t.hasData ? t.smoothed : "—";
+  $("zoneNum").textContent = t.hasData && t.zone >= 0 ? "Z" + (t.zone + 1) : "—";
+  $("zoneName").textContent = t.hasData ? (t.zoneName || "—").replace(/^Z\d+\s·\s/, "") : "—";
   const s = STATE_MAP[t.state] || STATE_MAP.STARTING;
   const pill = $("statusPill");
   pill.className = "status-pill " + s.cls;
@@ -1196,12 +1255,18 @@ function updateLive(t) {
   // zone number = zone name = displayed colour.
   const zones = hr ? (config.hrZones || []) : (config.zones || []);
   const zoneColor = (t.zone >= 0 && t.zone < zones.length) ? zones[t.zone].color : t.color;
-  $("powerGlow").style.background = "radial-gradient(circle, " + zoneColor + "cc, transparent 70%)";
-  $("brandDot").style.background = zoneColor;
-  $("brandDot").style.boxShadow = "0 0 24px " + zoneColor + "88";
+  $("zoneBadge").style.setProperty("--zone-color", t.hasData ? zoneColor : "var(--muted)");
+  $("lightingState").textContent = t.sim ? "Test active" : (t.hasData ? "Active" : "Waiting for data");
+  if (typeof t.brightness === "number" && document.activeElement !== $("hubBrightness")) {
+    config.brightness = t.brightness;
+    $("hubBrightness").value = t.brightness;
+    $("statBright").textContent = t.brightness;
+    $("brightInput").value = t.brightness;
+    $("brightVal").textContent = t.brightness + "%";
+  }
 
   // Dashboard source
-  $("dashSourceName").textContent = t.source || (t.sim ? "Simulation" : "—");
+  $("dashSourceName").textContent = t.sim ? "Lighting test" : (t.source || (hr ? config.hrSourceName : config.sourceName) || "No sensor selected");
   const ds = $("dashSourceState");
   ds.querySelector("span:last-child").textContent = t.sim ? "Lighting test" : stateLabel;
   ds.querySelector(".pill-dot").style.background = s.cls === "live" || s.cls === "ok" ? "var(--ok)" : "var(--muted)";
@@ -1719,7 +1784,14 @@ function importConfigFile(file) {
 async function loadHubInfo() {
   try { const r = await fetch("/api/info"); hubInfo = await r.json(); }
   catch (_) { hubInfo = null; }
+  $("hubDeviceId").textContent = hubInfo && hubInfo.deviceId ? hubInfo.deviceId : "Hub";
+  $("hubVersion").textContent = "Firmware " + (hubInfo && hubInfo.version ? hubInfo.version : "—");
   return hubInfo;
+}
+function setHubConnected(connected) {
+  $("hubConnection").textContent = connected ? "Connected" : "Offline";
+  $("hubIndicator").classList.toggle("connected", connected);
+  $("demoBtn").disabled = !connected;
 }
 function refreshAbout() {
   loadHubInfo().then(fillAbout, fillAbout);
@@ -1800,6 +1872,7 @@ async function init() {
   // Sync stored theme with device config (device is source of truth on first load if set)
   if (config.theme && !localStorage.getItem("theme")) { localStorage.setItem("theme", config.theme); applyTheme(config.theme); }
   fillForms();
+  void loadHubInfo();
   initWs();
 
   $("ftpInput").addEventListener("change", async () => { await postConfig({ ftp: +$("ftpInput").value }); fillForms(); toast("FTP updated"); });
@@ -1817,6 +1890,12 @@ async function init() {
   $("scanBtn").addEventListener("click", scan);
   $("smoothInput").addEventListener("input", () => ($("smoothVal").textContent = $("smoothInput").value));
   $("brightInput").addEventListener("input", () => ($("brightVal").textContent = $("brightInput").value + "%"));
+  $("hubBrightness").addEventListener("input", () => ($("statBright").textContent = $("hubBrightness").value));
+  $("hubBrightness").addEventListener("change", async () => {
+    await postConfig({ brightness: +$("hubBrightness").value });
+    fillForms();
+    toast("Brightness saved");
+  });
 
   // ---- Demo Mode ----
   $("demoBtn").addEventListener("click", () => startDemo());

@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZoneGlow</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
@@ -14,7 +14,7 @@
         <span class="brand-dot" id="brandDot"></span>
         <div>
           <h1>ZoneGlow</h1>
-          <p class="brand-sub">Training Zone Lighting</p>
+          <p class="brand-sub">Hub companion</p>
         </div>
       </div>
       <div class="topbar-right">
@@ -31,8 +31,8 @@
 
     <!-- Nav -->
     <nav class="nav" id="nav">
-      <button class="nav-btn active" data-view="dashboard" data-testid="nav-dashboard">Dashboard</button>
-      <button class="nav-btn" data-view="devices" data-testid="nav-devices">Devices</button>
+      <button class="nav-btn active" data-view="dashboard" data-testid="nav-dashboard">Hub</button>
+      <button class="nav-btn" data-view="devices" data-testid="nav-devices">Sensors</button>
       <button class="nav-btn" data-view="zones" data-testid="nav-zones">Zones</button>
       <button class="nav-btn" data-view="settings" data-testid="nav-settings">Settings</button>
       <button class="nav-btn" data-view="about" data-testid="nav-about">About</button>
@@ -48,28 +48,25 @@
 
       <!-- DASHBOARD -->
       <section class="view active" id="view-dashboard">
-        <div class="grid">
-          <div class="card power-card" id="powerCard" data-testid="power-card">
-            <div class="power-glow" id="powerGlow"></div>
-            <div class="power-value"><span id="powerWatts" data-testid="power-watts">0</span><em id="powerUnit">W</em></div>
-            <div class="zone-badge" id="zoneBadge" data-testid="zone-badge">
-              <span id="zoneNum">Z1</span> · <span id="zoneName">—</span>
-            </div>
-          </div>
-
-          <div class="card source-mini" data-testid="source-mini">
-            <div class="card-label" id="sourceMiniLabel">Power Source</div>
-            <div class="source-name" id="dashSourceName">—</div>
+        <div class="hub-intro"><p class="eyebrow">YOUR DEVICE</p><h2>Hub overview</h2><p>Connect, configure, verify. Your Hub runs independently after setup.</p></div>
+        <div class="hub-grid">
+          <div class="card hub-status"><div class="card-header"><div><div class="card-label">Hub status</div><div class="card-title" id="hubConnection">Connecting…</div></div><span class="hub-indicator" id="hubIndicator"></span></div><div class="hub-meta"><span id="hubDeviceId">Hub</span><span id="hubVersion">Firmware —</span></div></div>
+          <div class="card hub-source" data-testid="source-mini">
+            <div class="card-header"><div><div class="card-label">Control source</div><div class="card-title" id="sourceMiniLabel">Power controls lighting</div></div><div class="source-icon" id="sourceIcon" aria-hidden="true"><svg id="powerIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 5 13h6l-1 9 9-12h-6l0-8Z"/></svg><svg id="hrIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg></div></div>
+            <div class="source-detail"><span class="detail-label">Selected sensor</span><strong id="dashSourceName">—</strong></div>
             <div class="source-state" id="dashSourceState"><span class="pill-dot"></span><span>Disconnected</span></div>
-            <button class="btn demo-btn" id="demoBtn" data-testid="demo-btn">Test Lighting</button>
+            <div class="live-strip" id="powerCard" data-testid="power-card"><div><span class="detail-label">Current value</span><div class="live-value"><span id="powerWatts" data-testid="power-watts">—</span> <em id="powerUnit">W</em></div></div><div class="zone-badge" id="zoneBadge" data-testid="zone-badge"><span id="zoneNum">—</span> · <span id="zoneName">—</span></div></div>
+            <span class="visually-hidden" id="powerGlow"></span>
           </div>
-
-          <div class="card stat-row" data-testid="stat-row">
-            <div class="stat"><div class="stat-k" id="statFtpLabel">FTP</div><div class="stat-v"><span id="statFtp">0</span> <span id="statFtpUnit">W</span></div></div>
-            <div class="stat"><div class="stat-k">Zones</div><div class="stat-v" id="statZones">7</div></div>
-            <div class="stat"><div class="stat-k">Brightness</div><div class="stat-v"><span id="statBright">100</span>%</div></div>
+          <div class="card hub-lighting" data-testid="stat-row">
+            <div class="card-header"><div><div class="card-label">Lighting</div><div class="card-title" id="lightingState">Waiting for data</div></div></div>
+            <div class="lighting-bright"><label for="hubBrightness">Brightness</label><strong><span id="statBright">—</span>%</strong></div>
+            <input type="range" min="0" max="100" id="hubBrightness" class="slider" aria-label="Brightness" />
+            <div class="lighting-meta"><span>LED count</span><strong id="hubLedCount">—</strong></div>
+            <span class="visually-hidden" id="statFtpLabel">FTP</span><span class="visually-hidden" id="statFtp">0</span><span class="visually-hidden" id="statFtpUnit">W</span><span class="visually-hidden" id="statZones">7</span>
           </div>
-
+          <div class="card hub-test"><div><div class="card-label">Lighting test</div><p class="muted">Cycle through your configured zones to check the physical lights.</p></div><button class="btn primary" id="demoBtn" data-testid="demo-btn">Start</button></div>
+          <div class="card hub-links"><div class="card-label">Configure</div><button class="hub-link" data-open-view="zones">Zones <span>›</span></button><button class="hub-link" data-open-view="devices">Sensors <span>›</span></button><button class="hub-link" data-open-view="settings">Settings &amp; connectivity <span>›</span></button><button class="hub-link" data-open-view="about">Device &amp; firmware <span>›</span></button></div>
         </div>
       </section>
 
@@ -170,16 +167,6 @@
           <div class="field">
             <label>Data timeout (ms)</label>
             <input type="number" id="timeoutInput" data-testid="timeout-input" min="500" step="500" />
-          </div>
-        </div>
-
-        <!-- Power hysteresis is FTP-relative (automatic); the absolute margin
-             applies to Heart Rate zones only. -->
-        <div class="card">
-          <div class="card-title">Heart Rate Processing</div>
-          <div class="field">
-            <label>Hysteresis (<span id="hysUnit">BPM</span>)</label>
-            <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
           </div>
         </div>
 
