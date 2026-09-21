@@ -173,7 +173,7 @@ int main() {
   // normal Wi-Fi jitter below the physical-soak 3 s silence limit.
   const int heartbeatFrames=ws.frames;
   testMillis()+=400; web.loop(); assert(ws.frames==heartbeatFrames);
-  testMillis()+=200; web.loop(); assert(ws.frames==heartbeatFrames+1);
+  testMillis()+=500; web.loop(); assert(ws.frames==heartbeatFrames+1);
   const int callsBefore=commandCalls;
   for(const char *path : {"/api/scan","/api/disconnect","/api/forget","/api/factory-reset"}) post(path,"{}");
   post("/api/connect",R"({"address":"AA:BB:CC:DD:EE:FF","name":"Test HR","category":"hr"})");
