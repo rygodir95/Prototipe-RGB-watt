@@ -166,11 +166,13 @@ int main() {
     ws.writable=elapsed<30000 || elapsed>=40000;
     web.loop();
   }
-  assert(ws.frames>=54 && ws.frames<=56 && ws.cleanups==60);
+  // 1.5 s unchanged-state heartbeat, minus the simulated ten-second slow
+  // reader period below.
+  assert(ws.frames>=72 && ws.frames<=74 && ws.cleanups==60);
   // An unchanged state still receives a 1.5 s heartbeat, leaving margin for
   // normal Wi-Fi jitter below the physical-soak 3 s silence limit.
   const int heartbeatFrames=ws.frames;
-  testMillis()+=1400; web.loop(); assert(ws.frames==heartbeatFrames);
+  testMillis()+=400; web.loop(); assert(ws.frames==heartbeatFrames);
   testMillis()+=200; web.loop(); assert(ws.frames==heartbeatFrames+1);
   const int callsBefore=commandCalls;
   for(const char *path : {"/api/scan","/api/disconnect","/api/forget","/api/factory-reset"}) post(path,"{}");
