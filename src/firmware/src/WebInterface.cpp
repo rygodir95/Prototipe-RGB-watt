@@ -622,7 +622,10 @@ void WebInterface::broadcastTelemetry() {
   static String out, previous;
   static uint32_t lastSent=0;
   out = ""; serializeJson(doc, out);
-  if (out == previous && millis()-lastSent < 2000) { Runtime::record(Runtime::WsSkipped); return; }
+  // Keep an unchanged-state heartbeat comfortably below the 3 s client/soak
+  // silence limit. A 2 s heartbeat left too little room for normal Wi-Fi
+  // scheduling jitter on real hardware.
+  if (out == previous && millis()-lastSent < 1500) { Runtime::record(Runtime::WsSkipped); return; }
   ws.textAll(out);
   previous = out; lastSent = millis();
   Runtime::record(Runtime::WsSent);

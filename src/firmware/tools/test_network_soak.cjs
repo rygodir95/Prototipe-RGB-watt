@@ -50,7 +50,7 @@ async function scenario(options={}) {
       return {ok:true,status:200,json:async()=>{await delay(20);active.set(path,0);return body;}};
     }};
   vm.runInNewContext(source,context);
-  context.module.exports.run('http://192.168.4.1',120,'unused.json')
+  context.module.exports.run('http://192.168.4.1',120,'unused.json',{live:options.live})
     .then(value=>{result=value;finished=true;},err=>{error=err;finished=true;});
   for(let steps=0;!finished && steps<10000;steps++) {
     await new Promise(setImmediate); // drain nested promise continuations
@@ -66,13 +66,19 @@ async function scenario(options={}) {
     assert.equal(patches.length,0,'unreachable device must not start simulation');
     return result;
   }
-  assert.equal(patches.filter(p=>p.enabled===true).length,1,'enable only once');
-  assert.equal(patches.at(-1).enabled,false,'disable on exit');
-  assert(patches.filter(p=>'watts' in p).length>50);
+  if(options.live) {
+    assert.equal(patches.length,0,'live mode must not alter simulation');
+    assert.equal(result.mode,'live-sensor','report identifies live mode');
+  } else {
+    assert.equal(patches.filter(p=>p.enabled===true).length,1,'enable only once');
+    assert.equal(patches.at(-1).enabled,false,'disable on exit');
+    assert(patches.filter(p=>'watts' in p).length>50);
+  }
   return result;
 }
 (async()=>{
   assert.equal((await scenario()).transportPassed,true);
+  assert.equal((await scenario({live:true})).transportPassed,true);
   for(const options of [{lateOpen:true},{neverOpen:true},{disconnect:true},{setupFailure:true},{setupAlwaysFails:true},{cleanupFailure:true}]) {
     const result=await scenario(options);
     assert.equal(result.transportPassed,false,JSON.stringify(options));

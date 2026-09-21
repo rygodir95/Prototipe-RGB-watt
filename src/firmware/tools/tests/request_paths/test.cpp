@@ -167,6 +167,11 @@ int main() {
     web.loop();
   }
   assert(ws.frames>=54 && ws.frames<=56 && ws.cleanups==60);
+  // An unchanged state still receives a 1.5 s heartbeat, leaving margin for
+  // normal Wi-Fi jitter below the physical-soak 3 s silence limit.
+  const int heartbeatFrames=ws.frames;
+  testMillis()+=1400; web.loop(); assert(ws.frames==heartbeatFrames);
+  testMillis()+=200; web.loop(); assert(ws.frames==heartbeatFrames+1);
   const int callsBefore=commandCalls;
   for(const char *path : {"/api/scan","/api/disconnect","/api/forget","/api/factory-reset"}) post(path,"{}");
   post("/api/connect",R"({"address":"AA:BB:CC:DD:EE:FF","name":"Test HR","category":"hr"})");

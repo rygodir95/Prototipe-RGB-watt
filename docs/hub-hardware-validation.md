@@ -1,4 +1,4 @@
-# ZoneGlow Hub — Hardware Validation Plan
+# Hub — Hardware Validation Plan
 
 This document is the **authoritative validation plan** for the Power + Heart Rate →
 Zone → Lighting system on real ESP32 hardware. Release gates defined here govern
@@ -31,8 +31,8 @@ features · MetryLoom rebrand.
 
 | Item | Value |
 |---|---|
-| Branch | `feature/mobile-app` |
-| Commit | `7529fa6` (ZoneGlow production polish) |
+| Branch | `fix/led-pin-validation` |
+| Commit | `dea7c2f` (latest validated lighting/soak baseline) |
 | PlatformIO environment | `esp32dev-dev` (default; board `esp32dev`) |
 | Framework | Arduino (espressif32), 4 MB flash, `min_spiffs.csv` partitions |
 | Firmware version | `1.0.0-dev` (development build) |
@@ -42,6 +42,11 @@ features · MetryLoom rebrand.
 **Hardware under test (Phase 1):** classic ESP32 Dev Kit V1, 30-pin,
 ESP32-WROOM-32, 4 MB flash, Wi-Fi + BLE, microUSB. The `esp32dev` board target
 is correct for this board (generic ESP32 Dev Module).
+
+For the current multi-hour physical release soak, use
+[`release-validation-soak.md`](release-validation-soak.md). Its procedure
+supersedes the short Phase 8 endurance outline below while preserving these
+phase gates.
 
 ---
 

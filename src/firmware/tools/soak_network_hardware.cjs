@@ -1,6 +1,6 @@
 // Node 22+: node tools/soak_network_hardware.cjs http://192.168.4.1 120 report.json
-// Repeat with 600 seconds. Fixed existing 4s timeout, 500ms config / 1500ms
-// simulation rest, one in-flight request per worker, no automatic WS reconnect.
+// For a live BLE-sensor soak, add --live. Fixed existing 4s timeout, 500ms
+// config rest, one in-flight request per worker, no automatic WS reconnect.
 const fs = require('node:fs');
 const {performance} = require('node:perf_hooks');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -10,7 +10,7 @@ function statistics(values) {
   return {count:sorted.length, p50:percentile(.5), p95:percentile(.95), p99:percentile(.99),
     max:sorted.at(-1) ?? null, mean:sorted.length ? sorted.reduce((a,b)=>a+b,0)/sorted.length : null};
 }
-async function run(base, seconds, output) {
+async function run(base, seconds, output, options={}) {
   if(!base || !Number.isFinite(seconds) || seconds<120) throw Error('Specify URL and duration >=120 seconds');
   const result = {started:new Date().toISOString(), seconds, requests:{}, samples:[], failures:[],
     ws:{opened:0, closed:0, errors:0, frames:0, maxGapMs:0}, timeoutMs:4000};
@@ -48,9 +48,11 @@ async function run(base, seconds, output) {
     result.info=await setupRequest('/api/info');
     const config=await setupRequest('/api/config');
     result.before=await setupRequest('/api/diagnostics');
+    const live=options.live===true;
     const hr=config.controlSource==='hr';
     const values=(hr?config.hrZones:config.zones).map(z=>z.min+(hr?3:10));
-    if(!values.length) throw Error('No configured test zones');
+    if(!live && !values.length) throw Error('No configured test zones');
+    result.mode=live?'live-sensor':'simulation';
     const url=new URL('/ws',base); url.protocol='ws:';
     socket=new WebSocket(url);
     socket.addEventListener('message',event=>{
@@ -72,8 +74,10 @@ async function run(base, seconds, output) {
     });
     // Continue recording all failures instead of abandoning the run at the first
     // lost connection. No reconnect hides whether the original socket survived.
-    simulationTouched=true;
-    try {await request('/api/simulation',{enabled:true});} catch(_) {}
+    if(!live) {
+      simulationTouched=true;
+      try {await request('/api/simulation',{enabled:true});} catch(_) {}
+    }
     end=performance.now()+seconds*1000;
     const worker=async(period,fn)=>{
       while(performance.now()<end) {
@@ -84,10 +88,10 @@ async function run(base, seconds, output) {
     let index=0;
     await Promise.all([
       worker(500,()=>request('/api/config')),
-      worker(1500,async()=>{
+      ...(live ? [] : [worker(1500,async()=>{
         const reply=await request('/api/simulation',{[hr?'bpm':'watts']:values[index++%values.length]});
         if(reply.ok!==true) result.failures.push({path:'/api/simulation',message:'Update rejected'});
-      }),
+      })]),
       worker(10000,async()=>{
         result.samples.push(await request('/api/diagnostics'));
         console.log(JSON.stringify({remainingSeconds:Math.ceil((end-performance.now())/1000),
@@ -96,8 +100,13 @@ async function run(base, seconds, output) {
     ]);
     if(lastFrame!==undefined) result.ws.maxGapMs=Math.max(result.ws.maxGapMs,performance.now()-lastFrame);
     result.after=await request('/api/diagnostics');
+    const stable=(field)=>result.before[field]===undefined || result.after[field]===result.before[field];
+    const networkStable=!result.before.network || !result.after.network ||
+      result.before.network.sampleDrops===result.after.network.sampleDrops;
     const healthStable=result.after.uptimeMs>=result.before.uptimeMs &&
-      result.after.wifiEvents===result.before.wifiEvents && result.after.lostEvents===result.before.lostEvents;
+      stable('resetReason') && stable('lostEvents') && networkStable &&
+      result.samples.every((sample,index)=>
+        index===0 || sample.uptimeMs>=result.samples[index-1].uptimeMs);
     result.transportPassed=result.failures.length===0 && result.ws.opened===1 &&
       result.ws.closed===0 && result.ws.errors===0 && result.ws.frames>0 && result.ws.maxGapMs<3000 && healthStable;
     // Resource trends require inspecting the saved time series, not just endpoint
@@ -120,6 +129,7 @@ async function run(base, seconds, output) {
   return result;
 }
 module.exports={statistics,run};
-if(require.main===module) run(process.argv[2],Number(process.argv[3]||120),process.argv[4]||'network-soak.json')
+if(require.main===module) run(process.argv[2],Number(process.argv[3]||120),process.argv[4]||'network-soak.json',
+  {live:process.argv.includes('--live')})
   .then(result=>{if(!result.transportPassed) process.exitCode=1;})
   .catch(error=>{console.error(error);process.exitCode=1;});

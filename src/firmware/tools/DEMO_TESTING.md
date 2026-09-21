@@ -52,7 +52,7 @@ not supply the same reason codes as STA disconnects.
 LED rendering is owned by the setup/loop task and rejects other task callers.
 Animated frames are capped at 30 FPS or half wire-time duty for long strips;
 black frames are not resent. Zone/power/HR calculations still run at 10 Hz.
-Telemetry is limited to 2 Hz, with unchanged data sent as a 2-second heartbeat;
+Telemetry is limited to 2 Hz, with unchanged data sent as a 1.5-second heartbeat;
 its JSON slots and serializer capacity are reused. Demo POSTs retain single-flight
 backpressure and use a 1.5-second pause after each complete response.
 
