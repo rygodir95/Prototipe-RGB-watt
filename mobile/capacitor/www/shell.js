@@ -29,6 +29,7 @@
   var BLE_HINT = $("bleHint");
   var BLE_DEVICES = $("bleDevices");
   var BLE_LIVE = $("bleLive");
+  var BLE_CONFIG = $("bleConfig"), BLE_SENSORS = $("bleSensors"), BLE_SENSOR_SCAN = $("bleSensorScanBtn");
   var BLE_SCAN = $("bleScanBtn");
   var BLE_LIGHTING = $("bleLightingBtn");
   var BLE_DISCONNECT = $("bleDisconnectBtn");
@@ -43,6 +44,7 @@
   var splashHidden = false;
   var bleCommandId = 1;
   var bleLightingOn = false;
+  var bleConfigParts = {};
 
   var SPLASH = $("splash");
 
@@ -161,6 +163,8 @@
     HubBleTransport.connect(address).then(function () {
       BLE_HINT.textContent = "Connected locally over Bluetooth.";
       BLE_LIGHTING.disabled = false; BLE_DISCONNECT.disabled = false;
+      BLE_SENSOR_SCAN.disabled = false;
+      HubBleTransport.command(JSON.stringify({ id: bleCommandId++, op: "config_read" }));
     }).catch(function (error) { BLE_HINT.textContent = error.message || String(error); });
   }
 
@@ -176,6 +180,12 @@
     hideSplash(); BLE_PANEL.hidden = false; scanBle();
   });
   BLE_SCAN.addEventListener("click", scanBle);
+  BLE_SENSOR_SCAN.addEventListener("click", function () {
+    BLE_SENSOR_SCAN.disabled = true; BLE_HINT.textContent = "Searching for sensors…";
+    HubBleTransport.command(JSON.stringify({ id: bleCommandId++, op: "scan" })).then(function () { setTimeout(function () {
+      HubBleTransport.command(JSON.stringify({ id: bleCommandId++, op: "devices_read" })); BLE_SENSOR_SCAN.disabled = false;
+    }, 6500); });
+  });
   BLE_DISCONNECT.addEventListener("click", function () {
     HubBleTransport.disconnect(); BLE_LIGHTING.disabled = true; BLE_DISCONNECT.disabled = true;
     BLE_LIVE.hidden = true; BLE_HINT.textContent = "Disconnected. Search to connect again.";
@@ -190,7 +200,15 @@
     HubBleTransport.listen("status", function (status) {
       BLE_LIVE.hidden = false; BLE_LIVE.textContent = JSON.stringify(status, null, 2);
     });
-    HubBleTransport.listen("result", function (result) { if (!result.ok) BLE_HINT.textContent = result.error || "Hub rejected the command"; });
+    HubBleTransport.listen("result", function (result) {
+      if (!result.ok) { BLE_HINT.textContent = result.error || "Hub rejected the command"; return; }
+      if (result.type !== "config" && result.type !== "devices") return;
+      var transfer = bleConfigParts[result.id] || {parts:result.parts, values:[]}; transfer.values[result.part] = result.data; bleConfigParts[result.id] = transfer;
+      if (transfer.values.filter(Boolean).length !== transfer.parts) return;
+      var data = JSON.parse(transfer.values.join("")); delete bleConfigParts[result.id];
+      if (result.type === "config") { BLE_CONFIG.hidden = false; BLE_CONFIG.textContent = "FTP: " + data.ftp + " W · Max HR: " + data.hrMax + " bpm\nZones: " + data.zoneCount + " · LEDs: " + data.ledCount; return; }
+      BLE_SENSORS.textContent = ""; (data.devices || []).forEach(function (sensor) { var row=document.createElement("div"); row.className="ble-device"; row.textContent=(sensor.name||sensor.category)+" · "+sensor.category; var b=document.createElement("button"); b.textContent="Use"; b.onclick=function(){HubBleTransport.command(JSON.stringify({id:bleCommandId++,op:"sensor_connect",sensor:sensor}));}; row.appendChild(b); BLE_SENSORS.appendChild(row); });
+    });
     HubBleTransport.listen("connection", function (event) { if (!event.connected) { BLE_LIGHTING.disabled = true; BLE_DISCONNECT.disabled = true; } });
     HubBleTransport.listen("bleError", function (event) { BLE_HINT.textContent = event.error || "Bluetooth error"; });
   } else {
