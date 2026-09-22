@@ -4,12 +4,20 @@
 #include <NimBLEDevice.h>
 
 #include "AppState.h"
+#include "BLEPower.h"
+#include "HRSensor.h"
+#include "BleScanRouter.h"
+#include "Storage.h"
 #include "Config.h"
 #include "RuntimeDiagnostics.h"
 #include "Simulation.h"
 #include "WebInterface.h"
 
 extern Simulation sim;
+extern BLEPower ble;
+extern HRSensor hrBle;
+extern BleScanRouter bleScan;
+extern Storage storage;
 
 namespace {
 // A private, versioned service. UUIDs are intentionally neutral: they are a
@@ -75,9 +83,9 @@ void HubBleLink::begin() {
   _status = service->createCharacteristic(STATUS_UUID,
       NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY, 180);
   NimBLECharacteristic *command = service->createCharacteristic(COMMAND_UUID,
-      NIMBLE_PROPERTY::WRITE, 180);
+      NIMBLE_PROPERTY::WRITE, 240);
   _result = service->createCharacteristic(RESULT_UUID,
-      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY, 120);
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY, 240);
   command->setCallbacks(&g_commandCallbacks);
   service->start();
 
@@ -103,7 +111,7 @@ void HubBleLink::onDisconnect() {
 
 void HubBleLink::onWrite(NimBLECharacteristic *characteristic) {
   const std::string raw = characteristic->getValue();
-  StaticJsonDocument<160> doc;
+  StaticJsonDocument<256> doc;
   const DeserializationError error = deserializeJson(doc, raw.data(), raw.size());
   const uint32_t id = doc["id"] | 0;
   const char *op = doc["op"] | "";
@@ -126,6 +134,30 @@ void HubBleLink::onWrite(NimBLECharacteristic *characteristic) {
     command.type = CommandType::Source;
   } else if (strcmp(op, "diagnostics") == 0) {
     command.type = CommandType::Diagnostics;
+  } else if (strcmp(op, "config_read") == 0) {
+    command.type = CommandType::ConfigRead;
+  } else if (strcmp(op, "config_write") == 0) {
+    JsonVariantConst patch = doc["patch"];
+    if (!patch.is<JsonObjectConst>()) { sendResult(id, false, "invalid config patch"); return; }
+    const size_t length = serializeJson(patch, command.patch, sizeof(command.patch));
+    if (length >= sizeof(command.patch)) { sendResult(id, false, "config patch too large"); return; }
+    command.type = CommandType::ConfigWrite;
+  } else if (strcmp(op, "scan") == 0) {
+    command.type = CommandType::Scan;
+  } else if (strcmp(op, "devices_read") == 0) {
+    command.type = CommandType::DevicesRead;
+  } else if (strcmp(op, "sensor_connect") == 0) {
+    JsonVariantConst sensor = doc["sensor"];
+    if (!sensor.is<JsonObjectConst>() || !sensor["address"].is<const char*>()) { sendResult(id, false, "invalid sensor"); return; }
+    const size_t length = serializeJson(sensor, command.patch, sizeof(command.patch));
+    if (length >= sizeof(command.patch)) { sendResult(id, false, "sensor data too large"); return; }
+    command.type = CommandType::SensorConnect;
+  } else if (strcmp(op, "sensor_disconnect") == 0) {
+    command.type = CommandType::SensorDisconnect;
+  } else if (strcmp(op, "sensor_forget") == 0) {
+    command.type = CommandType::SensorForget;
+  } else if (strcmp(op, "factory_reset") == 0) {
+    command.type = CommandType::FactoryReset;
   } else {
     sendResult(id, false, "unsupported command");
     return;
@@ -144,6 +176,54 @@ void HubBleLink::sendResult(uint32_t id, bool ok, const char *error) {
   serializeJson(doc, out);
   _result->setValue(out.c_str());
   if (_clients) _result->notify();
+}
+
+void HubBleLink::sendConfig(uint32_t id) {
+  JsonDocument config;
+  buildConfigJson(config);
+  String payload;
+  serializeJson(config, payload);
+
+  // GATT notifications are deliberately short so this works on conservative
+  // desktop/mobile BLE stacks too. Clients reassemble the numbered parts.
+  const size_t chunkSize = 80;
+  const size_t parts = (payload.length() + chunkSize - 1) / chunkSize;
+  for (size_t part = 0; part < parts; ++part) {
+    StaticJsonDocument<240> doc;
+    doc["v"] = 1; doc["id"] = id; doc["ok"] = true;
+    doc["type"] = "config"; doc["part"] = part; doc["parts"] = parts;
+    doc["data"] = payload.substring(part * chunkSize, (part + 1) * chunkSize);
+    String out;
+    serializeJson(doc, out);
+    _result->setValue(out.c_str());
+    if (_clients) _result->notify();
+  }
+}
+
+void HubBleLink::sendDevices(uint32_t id) {
+  JsonDocument doc;
+  doc["scanning"] = bleScan.isScanning();
+  JsonArray devices = doc["devices"].to<JsonArray>();
+  for (const auto &item : ble.getDevices()) {
+    JsonObject out = devices.add<JsonObject>();
+    out["address"] = item.address; out["name"] = item.name; out["type"] = item.type;
+    out["category"] = "power"; out["rssi"] = item.rssi;
+  }
+  for (const auto &item : hrBle.getDevices()) {
+    JsonObject out = devices.add<JsonObject>();
+    out["address"] = item.address; out["name"] = item.name; out["type"] = item.type;
+    out["category"] = "hr"; out["rssi"] = item.rssi;
+  }
+  String payload; serializeJson(doc, payload);
+  const size_t chunkSize = 80, parts = (payload.length() + chunkSize - 1) / chunkSize;
+  for (size_t part = 0; part < parts; ++part) {
+    StaticJsonDocument<240> out;
+    out["v"] = 1; out["id"] = id; out["ok"] = true; out["type"] = "devices";
+    out["part"] = part; out["parts"] = parts;
+    out["data"] = payload.substring(part * chunkSize, (part + 1) * chunkSize);
+    String message; serializeJson(out, message); _result->setValue(message.c_str());
+    if (_clients) _result->notify();
+  }
 }
 
 void HubBleLink::publishStatus(bool force) {
@@ -228,6 +308,63 @@ void HubBleLink::loop() {
         if (_clients) _result->notify();
         break;
       }
+      case CommandType::ConfigRead:
+        sendConfig(command.id);
+        break;
+      case CommandType::ConfigWrite: {
+        StaticJsonDocument<256> patch;
+        if (deserializeJson(patch, command.patch)) {
+          sendResult(command.id, false, "invalid config patch");
+          break;
+        }
+        applyConfigPatch(patch);
+        scheduleRuntimeConfig(g_config);
+        sendConfig(command.id);
+        break;
+      }
+      case CommandType::Scan:
+        bleScan.startScan(6);
+        sendResult(command.id, true);
+        break;
+      case CommandType::DevicesRead:
+        sendDevices(command.id);
+        break;
+      case CommandType::SensorConnect: {
+        StaticJsonDocument<256> sensor;
+        if (deserializeJson(sensor, command.patch)) { sendResult(command.id, false, "invalid sensor"); break; }
+        const char *address = sensor["address"] | "";
+        const char *name = sensor["name"] | "";
+        const char *category = sensor["category"] | "";
+        const uint8_t source = strcmp(category, "hr") == 0 ? SRC_HEART_RATE : SRC_POWER;
+        if (!address[0] || (source == SRC_POWER && strcmp(category, "power") != 0)) { sendResult(command.id, false, "invalid sensor"); break; }
+        if (source != g_config.controlSource) setControlSource(source, false);
+        if (source == SRC_HEART_RATE) {
+          strlcpy(g_config.hrSourceAddr, address, sizeof(g_config.hrSourceAddr));
+          strlcpy(g_config.hrSourceName, name, sizeof(g_config.hrSourceName));
+          hrBle.connectToAddress(address, name);
+        } else {
+          strlcpy(g_config.sourceAddr, address, sizeof(g_config.sourceAddr));
+          strlcpy(g_config.sourceName, name, sizeof(g_config.sourceName));
+          ble.connectToAddress(address, name);
+        }
+        storage.save(g_config); sendResult(command.id, true);
+        break;
+      }
+      case CommandType::SensorDisconnect:
+        if (g_config.controlSource == SRC_HEART_RATE) hrBle.disconnect(); else ble.disconnect();
+        sendResult(command.id, true); break;
+      case CommandType::SensorForget:
+        if (g_config.controlSource == SRC_HEART_RATE) {
+          hrBle.forget(); g_config.hrSourceAddr[0] = '\0'; g_config.hrSourceName[0] = '\0';
+        } else {
+          ble.forget(); g_config.sourceAddr[0] = '\0'; g_config.sourceName[0] = '\0';
+        }
+        storage.save(g_config); sendResult(command.id, true); break;
+      case CommandType::FactoryReset:
+        storage.factoryReset(g_config);
+        sendResult(command.id, true);
+        scheduleReboot(1500);
+        break;
     }
     publishStatus(true);
   }
