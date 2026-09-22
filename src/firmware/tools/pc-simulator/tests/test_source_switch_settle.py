@@ -2,9 +2,8 @@
 
 Root cause guarded: a category switch (connected HR -> connect a Power
 device) used to start the new driver's connect attempt while NimBLE's
-ASYNCHRONOUS disconnect of the OLD link was still in flight; with
-CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1 that attempt failed deterministically
-with rc=6 (BLE_HS_ENOMEM). The simulator models the same gate: the old link
+ASYNCHRONOUS disconnect of the OLD link was still in flight. The simulator
+models the same gate: the old link
 needs TEARDOWN_SETTLE_S to terminate, and the ONE pending connect of the
 new source is held (never duplicated, never dropped) until it settles.
 
@@ -163,3 +162,4 @@ class TestTeardownSettleGate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

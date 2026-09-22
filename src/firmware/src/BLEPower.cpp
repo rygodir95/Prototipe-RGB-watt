@@ -45,7 +45,7 @@ static ClientCallbacks g_clientCB;
 BLEPower::BLEPower() { instance = this; }
 
 void BLEPower::begin() {
-  NimBLEDevice::init("");
+  NimBLEDevice::init("Training Hub");
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
   Serial.println("[BLE] Initialised");
 }
@@ -292,3 +292,4 @@ void BLEPower::onClientDisconnect() {
   g_tel.state = DeviceState::DISCONNECTED;
   scheduleReconnect();   // inert today; hook for the future bounded strategy
 }
+

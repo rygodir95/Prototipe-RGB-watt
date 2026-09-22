@@ -13,6 +13,7 @@
 #include "LightingOutputManager.h"
 #include "BLEPower.h"
 #include "HRSensor.h"
+#include "HubBleLink.h"
 #include "BleScanRouter.h"
 #include "Simulation.h"
 #include "WebInterface.h"
@@ -31,6 +32,7 @@ HRSensor       hrBle;
 BleScanRouter  bleScan;   // single owner of the shared NimBLE scan
 Simulation     sim;
 WebInterface   web;
+HubBleLink     hubBle;
 
 bool g_logEnabled = true;   // gated by build type + config.debug
 
@@ -78,9 +80,9 @@ void setControlSource(uint8_t src, bool restore) {
   //    disconnect is asynchronous, so when the old link is still on the air
   //    its live link state is registered in the teardown-settle gate: the
   //    explicit connect that follows a category switch holds its single
-  //    pending attempt (non-blocking) until the old link is actually gone -
-  //    with CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1 an attempt started any
-  //    earlier fails with rc=6/BLE_HS_ENOMEM.
+  //    pending attempt (non-blocking) until the old link is actually gone.
+  //    This also preserves one of the two link slots for the local control
+  //    client while a Power/HR sensor is selected.
   if (g_config.controlSource == SRC_HEART_RATE) {
     bool oldLinkUp = hrBle.isLinkActive();   // capture BEFORE the teardown
     hrBle.shutdown();
@@ -321,6 +323,7 @@ void setup() {
   hrBle.begin();
   hrBle.setAutoReconnect(g_config.autoReconnect);
   bleScan.begin(&ble, &hrBle);   // single owner of the shared NimBLE scan
+  hubBle.begin();                 // local phone/PC control GATT server
 
   web.begin();
 
@@ -356,6 +359,7 @@ void loop() {
   }
 
   web.loop();
+  hubBle.loop();
   lighting.update();
   serviceRuntimeDiagnostics();
   delay(2);  // Let Wi-Fi/AsyncTCP and idle tasks run during continuous lighting.
@@ -366,3 +370,4 @@ void loop() {
     ESP.restart();
   }
 }
+
