@@ -11,5 +11,11 @@ assert.match(source, /_lightingTestStep\+\+ % count/);
 assert.match(source, /sim\.patch\(hr, true, true, true, value, true, true\)/);
 assert.match(source, /if \(command\.enabled\) \{\s*advanceLightingTest\(\);/);
 assert.match(source, /advanceLightingTest\(\);\s*if \(millis\(\) - _lastStatus/);
-console.log('PASS: BLE Lighting Test advances through configured zone values');
+assert.match(source, /"config_read"/);
+assert.match(source, /"config_write"/);
+assert.match(source, /"sensor_connect"/);
+assert.match(source, /"devices_read"/);
+assert.match(source, /"factory_reset"/);
+assert.match(source, /scheduleRuntimeConfig\(g_config\)/);
+console.log('PASS: BLE Lighting Test, configuration, sensor management and reset commands are available');
 
