@@ -14,6 +14,10 @@ assert.match(source, /advanceLightingTest\(\);\s*if \(millis\(\) - _lastStatus/)
 assert.match(source, /"config_read"/);
 assert.match(source, /"config_write"/);
 assert.match(source, /"zone_write"/);
+assert.match(source, /"zone_begin"/);
+assert.match(source, /"zone_stage"/);
+assert.match(source, /"zone_commit"/);
+assert.match(source, /_stageMask != static_cast<uint8_t>\(\(1u << _stageExpected\) - 1u\)/);
 assert.match(source, /strcmp\(source, "power"\) != 0 && strcmp\(source, "hr"\) != 0/);
 assert.match(source, /zone\["color"\]/);
 assert.match(source, /"sensor_connect"/);
