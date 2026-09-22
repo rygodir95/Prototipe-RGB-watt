@@ -142,6 +142,12 @@ void HubBleLink::onWrite(NimBLECharacteristic *characteristic) {
     const size_t length = serializeJson(patch, command.patch, sizeof(command.patch));
     if (length >= sizeof(command.patch)) { sendResult(id, false, "config patch too large"); return; }
     command.type = CommandType::ConfigWrite;
+  } else if (strcmp(op, "zone_write") == 0) {
+    JsonVariantConst zone = doc["zone"];
+    if (!zone.is<JsonObjectConst>() || zone["index"].isNull()) { sendResult(id, false, "invalid zone"); return; }
+    const size_t length = serializeJson(zone, command.patch, sizeof(command.patch));
+    if (length >= sizeof(command.patch)) { sendResult(id, false, "zone data too large"); return; }
+    command.type = CommandType::ZoneWrite;
   } else if (strcmp(op, "scan") == 0) {
     command.type = CommandType::Scan;
   } else if (strcmp(op, "devices_read") == 0) {
@@ -320,6 +326,25 @@ void HubBleLink::loop() {
         applyConfigPatch(patch);
         scheduleRuntimeConfig(g_config);
         sendConfig(command.id);
+        break;
+      }
+      case CommandType::ZoneWrite: {
+        StaticJsonDocument<256> zone;
+        if (deserializeJson(zone, command.patch)) { sendResult(command.id, false, "invalid zone"); break; }
+        const bool hr = zone["source"] | false;
+        const int index = zone["index"] | -1;
+        const int limit = hr ? MAX_HR_ZONES : g_config.zoneCount;
+        if (index < 0 || index >= limit) { sendResult(command.id, false, "invalid zone index"); break; }
+        const char *name = zone["name"] | nullptr;
+        if (hr) {
+          if (name) strlcpy(g_config.hrZones[index].name, name, sizeof(g_config.hrZones[index].name));
+          if (!zone["min"].isNull()) g_config.hrZones[index].minBpm = zone["min"].as<int>();
+        } else {
+          if (name) strlcpy(g_config.zones[index].name, name, sizeof(g_config.zones[index].name));
+          if (!zone["min"].isNull()) g_config.zones[index].minWatts = zone["min"].as<int>();
+        }
+        if (hr) configSanitizeHrZones(g_config); else configSanitizeZones(g_config);
+        scheduleRuntimeConfig(g_config); sendConfig(command.id);
         break;
       }
       case CommandType::Scan:
