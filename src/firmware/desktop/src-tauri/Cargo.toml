@@ -9,3 +9,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+btleplug = "0.13.2"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["sync", "time"] }
+uuid = "1"
+
