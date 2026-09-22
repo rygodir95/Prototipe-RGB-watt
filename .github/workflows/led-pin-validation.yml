@@ -38,6 +38,9 @@ jobs:
       - name: Sustained demo client backpressure tests
         working-directory: src/firmware
         run: node tools/test_demo.cjs
+      - name: BLE Lighting Test progression regression test
+        working-directory: src/firmware
+        run: node tools/test_ble_lighting_test.cjs
       - name: Deterministic Lighting Test sequence and smoothing tests
         working-directory: src/firmware
         run: python tools/test_lighting_sequence.py
@@ -74,3 +77,4 @@ jobs:
       - name: Test Windows updater without hardware
         shell: powershell
         run: ./src/firmware/tools/test_windows_flash.ps1 -Package './flash package'
+
