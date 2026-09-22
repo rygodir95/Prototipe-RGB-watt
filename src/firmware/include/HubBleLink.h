@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "Config.h"
 #include "LightingMailbox.h"
 
 class NimBLECharacteristic;
@@ -21,13 +22,19 @@ public:
   void onDisconnect();
 
 private:
-  enum class CommandType : uint8_t { LightingTest, Simulation, Source, Diagnostics, ConfigRead, ConfigWrite, ZoneWrite, Scan, DevicesRead, SensorConnect, SensorDisconnect, SensorForget, FactoryReset };
+  enum class CommandType : uint8_t { LightingTest, Simulation, Source, Diagnostics, Info, ConfigRead, ConfigWrite, ZoneWrite, ZoneBegin, ZoneStage, ZoneCommit, Scan, DevicesRead, SensorConnect, SensorDisconnect, SensorForget, FactoryReset };
   struct Command {
     CommandType type;
     uint32_t id;
     bool enabled;
+    bool hasEnabled;
+    bool hasValue;
+    bool lightingTest;
+    bool hasLightingTest;
     float value;
     uint8_t source;
+    int16_t part;
+    bool ackOnly;
     char patch[200];
   };
   struct Queue { Command items[8]; uint8_t head = 0, size = 0; };
@@ -35,8 +42,8 @@ private:
   bool enqueue(const Command &command);
   bool take(Command &command);
   void sendResult(uint32_t id, bool ok, const char *error = nullptr);
-  void sendConfig(uint32_t id);
-  void sendDevices(uint32_t id);
+  void sendConfig(uint32_t id, int16_t part = -1);
+  void sendDevices(uint32_t id, int16_t part = -1);
   void publishStatus(bool force = false);
   void advanceLightingTest();
 
@@ -49,5 +56,14 @@ private:
   uint8_t _clients = 0;
   uint8_t _lightingTestStep = 0;
   bool _lightingTestRunning = false;
+  Zone _stagedPower[MAX_ZONES];
+  HRZone _stagedHr[MAX_HR_ZONES];
+  uint8_t _stageSource = SRC_POWER;
+  uint8_t _stageExpected = 0;
+  uint8_t _stageMask = 0;
+  bool _stageActive = false;
+  String _transferPayload;
+  uint32_t _transferAt = 0;
+  uint8_t _transferType = 0;
 };
 
