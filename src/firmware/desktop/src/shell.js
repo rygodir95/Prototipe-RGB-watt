@@ -27,6 +27,7 @@
   var BLE_DEVICES = $("bleDevices");
   var BLE_LIVE = $("bleLive");
   var BLE_CONFIG = $("bleConfig");
+  var BLE_ZONES = $("bleZones");
   var BLE_SETUP = $("bleSetup"), BLE_FTP = $("bleFtp"), BLE_HR_MAX = $("bleHrMax"), BLE_BRIGHTNESS = $("bleBrightness"), BLE_SAVE_SETUP = $("bleSaveSetup");
   var BLE_SENSORS = $("bleSensors");
   var BLE_SCAN = $("bleScanBtn");
@@ -183,6 +184,28 @@
       .then(function () { BLE_LIGHTING.textContent = bleLightingOn ? "Stop Lighting Test" : "Lighting Test"; })
       .catch(function (error) { BLE_HINT.textContent = String(error); });
   });
+  function renderBleZones(config) {
+    BLE_ZONES.textContent = "";
+    [["Power zones", "power", config.zones || []], ["HR zones", "hr", config.hrZones || []]].forEach(function (group) {
+      var heading = document.createElement("h3"); heading.textContent = group[0]; BLE_ZONES.appendChild(heading);
+      group[2].forEach(function (zone, index) {
+        var row = document.createElement("div"); row.className = "ble-device";
+        var name = document.createElement("input"); name.type = "text"; name.value = zone.name || ""; name.maxLength = 23; name.setAttribute("aria-label", group[0] + " " + (index + 1) + " name");
+        var minimum = document.createElement("input"); minimum.type = "number"; minimum.value = zone.min; minimum.min = "0"; minimum.setAttribute("aria-label", group[0] + " " + (index + 1) + " minimum");
+        var color = document.createElement("input"); color.type = "color"; color.value = zone.color || "#ffffff"; color.setAttribute("aria-label", group[0] + " " + (index + 1) + " color");
+        var save = document.createElement("button"); save.type = "button"; save.textContent = "Save";
+        save.addEventListener("click", function () {
+          var value = Number(minimum.value);
+          if (!Number.isInteger(value) || value < 0 || !name.value.trim()) { BLE_HINT.textContent = "Enter a zone name and a valid minimum."; return; }
+          var message = JSON.stringify({ id: bleCommandId++, op: "zone_write", zone: { source: group[1], index: index, name: name.value.trim(), min: value, color: color.value } });
+          BLE_HINT.textContent = "Saving " + group[0].toLowerCase() + "…";
+          HubBleTransport.command(message).catch(function (error) { BLE_HINT.textContent = String(error); });
+        });
+        row.appendChild(name); row.appendChild(minimum); row.appendChild(color); row.appendChild(save); BLE_ZONES.appendChild(row);
+      });
+    });
+    BLE_ZONES.hidden = false;
+  }
   if (HubBleTransport.available()) {
     HubBleTransport.listen("ble-status", function (payload) { BLE_LIVE.hidden = false; BLE_LIVE.textContent = payload; });
     HubBleTransport.listen("ble-result", function (payload) {
@@ -213,6 +236,7 @@
         }
         BLE_CONFIG.hidden = false;
         BLE_SETUP.hidden = false; BLE_FTP.value = config.ftp; BLE_HR_MAX.value = config.hrMax; BLE_BRIGHTNESS.value = config.brightness;
+        renderBleZones(config);
         BLE_CONFIG.textContent = "Configuration loaded\\n" +
           "Source: " + config.controlSource + " · FTP: " + config.ftp + " W · Max HR: " + config.hrMax + " bpm\\n" +
           "Zones: " + config.zoneCount + " · LEDs: " + config.ledCount + " · Brightness: " + config.brightness + "%";
