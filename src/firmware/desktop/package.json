@@ -5,11 +5,15 @@
   "description": "ZoneGlow - Training Zone Lighting (Windows desktop shell)",
   "scripts": {
     "tauri": "tauri",
+    "predev": "node ../tools/prepare_ble_web_ui.cjs",
     "dev": "tauri dev",
+    "prebuild": "node ../tools/prepare_ble_web_ui.cjs",
     "build": "tauri build",
+    "prebuild:exe": "node ../tools/prepare_ble_web_ui.cjs",
     "build:exe": "tauri build --no-bundle"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
   }
 }
+
