@@ -34,6 +34,7 @@
   var BLE_SCAN = $("bleScanBtn");
   var BLE_LIGHTING = $("bleLightingBtn");
   var BLE_DISCONNECT = $("bleDisconnectBtn");
+  var BLE_SHELL_DISCONNECT = $("bleShellDisconnect");
 
   var PROBE_INTERVAL_MS = 2000;
   var MAX_MISSED_PROBES = 3;   // sustained loss threshold for "Disconnected"
@@ -46,6 +47,7 @@
   var bleCommandId = 1;
   var bleLightingOn = false;
   var bleConfigParts = {};
+  var bleMode = false;
 
   var SPLASH = $("splash");
 
@@ -101,12 +103,14 @@
   });
 
   function tick() {
+    if (bleMode) return;
     if (probing) return;
     probing = true;
     var url = ZoneGlowTransport.getUrl();
     if (!HUB_URL_INPUT.value) HUB_URL_INPUT.value = url;
     ZoneGlowTransport.probe(url)
       .then(function () {
+        if (bleMode) { probing = false; return; }
         missedProbes = 0;
         everConnected = true;
         ZoneGlowTransport.setUrl(url);   // keep last successfully connected Hub
@@ -116,6 +120,7 @@
         probing = false;
       })
       .catch(function (err) {
+        if (bleMode) { probing = false; return; }
         missedProbes++;
         log("probe failed (" + missedProbes + "/" + MAX_MISSED_PROBES +
           " missed): " + (err && err.message ? err.message : err));
@@ -162,12 +167,32 @@
   function connectBle(address) {
     BLE_HINT.textContent = "Connecting…";
     HubBleTransport.connect(address).then(function () {
+      HubBleBridge.configure(HubBleTransport);
+      HubBleBridge.setConnected(true);
+      bleMode = true;
+      BLE_PANEL.hidden = true;
+      BLE_SHELL_DISCONNECT.hidden = false;
+      uiLoadedFor = "bluetooth";
+      UI_FRAME.src = "hub-ui/index.html";
+      setState("connected", "Bluetooth");
+      hideSplash();
       BLE_HINT.textContent = "Connected locally over Bluetooth.";
       BLE_LIGHTING.disabled = false; BLE_DISCONNECT.disabled = false;
       BLE_SENSOR_SCAN.disabled = false;
-      HubBleTransport.command(JSON.stringify({ id: bleCommandId++, op: "config_read" }));
     }).catch(function (error) { BLE_HINT.textContent = error.message || String(error); });
   }
+  function leaveBle() {
+    if (!bleMode) return;
+    bleMode = false;
+    HubBleBridge.setConnected(false);
+    BLE_SHELL_DISCONNECT.hidden = true;
+    UI_FRAME.src = "about:blank";
+    uiLoadedFor = "";
+    BLE_PANEL.hidden = false;
+    BLE_HINT.textContent = "Bluetooth disconnected. Search to reconnect.";
+    setState("disconnected", ZoneGlowTransport.getUrl());
+  }
+  BLE_SHELL_DISCONNECT.addEventListener("click", function () { HubBleTransport.disconnect().then(leaveBle, leaveBle); });
 
   function scanBle() {
     BLE_SCAN.disabled = true; BLE_HINT.textContent = "Searching for nearby Hubs…";
@@ -227,9 +252,13 @@
   }
   if (HubBleTransport.available()) {
     HubBleTransport.listen("status", function (status) {
+      HubBleBridge.receiveStatus(status);
+      if (bleMode) return;
       BLE_LIVE.hidden = false; BLE_LIVE.textContent = JSON.stringify(status, null, 2);
     });
     HubBleTransport.listen("result", function (result) {
+      HubBleBridge.receiveResult(result);
+      if (bleMode) return;
       if (!result.ok) { BLE_HINT.textContent = result.error || "Hub rejected the command"; return; }
       if (result.type !== "config" && result.type !== "devices") return;
       var transfer = bleConfigParts[result.id] || {parts:result.parts, values:[]}; transfer.values[result.part] = result.data; bleConfigParts[result.id] = transfer;
@@ -238,7 +267,7 @@
       if (result.type === "config") { BLE_CONFIG.hidden = false; BLE_CONFIG.textContent = "FTP: " + data.ftp + " W · Max HR: " + data.hrMax + " bpm\nZones: " + data.zoneCount + " · LEDs: " + data.ledCount; BLE_SETUP.hidden = false; BLE_FTP.value = data.ftp; BLE_HR_MAX.value = data.hrMax; BLE_BRIGHTNESS.value = data.brightness; renderBleZones(data); return; }
       BLE_SENSORS.textContent = ""; (data.devices || []).forEach(function (sensor) { var row=document.createElement("div"); row.className="ble-device"; row.textContent=(sensor.name||sensor.category)+" · "+sensor.category; var b=document.createElement("button"); b.textContent="Use"; b.onclick=function(){HubBleTransport.command(JSON.stringify({id:bleCommandId++,op:"sensor_connect",sensor:sensor}));}; row.appendChild(b); BLE_SENSORS.appendChild(row); });
     });
-    HubBleTransport.listen("connection", function (event) { if (!event.connected) { BLE_LIGHTING.disabled = true; BLE_DISCONNECT.disabled = true; } });
+    HubBleTransport.listen("connection", function (event) { if (!event.connected) { BLE_LIGHTING.disabled = true; BLE_DISCONNECT.disabled = true; leaveBle(); } });
     HubBleTransport.listen("bleError", function (event) { BLE_HINT.textContent = event.error || "Bluetooth error"; });
   } else {
     BLE_BTN.disabled = true; BLE_BTN.title = "Bluetooth is available in the Android app";
