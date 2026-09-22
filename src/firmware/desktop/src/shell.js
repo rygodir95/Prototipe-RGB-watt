@@ -21,6 +21,14 @@
   var BACKEND_URL_INPUT = $("backendUrl");
   var CONNECT_BTN = $("connectBtn");
   var OVERLAY_HINT = $("overlayHint");
+  var BLE_BTN = $("bleBtn");
+  var BLE_PANEL = $("blePanel");
+  var BLE_HINT = $("bleHint");
+  var BLE_DEVICES = $("bleDevices");
+  var BLE_LIVE = $("bleLive");
+  var BLE_SCAN = $("bleScanBtn");
+  var BLE_LIGHTING = $("bleLightingBtn");
+  var BLE_DISCONNECT = $("bleDisconnectBtn");
 
   var PROBE_INTERVAL_MS = 2000;
   var MAX_MISSED_PROBES = 2;   // tolerate one dropped probe before "Disconnected"
@@ -30,6 +38,8 @@
   var probing = false;
   var userInitiated = false;   // Connect button pressed (vs. automatic search)
   var splashHidden = false;
+  var bleCommandId = 1;
+  var bleLightingOn = false;
 
   var SPLASH = $("splash");
 
@@ -114,8 +124,56 @@
     BACKEND_URL_INPUT.classList.remove("invalid");
   });
 
+  function showBleDevices(devices) {
+    BLE_DEVICES.textContent = "";
+    if (!devices.length) { BLE_HINT.textContent = "No Training Hub was found. Keep the Hub powered and try again."; return; }
+    BLE_HINT.textContent = "Choose the nearby Hub.";
+    devices.forEach(function (device) {
+      var row = document.createElement("div"); row.className = "ble-device";
+      var label = document.createElement("div"); label.textContent = device.name || "Training Hub";
+      var small = document.createElement("small"); small.textContent = device.address + (device.rssi === null ? "" : " · " + device.rssi + " dBm");
+      label.appendChild(small);
+      var button = document.createElement("button"); button.type = "button"; button.textContent = "Connect";
+      button.addEventListener("click", function () { connectBle(device.address); });
+      row.appendChild(label); row.appendChild(button); BLE_DEVICES.appendChild(row);
+    });
+  }
+  function connectBle(address) {
+    BLE_HINT.textContent = "Connecting…";
+    HubBleTransport.connect(address).then(function () {
+      BLE_HINT.textContent = "Connected locally over Bluetooth.";
+      BLE_LIGHTING.disabled = false; BLE_DISCONNECT.disabled = false;
+    }).catch(function (error) { BLE_HINT.textContent = String(error); });
+  }
+  function scanBle() {
+    BLE_SCAN.disabled = true; BLE_HINT.textContent = "Searching for nearby Hubs…";
+    HubBleTransport.scan().then(showBleDevices).catch(function (error) {
+      BLE_HINT.textContent = String(error);
+    }).then(function () { BLE_SCAN.disabled = false; });
+  }
+  BLE_BTN.addEventListener("click", function () { hideSplash(); BLE_PANEL.hidden = false; scanBle(); });
+  BLE_SCAN.addEventListener("click", scanBle);
+  BLE_DISCONNECT.addEventListener("click", function () {
+    HubBleTransport.disconnect(); BLE_LIGHTING.disabled = true; BLE_DISCONNECT.disabled = true;
+    BLE_LIVE.hidden = true; BLE_HINT.textContent = "Disconnected. Search to connect again.";
+  });
+  BLE_LIGHTING.addEventListener("click", function () {
+    bleLightingOn = !bleLightingOn;
+    HubBleTransport.command(JSON.stringify({ id: bleCommandId++, op: "lighting_test", on: bleLightingOn }))
+      .then(function () { BLE_LIGHTING.textContent = bleLightingOn ? "Stop Lighting Test" : "Lighting Test"; })
+      .catch(function (error) { BLE_HINT.textContent = String(error); });
+  });
+  if (HubBleTransport.available()) {
+    HubBleTransport.listen("ble-status", function (payload) { BLE_LIVE.hidden = false; BLE_LIVE.textContent = payload; });
+    HubBleTransport.listen("ble-result", function (payload) {
+      try { var result = JSON.parse(payload); if (!result.ok) BLE_HINT.textContent = result.error || "Hub rejected the command"; } catch (_) {}
+    });
+    HubBleTransport.listen("ble-connection", function (connected) { if (!connected) { BLE_LIGHTING.disabled = true; BLE_DISCONNECT.disabled = true; } });
+  } else { BLE_BTN.disabled = true; }
+
   setState("connecting", ZoneGlowTransport.getUrl());
   tick();
   setInterval(tick, PROBE_INTERVAL_MS);
   setTimeout(hideSplash, 1200);   // branding window: 1.2 s max, never blocking
 })();
+
