@@ -13,9 +13,17 @@ assert.match(source, /if \(command\.enabled\) \{\s*advanceLightingTest\(\);/);
 assert.match(source, /advanceLightingTest\(\);\s*if \(millis\(\) - _lastStatus/);
 assert.match(source, /"config_read"/);
 assert.match(source, /"config_write"/);
+assert.match(source, /"zone_write"/);
+assert.match(source, /strcmp\(source, "power"\) != 0 && strcmp\(source, "hr"\) != 0/);
+assert.match(source, /zone\["color"\]/);
 assert.match(source, /"sensor_connect"/);
 assert.match(source, /"devices_read"/);
 assert.match(source, /"factory_reset"/);
 assert.match(source, /scheduleRuntimeConfig\(g_config\)/);
-console.log('PASS: BLE Lighting Test, configuration, sensor management and reset commands are available');
+for (const client of ['../desktop/src/shell.js', '../../../mobile/capacitor/www/shell.js']) {
+  const ui = fs.readFileSync(path.join(__dirname, client), 'utf8');
+  assert.match(ui, /op: "zone_write"/);
+  assert.match(ui, /renderBleZones\(config\)|renderBleZones\(data\)/);
+}
+console.log('PASS: BLE Lighting Test, configuration, zone editing, sensor management and reset commands are available');
 
