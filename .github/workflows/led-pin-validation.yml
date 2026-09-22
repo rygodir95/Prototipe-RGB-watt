@@ -41,6 +41,9 @@ jobs:
       - name: BLE Lighting Test progression regression test
         working-directory: src/firmware
         run: node tools/test_ble_lighting_test.cjs
+      - name: Canonical Web UI BLE bridge regression test
+        working-directory: src/firmware
+        run: node tools/test_ble_web_host.cjs
       - name: Deterministic Lighting Test sequence and smoothing tests
         working-directory: src/firmware
         run: python tools/test_lighting_sequence.py
