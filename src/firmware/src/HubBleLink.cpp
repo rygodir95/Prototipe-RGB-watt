@@ -170,13 +170,43 @@ void HubBleLink::publishStatus(bool force) {
   _lastStatus = millis();
 }
 
+void HubBleLink::advanceLightingTest() {
+  if (!_lightingTestRunning) return;
+  const uint32_t now = millis();
+  if (_lastLightingTestStep && now - _lastLightingTestStep < 1500) return;
+
+  const bool hr = g_config.controlSource == SRC_HEART_RATE;
+  const uint8_t count = hr ? MAX_HR_ZONES : g_config.zoneCount;
+  if (!count) return;
+  const uint8_t index = _lightingTestStep++ % count;
+  float value;
+  if (hr) {
+    const int lower = g_config.hrZones[index].minBpm;
+    const int upper = index + 1 < count ? g_config.hrZones[index + 1].minBpm : g_config.hrMax;
+    value = (lower + max(lower, upper)) * 0.5f;
+  } else {
+    const int lower = g_config.zones[index].minWatts;
+    const int upper = index + 1 < count ? g_config.zones[index + 1].minWatts : lower + 50;
+    value = (lower + max(lower, upper)) * 0.5f;
+  }
+  sim.patch(hr, true, true, true, value, true, true);
+  _lastLightingTestStep = now;
+}
+
 void HubBleLink::loop() {
   Command command;
   if (take(command)) {
     switch (command.type) {
       case CommandType::LightingTest:
-        sim.patch(g_config.controlSource == SRC_HEART_RATE, true, command.enabled,
-                  false, 0, true, command.enabled);
+        _lightingTestRunning = command.enabled;
+        _lightingTestStep = 0;
+        _lastLightingTestStep = 0;
+        if (command.enabled) {
+          advanceLightingTest();
+        } else {
+          sim.patch(g_config.controlSource == SRC_HEART_RATE, true, false,
+                    false, 0, true, false);
+        }
         sendResult(command.id, true);
         break;
       case CommandType::Simulation:
@@ -201,6 +231,7 @@ void HubBleLink::loop() {
     }
     publishStatus(true);
   }
+  advanceLightingTest();
   if (millis() - _lastStatus >= 500) publishStatus(false);
 }
 
