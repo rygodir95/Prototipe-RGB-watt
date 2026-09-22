@@ -188,6 +188,15 @@ public class HubBlePlugin extends Plugin {
                 rejectConnect("connection failed (" + status + ")");
                 emitConnection(false); return;
             }
+            // Configuration and zone commands need more than the default 23-byte ATT MTU.
+            try { if (!connection.requestMtu(247)) rejectConnect("Could not negotiate Bluetooth message size"); }
+            catch (SecurityException error) { rejectConnect("Bluetooth permission denied"); }
+        }
+
+        @Override public void onMtuChanged(BluetoothGatt connection, int mtu, int status) {
+            if (status != BluetoothGatt.GATT_SUCCESS || mtu < 185) {
+                rejectConnect("Hub requires a Bluetooth MTU of at least 185 bytes"); return;
+            }
             try { connection.discoverServices(); }
             catch (SecurityException error) { rejectConnect("Bluetooth permission denied"); }
         }
