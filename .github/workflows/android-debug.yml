@@ -2,7 +2,7 @@ name: ZoneGlow Android Debug APK
 
 on:
   push:
-    branches: [feature/mobile-app]
+    branches: [feature/mobile-app, fix/led-pin-validation]
   workflow_dispatch:
 
 jobs:
@@ -45,3 +45,4 @@ jobs:
           name: ZoneGlow-Android-Debug
           path: mobile/capacitor/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
