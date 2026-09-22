@@ -2,7 +2,7 @@ name: ZoneGlow Windows Debug Build
 
 on:
   push:
-    branches: [feature/mobile-app]
+    branches: [feature/mobile-app, fix/led-pin-validation]
   workflow_dispatch:
 
 jobs:
@@ -36,3 +36,4 @@ jobs:
           name: ZoneGlow-Windows-Exe
           path: src/firmware/desktop/src-tauri/target/release/ZoneGlow.exe
           if-no-files-found: error
+
