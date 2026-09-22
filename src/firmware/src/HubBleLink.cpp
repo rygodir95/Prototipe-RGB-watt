@@ -331,17 +331,33 @@ void HubBleLink::loop() {
       case CommandType::ZoneWrite: {
         StaticJsonDocument<256> zone;
         if (deserializeJson(zone, command.patch)) { sendResult(command.id, false, "invalid zone"); break; }
-        const bool hr = zone["source"] | false;
+        const char *source = zone["source"] | "";
+        if (strcmp(source, "power") != 0 && strcmp(source, "hr") != 0) {
+          sendResult(command.id, false, "invalid zone source"); break;
+        }
+        const bool hr = strcmp(source, "hr") == 0;
         const int index = zone["index"] | -1;
         const int limit = hr ? MAX_HR_ZONES : g_config.zoneCount;
         if (index < 0 || index >= limit) { sendResult(command.id, false, "invalid zone index"); break; }
         const char *name = zone["name"] | nullptr;
+        const char *color = zone["color"] | nullptr;
+        uint8_t red = 0, green = 0, blue = 0;
+        if (color) {
+          const char *digits = color[0] == '#' ? color + 1 : color;
+          if (strlen(digits) != 6 || strspn(digits, "0123456789abcdefABCDEF") != 6) {
+            sendResult(command.id, false, "invalid zone color"); break;
+          }
+          const unsigned long rgb = strtoul(digits, nullptr, 16);
+          red = (rgb >> 16) & 0xff; green = (rgb >> 8) & 0xff; blue = rgb & 0xff;
+        }
         if (hr) {
           if (name) strlcpy(g_config.hrZones[index].name, name, sizeof(g_config.hrZones[index].name));
           if (!zone["min"].isNull()) g_config.hrZones[index].minBpm = zone["min"].as<int>();
+          if (color) { g_config.hrZones[index].r = red; g_config.hrZones[index].g = green; g_config.hrZones[index].b = blue; }
         } else {
           if (name) strlcpy(g_config.zones[index].name, name, sizeof(g_config.zones[index].name));
           if (!zone["min"].isNull()) g_config.zones[index].minWatts = zone["min"].as<int>();
+          if (color) { g_config.zones[index].r = red; g_config.zones[index].g = green; g_config.zones[index].b = blue; }
         }
         if (hr) configSanitizeHrZones(g_config); else configSanitizeZones(g_config);
         scheduleRuntimeConfig(g_config); sendConfig(command.id);
