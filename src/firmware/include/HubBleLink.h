@@ -21,7 +21,7 @@ public:
   void onDisconnect();
 
 private:
-  enum class CommandType : uint8_t { LightingTest, Simulation, Source, Diagnostics, ConfigRead, ConfigWrite, Scan, DevicesRead, SensorConnect, SensorDisconnect, SensorForget, FactoryReset };
+  enum class CommandType : uint8_t { LightingTest, Simulation, Source, Diagnostics, ConfigRead, ConfigWrite, ZoneWrite, Scan, DevicesRead, SensorConnect, SensorDisconnect, SensorForget, FactoryReset };
   struct Command {
     CommandType type;
     uint32_t id;
