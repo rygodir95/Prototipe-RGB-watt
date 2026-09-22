@@ -63,6 +63,13 @@
       <div id="bleDevices" class="ble-devices"></div>
       <div id="bleLive" class="ble-live" hidden></div>
       <div id="bleConfig" class="ble-live" hidden></div>
+      <div id="bleSetup" class="ble-devices" hidden>
+        <label>FTP (W) <input id="bleFtp" type="number" min="0" max="1000"></label>
+        <label>Max HR <input id="bleHrMax" type="number" min="0" max="230"></label>
+        <label>Brightness <input id="bleBrightness" type="number" min="0" max="100"></label>
+        <button id="bleSaveSetup" type="button">Save setup</button>
+      </div>
+      <div id="bleZones" class="ble-devices" hidden></div>
       <div id="bleSensors" class="ble-devices"></div>
       <div class="ble-actions">
         <button id="bleScanBtn" type="button">Search</button>
