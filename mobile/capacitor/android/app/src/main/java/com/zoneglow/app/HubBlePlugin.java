@@ -215,11 +215,6 @@ public class HubBlePlugin extends Plugin {
             subscriptions.add(statusCharacteristic);
             subscriptions.add(resultCharacteristic);
             enableNextNotification(connection);
-            if (pendingConnect != null) {
-                JSObject result = new JSObject(); result.put("connected", true);
-                pendingConnect.resolve(result); pendingConnect = null;
-            }
-            emitConnection(true);
         }
 
         @Override public void onCharacteristicChanged(BluetoothGatt connection, BluetoothGattCharacteristic characteristic) {
@@ -242,8 +237,7 @@ public class HubBlePlugin extends Plugin {
 
         @Override public void onDescriptorWrite(BluetoothGatt connection, BluetoothGattDescriptor descriptor, int status) {
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                JSObject event = new JSObject(); event.put("error", "could not subscribe to Hub updates");
-                notifyListeners("bleError", event);
+                rejectConnect("Could not subscribe to Hub updates");
                 return;
             }
             enableNextNotification(connection);
@@ -251,7 +245,14 @@ public class HubBlePlugin extends Plugin {
     };
 
     private void enableNextNotification(BluetoothGatt connection) {
-        if (subscriptions.isEmpty()) return;
+        if (subscriptions.isEmpty()) {
+            if (pendingConnect != null) {
+                JSObject result = new JSObject(); result.put("connected", true);
+                pendingConnect.resolve(result); pendingConnect = null;
+            }
+            emitConnection(true);
+            return;
+        }
         BluetoothGattCharacteristic characteristic = subscriptions.remove(0);
         try {
             connection.setCharacteristicNotification(characteristic, true);
@@ -259,15 +260,13 @@ public class HubBlePlugin extends Plugin {
             if (descriptor != null) {
                 descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
                 if (!connection.writeDescriptor(descriptor)) {
-                    JSObject event = new JSObject(); event.put("error", "could not subscribe to Hub updates");
-                    notifyListeners("bleError", event);
+                    rejectConnect("Could not subscribe to Hub updates");
                 }
             } else {
                 enableNextNotification(connection);
             }
         } catch (SecurityException error) {
-            JSObject event = new JSObject(); event.put("error", "Bluetooth permission denied");
-            notifyListeners("bleError", event);
+            rejectConnect("Bluetooth permission denied");
         }
     }
 
