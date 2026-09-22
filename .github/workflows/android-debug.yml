@@ -2,7 +2,7 @@ name: ZoneGlow Android Debug APK
 
 on:
   push:
-    branches: [feature/mobile-app, fix/led-pin-validation]
+    branches: [feature/mobile-app, fix/led-pin-validation, feature/full-ble-ui]
   workflow_dispatch:
 
 jobs:
