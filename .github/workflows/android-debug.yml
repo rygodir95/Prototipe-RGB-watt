@@ -36,7 +36,7 @@ jobs:
         run: npm ci
 
       - name: Sync Capacitor Android assets
-        run: npx cap sync android
+        run: npm run prepare:ui && npx cap sync android
 
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon
