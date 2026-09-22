@@ -11,7 +11,7 @@ main = (root / 'src/main.cpp').read_text(encoding='utf-8')
 assert 'receiveJsonBody(req, data, len, index, total, handler)' in web
 assert re.search(r'void loop\(\)\s*\{.*?servicePendingConfig\(\);', main, re.S)
 helpers = web[web.index('static void hexFromRGB'):web.index('// ---- Secure OTA')]
-config = web[web.index('static void buildConfigJson'):web.index('// Generic JSON')]
+config = web[web.index('void buildConfigJson'):web.index('// Generic JSON')]
 service = main[main.index('static DeferredConfig pendingConfig;'):main.index('void scheduleReboot')]
 telemetry = web[web.index('void WebInterface::broadcastTelemetry()'):web.index('void WebInterface::begin()')]
 telemetry += web[web.index('void WebInterface::loop()'):web.index('size_t WebInterface::clientCount()')]
