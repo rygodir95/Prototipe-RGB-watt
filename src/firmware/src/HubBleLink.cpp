@@ -12,6 +12,8 @@
 #include "RuntimeDiagnostics.h"
 #include "Simulation.h"
 #include "WebInterface.h"
+#include "FirmwareVersion.h"
+#include "Security.h"
 
 extern Simulation sim;
 extern BLEPower ble;
@@ -106,17 +108,22 @@ void HubBleLink::onConnect() {
 
 void HubBleLink::onDisconnect() {
   _clients = 0;
+  _stageActive = false;
+  _transferPayload = "";
+  _transferType = 0;
   Serial.println("[HUB BLE] Control client disconnected");
 }
 
 void HubBleLink::onWrite(NimBLECharacteristic *characteristic) {
   const std::string raw = characteristic->getValue();
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<384> doc;
   const DeserializationError error = deserializeJson(doc, raw.data(), raw.size());
   const uint32_t id = doc["id"] | 0;
   const char *op = doc["op"] | "";
   Command command{};
   command.id = id;
+  command.part = -1;
+  command.ackOnly = doc["ack"] | false;
 
   if (error || id == 0 || !op[0]) { sendResult(id, false, "invalid command"); return; }
   if (strcmp(op, "lighting_test") == 0) {
@@ -124,8 +131,12 @@ void HubBleLink::onWrite(NimBLECharacteristic *characteristic) {
     command.enabled = doc["on"] | false;
   } else if (strcmp(op, "simulation") == 0) {
     command.type = CommandType::Simulation;
+    command.hasEnabled = !doc["on"].isNull();
     command.enabled = doc["on"] | false;
+    command.hasValue = !doc["value"].isNull();
     command.value = doc["value"] | 0.0f;
+    command.hasLightingTest = !doc["lightingTest"].isNull();
+    command.lightingTest = doc["lightingTest"] | false;
   } else if (strcmp(op, "source") == 0) {
     const char *value = doc["value"] | "";
     if (strcmp(value, "power") == 0) command.source = SRC_POWER;
@@ -134,7 +145,13 @@ void HubBleLink::onWrite(NimBLECharacteristic *characteristic) {
     command.type = CommandType::Source;
   } else if (strcmp(op, "diagnostics") == 0) {
     command.type = CommandType::Diagnostics;
+  } else if (strcmp(op, "info") == 0) {
+    command.type = CommandType::Info;
   } else if (strcmp(op, "config_read") == 0) {
+    if (!doc["part"].isNull()) {
+      if (!doc["part"].is<int>() || doc["part"].as<int>() < 0 || doc["part"].as<int>() > 32767) { sendResult(id, false, "invalid part"); return; }
+      command.part = doc["part"].as<int>();
+    }
     command.type = CommandType::ConfigRead;
   } else if (strcmp(op, "config_write") == 0) {
     JsonVariantConst patch = doc["patch"];
@@ -148,9 +165,28 @@ void HubBleLink::onWrite(NimBLECharacteristic *characteristic) {
     const size_t length = serializeJson(zone, command.patch, sizeof(command.patch));
     if (length >= sizeof(command.patch)) { sendResult(id, false, "zone data too large"); return; }
     command.type = CommandType::ZoneWrite;
+  } else if (strcmp(op, "zone_begin") == 0) {
+    const char *source = doc["source"] | "";
+    if (strcmp(source, "power") == 0) command.source = SRC_POWER;
+    else if (strcmp(source, "hr") == 0) command.source = SRC_HEART_RATE;
+    else { sendResult(id, false, "invalid zone source"); return; }
+    command.value = doc["count"] | 0;
+    command.type = CommandType::ZoneBegin;
+  } else if (strcmp(op, "zone_stage") == 0) {
+    JsonVariantConst zone = doc["zone"];
+    if (!zone.is<JsonObjectConst>() || zone["index"].isNull()) { sendResult(id, false, "invalid zone"); return; }
+    const size_t length = serializeJson(zone, command.patch, sizeof(command.patch));
+    if (length >= sizeof(command.patch)) { sendResult(id, false, "zone data too large"); return; }
+    command.type = CommandType::ZoneStage;
+  } else if (strcmp(op, "zone_commit") == 0) {
+    command.type = CommandType::ZoneCommit;
   } else if (strcmp(op, "scan") == 0) {
     command.type = CommandType::Scan;
   } else if (strcmp(op, "devices_read") == 0) {
+    if (!doc["part"].isNull()) {
+      if (!doc["part"].is<int>() || doc["part"].as<int>() < 0 || doc["part"].as<int>() > 32767) { sendResult(id, false, "invalid part"); return; }
+      command.part = doc["part"].as<int>();
+    }
     command.type = CommandType::DevicesRead;
   } else if (strcmp(op, "sensor_connect") == 0) {
     JsonVariantConst sensor = doc["sensor"];
@@ -184,17 +220,25 @@ void HubBleLink::sendResult(uint32_t id, bool ok, const char *error) {
   if (_clients) _result->notify();
 }
 
-void HubBleLink::sendConfig(uint32_t id) {
-  JsonDocument config;
-  buildConfigJson(config);
+void HubBleLink::sendConfig(uint32_t id, int16_t requestedPart) {
   String payload;
-  serializeJson(config, payload);
+  if (requestedPart > 0) {
+    if (_transferType != 1 || millis() - _transferAt > 60000) { sendResult(id, false, "config transfer expired"); return; }
+    payload = _transferPayload;
+  } else {
+    JsonDocument config;
+    buildConfigJson(config);
+    serializeJson(config, payload);
+    if (requestedPart == 0) { _transferPayload = payload; _transferType = 1; _transferAt = millis(); }
+  }
 
   // GATT notifications are deliberately short so this works on conservative
   // desktop/mobile BLE stacks too. Clients reassemble the numbered parts.
   const size_t chunkSize = 80;
   const size_t parts = (payload.length() + chunkSize - 1) / chunkSize;
+  if (requestedPart >= 0 && static_cast<size_t>(requestedPart) >= parts) { sendResult(id, false, "invalid part"); return; }
   for (size_t part = 0; part < parts; ++part) {
+    if (requestedPart >= 0 && part != static_cast<size_t>(requestedPart)) continue;
     StaticJsonDocument<240> doc;
     doc["v"] = 1; doc["id"] = id; doc["ok"] = true;
     doc["type"] = "config"; doc["part"] = part; doc["parts"] = parts;
@@ -204,25 +248,37 @@ void HubBleLink::sendConfig(uint32_t id) {
     _result->setValue(out.c_str());
     if (_clients) _result->notify();
   }
+  if (requestedPart >= 0 && static_cast<size_t>(requestedPart) + 1 == parts) { _transferPayload = ""; _transferType = 0; }
 }
 
-void HubBleLink::sendDevices(uint32_t id) {
-  JsonDocument doc;
-  doc["scanning"] = bleScan.isScanning();
-  JsonArray devices = doc["devices"].to<JsonArray>();
-  for (const auto &item : ble.getDevices()) {
-    JsonObject out = devices.add<JsonObject>();
-    out["address"] = item.address; out["name"] = item.name; out["type"] = item.type;
-    out["category"] = "power"; out["rssi"] = item.rssi;
+void HubBleLink::sendDevices(uint32_t id, int16_t requestedPart) {
+  String payload;
+  if (requestedPart > 0) {
+    if (_transferType != 2 || millis() - _transferAt > 60000) { sendResult(id, false, "device transfer expired"); return; }
+    payload = _transferPayload;
+  } else {
+    JsonDocument doc;
+    doc["scanning"] = bleScan.isScanning();
+    JsonArray devices = doc["devices"].to<JsonArray>();
+    for (const auto &item : ble.getDevices()) {
+      JsonObject out = devices.add<JsonObject>();
+      out["address"] = item.address; out["name"] = item.name; out["type"] = item.type;
+      out["category"] = "power"; out["rssi"] = item.rssi;
+      out["connected"] = g_config.controlSource == SRC_POWER && g_tel.connected && item.address == g_config.sourceAddr;
+    }
+    for (const auto &item : hrBle.getDevices()) {
+      JsonObject out = devices.add<JsonObject>();
+      out["address"] = item.address; out["name"] = item.name; out["type"] = item.type;
+      out["category"] = "hr"; out["rssi"] = item.rssi;
+      out["connected"] = g_config.controlSource == SRC_HEART_RATE && g_tel.connected && item.address == g_config.hrSourceAddr;
+    }
+    serializeJson(doc, payload);
+    if (requestedPart == 0) { _transferPayload = payload; _transferType = 2; _transferAt = millis(); }
   }
-  for (const auto &item : hrBle.getDevices()) {
-    JsonObject out = devices.add<JsonObject>();
-    out["address"] = item.address; out["name"] = item.name; out["type"] = item.type;
-    out["category"] = "hr"; out["rssi"] = item.rssi;
-  }
-  String payload; serializeJson(doc, payload);
   const size_t chunkSize = 80, parts = (payload.length() + chunkSize - 1) / chunkSize;
+  if (requestedPart >= 0 && static_cast<size_t>(requestedPart) >= parts) { sendResult(id, false, "invalid part"); return; }
   for (size_t part = 0; part < parts; ++part) {
+    if (requestedPart >= 0 && part != static_cast<size_t>(requestedPart)) continue;
     StaticJsonDocument<240> out;
     out["v"] = 1; out["id"] = id; out["ok"] = true; out["type"] = "devices";
     out["part"] = part; out["parts"] = parts;
@@ -230,6 +286,7 @@ void HubBleLink::sendDevices(uint32_t id) {
     String message; serializeJson(out, message); _result->setValue(message.c_str());
     if (_clients) _result->notify();
   }
+  if (requestedPart >= 0 && static_cast<size_t>(requestedPart) + 1 == parts) { _transferPayload = ""; _transferType = 0; }
 }
 
 void HubBleLink::publishStatus(bool force) {
@@ -296,8 +353,8 @@ void HubBleLink::loop() {
         sendResult(command.id, true);
         break;
       case CommandType::Simulation:
-        sim.patch(g_config.controlSource == SRC_HEART_RATE, true, command.enabled,
-                  true, command.value);
+        sim.patch(g_config.controlSource == SRC_HEART_RATE, command.hasEnabled, command.enabled,
+                  command.hasValue, command.value, command.hasLightingTest, command.lightingTest);
         sendResult(command.id, true);
         break;
       case CommandType::Source:
@@ -314,8 +371,18 @@ void HubBleLink::loop() {
         if (_clients) _result->notify();
         break;
       }
+      case CommandType::Info: {
+        StaticJsonDocument<192> doc;
+        doc["v"] = 1; doc["id"] = command.id; doc["ok"] = true;
+        doc["version"] = FW_VERSION_FULL; doc["buildId"] = FW_BUILD_SHA;
+        doc["deviceId"] = Security::deviceId();
+        String out; serializeJson(doc, out);
+        _result->setValue(out.c_str());
+        if (_clients) _result->notify();
+        break;
+      }
       case CommandType::ConfigRead:
-        sendConfig(command.id);
+        sendConfig(command.id, command.part);
         break;
       case CommandType::ConfigWrite: {
         StaticJsonDocument<256> patch;
@@ -325,10 +392,19 @@ void HubBleLink::loop() {
         }
         applyConfigPatch(patch);
         scheduleRuntimeConfig(g_config);
-        sendConfig(command.id);
+        if (command.ackOnly) sendResult(command.id, true); else sendConfig(command.id);
         break;
       }
-      case CommandType::ZoneWrite: {
+      case CommandType::ZoneBegin:
+        _stageExpected = command.source == SRC_HEART_RATE ? MAX_HR_ZONES : g_config.zoneCount;
+        if (command.value != _stageExpected) { sendResult(command.id, false, "zone count changed"); break; }
+        memcpy(_stagedPower, g_config.zones, sizeof(_stagedPower));
+        memcpy(_stagedHr, g_config.hrZones, sizeof(_stagedHr));
+        _stageSource = command.source; _stageMask = 0; _stageActive = true;
+        sendResult(command.id, true);
+        break;
+      case CommandType::ZoneWrite:
+      case CommandType::ZoneStage: {
         StaticJsonDocument<256> zone;
         if (deserializeJson(zone, command.patch)) { sendResult(command.id, false, "invalid zone"); break; }
         const char *source = zone["source"] | "";
@@ -336,8 +412,11 @@ void HubBleLink::loop() {
           sendResult(command.id, false, "invalid zone source"); break;
         }
         const bool hr = strcmp(source, "hr") == 0;
+        if (command.type == CommandType::ZoneStage && (!_stageActive || _stageSource != (hr ? SRC_HEART_RATE : SRC_POWER))) {
+          sendResult(command.id, false, "zone batch not started"); break;
+        }
         const int index = zone["index"] | -1;
-        const int limit = hr ? MAX_HR_ZONES : g_config.zoneCount;
+        const int limit = command.type == CommandType::ZoneStage ? _stageExpected : (hr ? MAX_HR_ZONES : g_config.zoneCount);
         if (index < 0 || index >= limit) { sendResult(command.id, false, "invalid zone index"); break; }
         const char *name = zone["name"] | nullptr;
         const char *color = zone["color"] | nullptr;
@@ -351,24 +430,43 @@ void HubBleLink::loop() {
           red = (rgb >> 16) & 0xff; green = (rgb >> 8) & 0xff; blue = rgb & 0xff;
         }
         if (hr) {
-          if (name) strlcpy(g_config.hrZones[index].name, name, sizeof(g_config.hrZones[index].name));
-          if (!zone["min"].isNull()) g_config.hrZones[index].minBpm = zone["min"].as<int>();
-          if (color) { g_config.hrZones[index].r = red; g_config.hrZones[index].g = green; g_config.hrZones[index].b = blue; }
+          HRZone &target = command.type == CommandType::ZoneStage ? _stagedHr[index] : g_config.hrZones[index];
+          if (name) strlcpy(target.name, name, sizeof(target.name));
+          if (!zone["min"].isNull()) target.minBpm = zone["min"].as<int>();
+          if (color) { target.r = red; target.g = green; target.b = blue; }
         } else {
-          if (name) strlcpy(g_config.zones[index].name, name, sizeof(g_config.zones[index].name));
-          if (!zone["min"].isNull()) g_config.zones[index].minWatts = zone["min"].as<int>();
-          if (color) { g_config.zones[index].r = red; g_config.zones[index].g = green; g_config.zones[index].b = blue; }
+          Zone &target = command.type == CommandType::ZoneStage ? _stagedPower[index] : g_config.zones[index];
+          if (name) strlcpy(target.name, name, sizeof(target.name));
+          if (!zone["min"].isNull()) target.minWatts = zone["min"].as<int>();
+          if (color) { target.r = red; target.g = green; target.b = blue; }
         }
+        if (command.type == CommandType::ZoneStage) { _stageMask |= static_cast<uint8_t>(1u << index); sendResult(command.id, true); break; }
         if (hr) configSanitizeHrZones(g_config); else configSanitizeZones(g_config);
-        scheduleRuntimeConfig(g_config); sendConfig(command.id);
+        scheduleRuntimeConfig(g_config);
+        if (command.ackOnly) sendResult(command.id, true); else sendConfig(command.id);
         break;
       }
+      case CommandType::ZoneCommit:
+        if (!_stageActive || _stageMask != static_cast<uint8_t>((1u << _stageExpected) - 1u)) {
+          sendResult(command.id, false, "incomplete zone batch"); break;
+        }
+        if (_stageSource == SRC_HEART_RATE) {
+          memcpy(g_config.hrZones, _stagedHr, sizeof(_stagedHr));
+          configSanitizeHrZones(g_config);
+        } else {
+          memcpy(g_config.zones, _stagedPower, sizeof(_stagedPower));
+          configSanitizeZones(g_config);
+        }
+        _stageActive = false;
+        scheduleRuntimeConfig(g_config);
+        sendResult(command.id, true);
+        break;
       case CommandType::Scan:
         bleScan.startScan(6);
         sendResult(command.id, true);
         break;
       case CommandType::DevicesRead:
-        sendDevices(command.id);
+        sendDevices(command.id, command.part);
         break;
       case CommandType::SensorConnect: {
         StaticJsonDocument<256> sensor;
