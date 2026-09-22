@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 // Async web server + WebSocket for the configuration UI and live telemetry.
 class WebInterface {
@@ -16,6 +17,10 @@ private:
 };
 
 struct AppConfig;
+// Shared by the HTTP and local BLE transports so both expose identical
+// validated configuration semantics.
+void buildConfigJson(JsonDocument &doc);
+void applyConfigPatch(JsonDocument &doc);
 // Request-safe: copies a validated snapshot; loop() persists/applies it later.
 void scheduleRuntimeConfig(const AppConfig &config);
 // Implemented in main.cpp: switches the active control source (Power <-> HR),
@@ -25,3 +30,4 @@ void scheduleRuntimeConfig(const AppConfig &config);
 void setControlSource(uint8_t src, bool restore = true);
 // Implemented in main.cpp: schedules a device reboot after `ms`.
 void scheduleReboot(uint32_t ms);
+
