@@ -21,19 +21,22 @@ public:
   void onDisconnect();
 
 private:
-  enum class CommandType : uint8_t { LightingTest, Simulation, Source, Diagnostics };
+  enum class CommandType : uint8_t { LightingTest, Simulation, Source, Diagnostics, ConfigRead, ConfigWrite, Scan, DevicesRead, SensorConnect, SensorDisconnect, SensorForget, FactoryReset };
   struct Command {
     CommandType type;
     uint32_t id;
     bool enabled;
     float value;
     uint8_t source;
+    char patch[200];
   };
   struct Queue { Command items[8]; uint8_t head = 0, size = 0; };
 
   bool enqueue(const Command &command);
   bool take(Command &command);
   void sendResult(uint32_t id, bool ok, const char *error = nullptr);
+  void sendConfig(uint32_t id);
+  void sendDevices(uint32_t id);
   void publishStatus(bool force = false);
   void advanceLightingTest();
 
