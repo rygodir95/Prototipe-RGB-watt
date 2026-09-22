@@ -30,6 +30,7 @@
   var BLE_DEVICES = $("bleDevices");
   var BLE_LIVE = $("bleLive");
   var BLE_CONFIG = $("bleConfig"), BLE_SENSORS = $("bleSensors"), BLE_SENSOR_SCAN = $("bleSensorScanBtn");
+  var BLE_SETUP = $("bleSetup"), BLE_FTP = $("bleFtp"), BLE_HR_MAX = $("bleHrMax"), BLE_BRIGHTNESS = $("bleBrightness"), BLE_SAVE_SETUP = $("bleSaveSetup"), BLE_ZONES = $("bleZones");
   var BLE_SCAN = $("bleScanBtn");
   var BLE_LIGHTING = $("bleLightingBtn");
   var BLE_DISCONNECT = $("bleDisconnectBtn");
@@ -180,6 +181,12 @@
     hideSplash(); BLE_PANEL.hidden = false; scanBle();
   });
   BLE_SCAN.addEventListener("click", scanBle);
+  BLE_SAVE_SETUP.addEventListener("click", function () {
+    var patch = { ftp: Number(BLE_FTP.value), hrMax: Number(BLE_HR_MAX.value), brightness: Number(BLE_BRIGHTNESS.value) };
+    BLE_HINT.textContent = "Saving setup…";
+    HubBleTransport.command(JSON.stringify({ id: bleCommandId++, op: "config_write", patch: patch }))
+      .catch(function (error) { BLE_HINT.textContent = error.message || String(error); });
+  });
   BLE_SENSOR_SCAN.addEventListener("click", function () {
     BLE_SENSOR_SCAN.disabled = true; BLE_HINT.textContent = "Searching for sensors…";
     HubBleTransport.command(JSON.stringify({ id: bleCommandId++, op: "scan" })).then(function () { setTimeout(function () {
@@ -196,6 +203,28 @@
       .then(function () { BLE_LIGHTING.textContent = bleLightingOn ? "Stop Lighting Test" : "Lighting Test"; })
       .catch(function (error) { BLE_HINT.textContent = error.message || String(error); });
   });
+  function renderBleZones(config) {
+    BLE_ZONES.textContent = "";
+    [["Power zones", "power", config.zones || []], ["HR zones", "hr", config.hrZones || []]].forEach(function (group) {
+      var heading = document.createElement("h3"); heading.textContent = group[0]; BLE_ZONES.appendChild(heading);
+      group[2].forEach(function (zone, index) {
+        var row = document.createElement("div"); row.className = "ble-device";
+        var name = document.createElement("input"); name.type = "text"; name.value = zone.name || ""; name.maxLength = 23; name.setAttribute("aria-label", group[0] + " " + (index + 1) + " name");
+        var minimum = document.createElement("input"); minimum.type = "number"; minimum.value = zone.min; minimum.min = "0"; minimum.setAttribute("aria-label", group[0] + " " + (index + 1) + " minimum");
+        var color = document.createElement("input"); color.type = "color"; color.value = zone.color || "#ffffff"; color.setAttribute("aria-label", group[0] + " " + (index + 1) + " color");
+        var save = document.createElement("button"); save.type = "button"; save.textContent = "Save";
+        save.addEventListener("click", function () {
+          var value = Number(minimum.value);
+          if (!Number.isInteger(value) || value < 0 || !name.value.trim()) { BLE_HINT.textContent = "Enter a zone name and a valid minimum."; return; }
+          var message = JSON.stringify({ id: bleCommandId++, op: "zone_write", zone: { source: group[1], index: index, name: name.value.trim(), min: value, color: color.value } });
+          BLE_HINT.textContent = "Saving " + group[0].toLowerCase() + "…";
+          HubBleTransport.command(message).catch(function (error) { BLE_HINT.textContent = error.message || String(error); });
+        });
+        row.appendChild(name); row.appendChild(minimum); row.appendChild(color); row.appendChild(save); BLE_ZONES.appendChild(row);
+      });
+    });
+    BLE_ZONES.hidden = false;
+  }
   if (HubBleTransport.available()) {
     HubBleTransport.listen("status", function (status) {
       BLE_LIVE.hidden = false; BLE_LIVE.textContent = JSON.stringify(status, null, 2);
@@ -206,7 +235,7 @@
       var transfer = bleConfigParts[result.id] || {parts:result.parts, values:[]}; transfer.values[result.part] = result.data; bleConfigParts[result.id] = transfer;
       if (transfer.values.filter(Boolean).length !== transfer.parts) return;
       var data = JSON.parse(transfer.values.join("")); delete bleConfigParts[result.id];
-      if (result.type === "config") { BLE_CONFIG.hidden = false; BLE_CONFIG.textContent = "FTP: " + data.ftp + " W · Max HR: " + data.hrMax + " bpm\nZones: " + data.zoneCount + " · LEDs: " + data.ledCount; return; }
+      if (result.type === "config") { BLE_CONFIG.hidden = false; BLE_CONFIG.textContent = "FTP: " + data.ftp + " W · Max HR: " + data.hrMax + " bpm\nZones: " + data.zoneCount + " · LEDs: " + data.ledCount; BLE_SETUP.hidden = false; BLE_FTP.value = data.ftp; BLE_HR_MAX.value = data.hrMax; BLE_BRIGHTNESS.value = data.brightness; renderBleZones(data); return; }
       BLE_SENSORS.textContent = ""; (data.devices || []).forEach(function (sensor) { var row=document.createElement("div"); row.className="ble-device"; row.textContent=(sensor.name||sensor.category)+" · "+sensor.category; var b=document.createElement("button"); b.textContent="Use"; b.onclick=function(){HubBleTransport.command(JSON.stringify({id:bleCommandId++,op:"sensor_connect",sensor:sensor}));}; row.appendChild(b); BLE_SENSORS.appendChild(row); });
     });
     HubBleTransport.listen("connection", function (event) { if (!event.connected) { BLE_LIGHTING.disabled = true; BLE_DISCONNECT.disabled = true; } });
