@@ -8,6 +8,7 @@
     "frontendDist": "../src"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "ZoneGlow — Training Zone Lighting",
