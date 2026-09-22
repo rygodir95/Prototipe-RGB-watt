@@ -2,7 +2,7 @@ name: LED pin validation
 
 on:
   push:
-    branches: [fix/led-pin-validation]
+    branches: [fix/led-pin-validation, feature/full-ble-ui]
     paths: ["src/firmware/**", ".github/workflows/led-pin-validation.yml"]
   workflow_dispatch:
 
