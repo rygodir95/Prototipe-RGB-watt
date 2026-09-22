@@ -154,6 +154,19 @@ body[data-state="disconnected"] #statusText { color: #e74c3c; }
   border: 0;
   border-radius: 8px;
 }
+.secondary-btn, .ble-actions button {
+  min-height: 38px; padding: 0 14px; color: #e6e9f0; background: #1a2130;
+  border: 1px solid #33405a; border-radius: 8px; font-weight: 600;
+}
+.secondary-btn { margin-top: 14px; }
+.secondary-btn:disabled, .ble-actions button:disabled { opacity: .45; }
+.ble-panel { position: fixed; inset: 38px 0 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 24px; background: #0b0e14; }
+.ble-devices { display: grid; gap: 8px; margin: 14px 0; text-align: left; }
+.ble-device { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px; border: 1px solid #2a3245; border-radius: 8px; background: #0b0e14; }
+.ble-device small { color: #8b94a7; display: block; margin-top: 2px; }
+.ble-device button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 7px; color: #fff; background: #3957a7; }
+.ble-live { margin: 14px 0; padding: 12px; border: 1px solid #294534; border-radius: 8px; background: #102218; color: #d7f4df; text-align: left; font-family: ui-monospace, Consolas, monospace; white-space: pre-wrap; }
+.ble-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .overlay-tip {
   margin: 14px 0 0;
   font-size: 12px;
@@ -161,3 +174,4 @@ body[data-state="disconnected"] #statusText { color: #e74c3c; }
   word-break: break-word;
 }
 .overlay-tip code { color: #8b94a7; }
+
