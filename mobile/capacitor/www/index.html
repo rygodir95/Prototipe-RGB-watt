@@ -52,10 +52,27 @@
         <button id="connectBtn" type="button">Connect</button>
       </div>
       <p class="overlay-tip">Suggestion: <code>http://zoneglow.local</code> or the Hub's IP, e.g. <code>192.168.1.50</code></p>
+      <button id="bleBtn" class="secondary-btn" type="button">Use Bluetooth instead</button>
+    </div>
+  </div>
+
+  <div id="blePanel" class="ble-panel" hidden>
+    <div class="overlay-card">
+      <div class="overlay-brand"><span class="overlay-dot"></span><div><h1>Bluetooth Hub</h1><p>Local control connection</p></div></div>
+      <p id="bleHint" class="overlay-hint">Search for a nearby Training Hub.</p>
+      <div id="bleDevices" class="ble-devices"></div>
+      <div id="bleLive" class="ble-live" hidden></div>
+      <div class="ble-actions">
+        <button id="bleScanBtn" type="button">Search</button>
+        <button id="bleLightingBtn" class="secondary-btn" type="button" disabled>Lighting Test</button>
+        <button id="bleDisconnectBtn" class="secondary-btn" type="button" disabled>Disconnect</button>
+      </div>
     </div>
   </div>
 
   <script src="transport.js"></script>
+  <script src="ble-transport.js"></script>
   <script src="shell.js"></script>
 </body>
 </html>
+
