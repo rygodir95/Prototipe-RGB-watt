@@ -35,12 +35,16 @@ private:
   bool take(Command &command);
   void sendResult(uint32_t id, bool ok, const char *error = nullptr);
   void publishStatus(bool force = false);
+  void advanceLightingTest();
 
   NimBLECharacteristic *_status = nullptr;
   NimBLECharacteristic *_result = nullptr;
   LightingMailbox<Queue> _queue;
   uint32_t _lastStatus = 0;
+  uint32_t _lastLightingTestStep = 0;
   String _previousStatus;
   uint8_t _clients = 0;
+  uint8_t _lightingTestStep = 0;
+  bool _lightingTestRunning = false;
 };
 
