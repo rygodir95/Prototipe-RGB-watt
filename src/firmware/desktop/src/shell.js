@@ -34,6 +34,7 @@
   var BLE_SENSOR_SCAN = $("bleSensorScanBtn");
   var BLE_LIGHTING = $("bleLightingBtn");
   var BLE_DISCONNECT = $("bleDisconnectBtn");
+  var BLE_SHELL_DISCONNECT = $("bleShellDisconnect");
 
   var PROBE_INTERVAL_MS = 2000;
   var MAX_MISSED_PROBES = 2;   // tolerate one dropped probe before "Disconnected"
@@ -46,6 +47,7 @@
   var bleCommandId = 1;
   var bleLightingOn = false;
   var bleConfigParts = {};
+  var bleMode = false;
 
   var SPLASH = $("splash");
 
@@ -89,12 +91,14 @@
   }
 
   function tick() {
+    if (bleMode) return;
     if (probing) return;
     probing = true;
     var url = ZoneGlowTransport.getUrl();
     if (!BACKEND_URL_INPUT.value) BACKEND_URL_INPUT.value = url;
     ZoneGlowTransport.probe(url)
       .then(function () {
+        if (bleMode) { probing = false; return; }
         missedProbes = 0;
         everConnected = true;
         showUi(url);
@@ -103,6 +107,7 @@
         probing = false;
       })
       .catch(function () {
+        if (bleMode) { probing = false; return; }
         missedProbes++;
         if (everConnected && missedProbes < MAX_MISSED_PROBES) {
           probing = false;   // brief hiccup while connected: keep the UI up
@@ -147,12 +152,32 @@
   function connectBle(address) {
     BLE_HINT.textContent = "Connecting…";
     HubBleTransport.connect(address).then(function () {
+      HubBleBridge.configure(HubBleTransport);
+      HubBleBridge.setConnected(true);
+      bleMode = true;
+      BLE_PANEL.hidden = true;
+      BLE_SHELL_DISCONNECT.hidden = false;
+      uiLoadedFor = "bluetooth";
+      UI_FRAME.src = "hub-ui/index.html";
+      setState("connected", "Bluetooth");
+      hideSplash();
       BLE_HINT.textContent = "Connected locally over Bluetooth.";
       BLE_LIGHTING.disabled = false; BLE_DISCONNECT.disabled = false;
       BLE_SENSOR_SCAN.disabled = false;
-      HubBleTransport.command(JSON.stringify({ id: bleCommandId++, op: "config_read" }));
     }).catch(function (error) { BLE_HINT.textContent = String(error); });
   }
+  function leaveBle() {
+    if (!bleMode) return;
+    bleMode = false;
+    HubBleBridge.setConnected(false);
+    BLE_SHELL_DISCONNECT.hidden = true;
+    UI_FRAME.src = "about:blank";
+    uiLoadedFor = "";
+    BLE_PANEL.hidden = false;
+    BLE_HINT.textContent = "Bluetooth disconnected. Search to reconnect.";
+    setState("disconnected", ZoneGlowTransport.getUrl());
+  }
+  BLE_SHELL_DISCONNECT.addEventListener("click", function () { HubBleTransport.disconnect().then(leaveBle, leaveBle); });
   function scanBle() {
     BLE_SCAN.disabled = true; BLE_HINT.textContent = "Searching for nearby Hubs…";
     HubBleTransport.scan().then(showBleDevices).catch(function (error) {
@@ -207,8 +232,13 @@
     BLE_ZONES.hidden = false;
   }
   if (HubBleTransport.available()) {
-    HubBleTransport.listen("ble-status", function (payload) { BLE_LIVE.hidden = false; BLE_LIVE.textContent = payload; });
+    HubBleTransport.listen("ble-status", function (payload) {
+      HubBleBridge.receiveStatus(payload);
+      if (!bleMode) { BLE_LIVE.hidden = false; BLE_LIVE.textContent = payload; }
+    });
     HubBleTransport.listen("ble-result", function (payload) {
+      HubBleBridge.receiveResult(payload);
+      if (bleMode) return;
       try {
         var result = JSON.parse(payload);
         if (!result.ok) { BLE_HINT.textContent = result.error || "Hub rejected the command"; return; }
@@ -242,7 +272,7 @@
           "Zones: " + config.zoneCount + " · LEDs: " + config.ledCount + " · Brightness: " + config.brightness + "%";
       } catch (_) { BLE_HINT.textContent = "Could not read Hub configuration"; }
     });
-    HubBleTransport.listen("ble-connection", function (connected) { if (!connected) { BLE_LIGHTING.disabled = true; BLE_DISCONNECT.disabled = true; } });
+    HubBleTransport.listen("ble-connection", function (connected) { if (!connected) { BLE_LIGHTING.disabled = true; BLE_DISCONNECT.disabled = true; leaveBle(); } });
   } else { BLE_BTN.disabled = true; }
 
   setState("connecting", ZoneGlowTransport.getUrl());
