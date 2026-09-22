@@ -30,3 +30,10 @@ dist-ssr
 .env
 .vite
 base44/.app.jsonc
+
+# Web UI copies generated for native BLE app packages.
+src/firmware/desktop/src/hub-ui/
+src/firmware/desktop/src/ble-web-host.js
+mobile/capacitor/www/hub-ui/
+mobile/capacitor/www/ble-web-host.js
+
