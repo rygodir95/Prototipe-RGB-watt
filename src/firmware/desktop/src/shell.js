@@ -250,7 +250,9 @@
       if (!bleMode) { BLE_LIVE.hidden = false; BLE_LIVE.textContent = payload; }
     });
     HubBleTransport.listen("ble-result", function (payload) {
-      HubBleBridge.receiveResult(payload);
+      // Desktop commands resolve from the matching GATT read. Resolving from
+      // the notification here can start the next page before that read ends,
+      // overlapping writes and invalidating the Hub's paged transfer state.
       if (bleMode) return;
       try {
         var result = JSON.parse(payload);
