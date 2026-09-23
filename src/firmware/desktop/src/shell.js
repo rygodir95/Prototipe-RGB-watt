@@ -157,6 +157,9 @@
       // A GATT connection alone does not prove that commands and result
       // notifications work. Keep the picker visible until the UI's first
       // configuration request has actually succeeded.
+      BLE_HINT.textContent = "Checking Hub response…";
+      return HubBleBridge.api("/api/info", "GET");
+    }).then(function () {
       BLE_HINT.textContent = "Reading Hub settings…";
       return HubBleBridge.api("/api/config", "GET");
     }).then(function () {
