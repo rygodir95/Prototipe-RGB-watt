@@ -4,9 +4,9 @@
   "private": true,
   "description": "ZoneGlow Android shell - mobile UI client for the ZoneGlow Hub",
   "scripts": {
-    "prepare:ui": "node ../../../src/firmware/tools/prepare_ble_web_ui.cjs",
-    "prebuild:debug": "node ../../../src/firmware/tools/prepare_ble_web_ui.cjs",
-    "prebuild:release": "node ../../../src/firmware/tools/prepare_ble_web_ui.cjs",
+    "prepare:ui": "node ../../src/firmware/tools/prepare_ble_web_ui.cjs",
+    "prebuild:debug": "node ../../src/firmware/tools/prepare_ble_web_ui.cjs",
+    "prebuild:release": "node ../../src/firmware/tools/prepare_ble_web_ui.cjs",
     "setup": "npm install --ignore-scripts && npm run prepare:ui && cap sync android",
     "build:debug": "cap sync android && cd android && ./gradlew assembleDebug",
     "build:release": "cap sync android && cd android && ./gradlew assembleRelease"
