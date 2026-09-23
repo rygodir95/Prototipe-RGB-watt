@@ -24,6 +24,13 @@ assert.match(source, /"sensor_connect"/);
 assert.match(source, /"devices_read"/);
 assert.match(source, /"factory_reset"/);
 assert.match(source, /scheduleRuntimeConfig\(g_config\)/);
+// NimBLE-Arduino 1.x treats setValue(c_str()) as a template value and stores
+// the four-byte pointer, not the JSON text. Every BLE payload needs a length.
+const valueWrites = [...source.matchAll(/_(?:result|status)->setValue\(([^;]+)\);/g)];
+assert.equal(valueWrites.length, 6);
+for (const [, args] of valueWrites) {
+  assert.match(args, /reinterpret_cast<const uint8_t \*>\([^)]*\.c_str\(\)\),\s*\w+\.length\(\)/);
+}
 for (const client of ['../desktop/src/shell.js', '../../../mobile/capacitor/www/shell.js']) {
   const ui = fs.readFileSync(path.join(__dirname, client), 'utf8');
   assert.match(ui, /op: "zone_write"/);
