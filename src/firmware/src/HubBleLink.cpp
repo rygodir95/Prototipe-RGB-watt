@@ -226,7 +226,7 @@ void HubBleLink::sendResult(uint32_t id, bool ok, const char *error) {
   Serial.printf("[HUB BLE][result] id=%lu ok=%u resultBytes=%u\n",
                 (unsigned long)id, ok ? 1u : 0u, (unsigned)out.length());
 #endif
-  _result->setValue(out.c_str());
+  _result->setValue(reinterpret_cast<const uint8_t *>(out.c_str()), out.length());
   if (_clients) _result->notify();
 }
 
@@ -255,7 +255,7 @@ void HubBleLink::sendConfig(uint32_t id, int16_t requestedPart) {
     doc["data"] = payload.substring(part * chunkSize, (part + 1) * chunkSize);
     String out;
     serializeJson(doc, out);
-    _result->setValue(out.c_str());
+    _result->setValue(reinterpret_cast<const uint8_t *>(out.c_str()), out.length());
     if (_clients) _result->notify();
   }
   if (requestedPart >= 0 && static_cast<size_t>(requestedPart) + 1 == parts) { _transferPayload = ""; _transferType = 0; }
@@ -293,7 +293,8 @@ void HubBleLink::sendDevices(uint32_t id, int16_t requestedPart) {
     out["v"] = 1; out["id"] = id; out["ok"] = true; out["type"] = "devices";
     out["part"] = part; out["parts"] = parts;
     out["data"] = payload.substring(part * chunkSize, (part + 1) * chunkSize);
-    String message; serializeJson(out, message); _result->setValue(message.c_str());
+    String message; serializeJson(out, message);
+    _result->setValue(reinterpret_cast<const uint8_t *>(message.c_str()), message.length());
     if (_clients) _result->notify();
   }
   if (requestedPart >= 0 && static_cast<size_t>(requestedPart) + 1 == parts) { _transferPayload = ""; _transferType = 0; }
@@ -317,7 +318,7 @@ void HubBleLink::publishStatus(bool force) {
   String out;
   serializeJson(doc, out);
   if (!force && out == _previousStatus && millis() - _lastStatus < 1500) return;
-  _status->setValue(out.c_str());
+  _status->setValue(reinterpret_cast<const uint8_t *>(out.c_str()), out.length());
   if (_clients) _status->notify();
   _previousStatus = out;
   _lastStatus = millis();
@@ -381,7 +382,7 @@ void HubBleLink::loop() {
         doc["v"] = 1; doc["id"] = command.id; doc["ok"] = true;
         doc["heap"] = health.freeHeap; doc["minHeap"] = health.minHeap;
         String out; serializeJson(doc, out);
-        _result->setValue(out.c_str());
+        _result->setValue(reinterpret_cast<const uint8_t *>(out.c_str()), out.length());
         if (_clients) _result->notify();
         break;
       }
@@ -395,7 +396,7 @@ void HubBleLink::loop() {
         Serial.printf("[HUB BLE][info] id=%lu resultBytes=%u\n",
                       (unsigned long)command.id, (unsigned)out.length());
 #endif
-        _result->setValue(out.c_str());
+        _result->setValue(reinterpret_cast<const uint8_t *>(out.c_str()), out.length());
         if (_clients) _result->notify();
         break;
       }
