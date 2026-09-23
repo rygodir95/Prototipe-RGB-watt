@@ -139,9 +139,12 @@ async fn ble_command(message: String, state: State<'_, BleState>) -> Result<Stri
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     let mut last_result_len = 0;
     let mut last_result_id = None;
+    let mut last_result_prefix = String::new();
     loop {
         let bytes = peripheral.read(&result).await.map_err(|error| error.to_string())?;
         last_result_len = bytes.len();
+        last_result_prefix = bytes.iter().take(12).map(|byte| format!("{byte:02x}"))
+            .collect::<Vec<_>>().join("");
         if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) {
             last_result_id = json.get("id").and_then(|value| value.as_u64());
             if last_result_id == Some(request_id) {
@@ -149,7 +152,7 @@ async fn ble_command(message: String, state: State<'_, BleState>) -> Result<Stri
             }
         }
         if tokio::time::Instant::now() >= deadline {
-            return Err(format!("Hub did not return result for command {request_id} (last GATT read: {last_result_len} bytes, result ID: {})",
+            return Err(format!("Hub did not return result for command {request_id} (last GATT read: {last_result_len} bytes, prefix: {last_result_prefix}, result ID: {})",
                 last_result_id.map_or("none".to_string(), |id| id.to_string())));
         }
         tokio::time::sleep(Duration::from_millis(75)).await;
