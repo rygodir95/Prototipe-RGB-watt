@@ -154,6 +154,12 @@
     HubBleTransport.connect(address).then(function () {
       HubBleBridge.configure(HubBleTransport);
       HubBleBridge.setConnected(true);
+      // A GATT connection alone does not prove that commands and result
+      // notifications work. Keep the picker visible until the UI's first
+      // configuration request has actually succeeded.
+      BLE_HINT.textContent = "Reading Hub settings…";
+      return HubBleBridge.api("/api/config", "GET");
+    }).then(function () {
       bleMode = true;
       BLE_PANEL.hidden = true;
       BLE_SHELL_DISCONNECT.hidden = false;
@@ -164,7 +170,11 @@
       BLE_HINT.textContent = "Connected locally over Bluetooth.";
       BLE_LIGHTING.disabled = false; BLE_DISCONNECT.disabled = false;
       BLE_SENSOR_SCAN.disabled = false;
-    }).catch(function (error) { BLE_HINT.textContent = String(error); });
+    }).catch(function (error) {
+      BLE_HINT.textContent = "Bluetooth connected, but Hub settings could not be read: " + String(error);
+      HubBleBridge.setConnected(false);
+      HubBleTransport.disconnect().catch(function () {});
+    });
   }
   function leaveBle() {
     if (!bleMode) return;
