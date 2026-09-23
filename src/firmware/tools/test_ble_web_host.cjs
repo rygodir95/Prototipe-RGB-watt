@@ -2,6 +2,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const mobileDir = path.resolve(__dirname, '../../../mobile/capacitor');
+const mobilePackage = JSON.parse(fs.readFileSync(path.join(mobileDir, 'package.json'), 'utf8'));
+for (const script of ['prepare:ui', 'prebuild:debug', 'prebuild:release']) {
+  const command = mobilePackage.scripts[script];
+  assert.match(command, /^node\s+\S+$/);
+  assert(fs.existsSync(path.resolve(mobileDir, command.split(/\s+/)[1])), `${script} must point to the UI packager`);
+}
 require('./prepare_ble_web_ui.cjs');
 const canonical = fs.readFileSync(path.join(__dirname, '../data/web/app.js'), 'utf8');
 for (const target of ['../desktop/src/hub-ui', '../../../mobile/capacitor/www/hub-ui']) {
