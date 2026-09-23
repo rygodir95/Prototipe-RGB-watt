@@ -33,6 +33,7 @@ struct BleDevice {
 struct BleSession {
     peripheral: Peripheral,
     command: btleplug::api::Characteristic,
+    result: btleplug::api::Characteristic,
 }
 
 struct BleState(Mutex<Option<BleSession>>);
@@ -114,21 +115,40 @@ async fn ble_connect(address: String, app: tauri::AppHandle, state: State<'_, Bl
         }
         let _ = event_app.emit("ble-connection", false);
     });
-    *state.0.lock().map_err(|_| "BLE state lock failed")? = Some(BleSession { peripheral, command });
+    *state.0.lock().map_err(|_| "BLE state lock failed")? = Some(BleSession { peripheral, command, result });
     app.emit("ble-connection", true).map_err(|error| error.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-async fn ble_command(message: String, state: State<'_, BleState>) -> Result<(), String> {
+async fn ble_command(message: String, state: State<'_, BleState>) -> Result<String, String> {
     if message.is_empty() || message.len() > 180 { return Err("Invalid Hub command".to_string()); }
-    let (peripheral, command) = {
+    let request_id = serde_json::from_str::<serde_json::Value>(&message)
+        .ok().and_then(|json| json.get("id")?.as_u64())
+        .filter(|id| *id > 0).ok_or("Invalid Hub command ID")?;
+    let (peripheral, command, result) = {
         let guard = state.0.lock().map_err(|_| "BLE state lock failed")?;
         let session = guard.as_ref().ok_or("Hub is not connected")?;
-        (session.peripheral.clone(), session.command.clone())
+        (session.peripheral.clone(), session.command.clone(), session.result.clone())
     };
     peripheral.write(&command, message.as_bytes(), WriteType::WithResponse).await
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    // Windows stacks can deliver a successful GATT write yet drop the result
+    // notification. The result characteristic is readable as well: poll it
+    // for THIS command ID, so a stale result cannot satisfy a later request.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let bytes = peripheral.read(&result).await.map_err(|error| error.to_string())?;
+        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+            if json.get("id").and_then(|value| value.as_u64()) == Some(request_id) {
+                return String::from_utf8(bytes).map_err(|error| error.to_string());
+            }
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(format!("Hub did not return result for command {request_id}"));
+        }
+        tokio::time::sleep(Duration::from_millis(75)).await;
+    }
 }
 
 #[tauri::command]
