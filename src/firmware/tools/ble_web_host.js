@@ -30,7 +30,11 @@ var HubBleBridge = (function () {
         reject(new Error("Hub did not answer " + op));
       }, 10000);
       pending = { id: id, resolve: resolve, reject: reject, timer: timer };
-      Promise.resolve(transport.command(message)).catch(function (error) {
+      Promise.resolve(transport.command(message)).then(function (result) {
+        // Desktop can also read the result characteristic directly. Android
+        // continues to resolve through the subscribed notification instead.
+        if (result) receiveResult(result);
+      }).catch(function (error) {
         if (pending && pending.id === id) { clearTimeout(timer); pending = null; reject(error); }
       });
     });
