@@ -125,6 +125,12 @@ void HubBleLink::onWrite(NimBLECharacteristic *characteristic) {
   command.part = -1;
   command.ackOnly = doc["ack"] | false;
 
+#if defined(BUILD_DEV)
+  // Diagnostic metadata only: never print the command body or saved secrets.
+  Serial.printf("[HUB BLE][write] bytes=%u id=%lu op=%s parse=%s\n",
+                (unsigned)raw.size(), (unsigned long)id, op, error.c_str());
+#endif
+
   if (error || id == 0 || !op[0]) { sendResult(id, false, "invalid command"); return; }
   if (strcmp(op, "lighting_test") == 0) {
     command.type = CommandType::LightingTest;
@@ -216,6 +222,10 @@ void HubBleLink::sendResult(uint32_t id, bool ok, const char *error) {
   if (error) doc["error"] = error;
   String out;
   serializeJson(doc, out);
+#if defined(BUILD_DEV)
+  Serial.printf("[HUB BLE][result] id=%lu ok=%u resultBytes=%u\n",
+                (unsigned long)id, ok ? 1u : 0u, (unsigned)out.length());
+#endif
   _result->setValue(out.c_str());
   if (_clients) _result->notify();
 }
@@ -339,6 +349,10 @@ void HubBleLink::advanceLightingTest() {
 void HubBleLink::loop() {
   Command command;
   if (take(command)) {
+#if defined(BUILD_DEV)
+    Serial.printf("[HUB BLE][dispatch] id=%lu type=%u\n",
+                  (unsigned long)command.id, (unsigned)command.type);
+#endif
     switch (command.type) {
       case CommandType::LightingTest:
         _lightingTestRunning = command.enabled;
@@ -377,6 +391,10 @@ void HubBleLink::loop() {
         doc["version"] = FW_VERSION_FULL; doc["buildId"] = FW_BUILD_SHA;
         doc["deviceId"] = Security::deviceId();
         String out; serializeJson(doc, out);
+#if defined(BUILD_DEV)
+        Serial.printf("[HUB BLE][info] id=%lu resultBytes=%u\n",
+                      (unsigned long)command.id, (unsigned)out.length());
+#endif
         _result->setValue(out.c_str());
         if (_clients) _result->notify();
         break;
