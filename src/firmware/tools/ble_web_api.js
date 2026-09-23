@@ -3,8 +3,24 @@
 "use strict";
 
 (function () {
-  var bridge = window.parent && window.parent.HubBleBridge;
-  if (!bridge) throw new Error("Bluetooth bridge is unavailable");
+  var bridge;
+  try { bridge = window.parent && window.parent.HubBleBridge; } catch (_) {}
+  function showBridgeError(error) {
+    var message = error && error.message ? error.message : String(error);
+    var banner = document.getElementById("bleBridgeError");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "bleBridgeError";
+      banner.setAttribute("role", "alert");
+      banner.style.cssText = "position:fixed;z-index:99999;left:1rem;right:1rem;top:1rem;padding:1rem;background:#7f1d1d;color:white;border-radius:.5rem;font:16px sans-serif";
+      document.body.appendChild(banner);
+    }
+    banner.textContent = "Bluetooth data error: " + message;
+  }
+  if (!bridge) {
+    document.addEventListener("DOMContentLoaded", function () { showBridgeError("The local Bluetooth bridge is unavailable"); });
+    return;
+  }
   var networkFetch = window.fetch.bind(window);
 
   window.fetch = function (input, options) {
@@ -16,7 +32,7 @@
     if (signal && signal.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
     var call = bridge.api(path, method, body).then(function (value) {
       return new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } });
-    });
+    }).catch(function (error) { showBridgeError(error); throw error; });
     if (!signal) return call;
     return Promise.race([call, new Promise(function (_, reject) {
       signal.addEventListener("abort", function () { reject(new DOMException("Aborted", "AbortError")); }, { once: true });
