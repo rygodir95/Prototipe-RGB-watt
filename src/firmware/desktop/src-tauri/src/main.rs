@@ -137,15 +137,20 @@ async fn ble_command(message: String, state: State<'_, BleState>) -> Result<Stri
     // notification. The result characteristic is readable as well: poll it
     // for THIS command ID, so a stale result cannot satisfy a later request.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let mut last_result_len = 0;
+    let mut last_result_id = None;
     loop {
         let bytes = peripheral.read(&result).await.map_err(|error| error.to_string())?;
+        last_result_len = bytes.len();
         if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) {
-            if json.get("id").and_then(|value| value.as_u64()) == Some(request_id) {
+            last_result_id = json.get("id").and_then(|value| value.as_u64());
+            if last_result_id == Some(request_id) {
                 return String::from_utf8(bytes).map_err(|error| error.to_string());
             }
         }
         if tokio::time::Instant::now() >= deadline {
-            return Err(format!("Hub did not return result for command {request_id}"));
+            return Err(format!("Hub did not return result for command {request_id} (last GATT read: {last_result_len} bytes, result ID: {})",
+                last_result_id.map_or("none".to_string(), |id| id.to_string())));
         }
         tokio::time::sleep(Duration::from_millis(75)).await;
     }
