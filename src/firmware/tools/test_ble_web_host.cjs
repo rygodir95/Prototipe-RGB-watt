@@ -82,6 +82,17 @@ bridge.setConnected(true);
     { window: frameWindow, document: frameDocument, Response, DOMException, Promise, setTimeout });
   const infoResponse = await frameWindow.fetch('/api/info');
   assert.equal((await infoResponse.json()).buildId, 'test');
+  const readbackBridge = vm.runInNewContext(
+    fs.readFileSync(path.join(__dirname, 'ble_web_host.js'), 'utf8') + '\nHubBleBridge;',
+    { TextEncoder, Promise, setTimeout, clearTimeout, console }
+  );
+  readbackBridge.configure({ command: async (raw) => {
+    const request = JSON.parse(raw);
+    return JSON.stringify({ v: 1, id: request.id, ok: true, version: 'readback' });
+  } });
+  readbackBridge.setConnected(true);
+  assert.equal((await readbackBridge.api('/api/info', 'GET')).version, 'readback');
+  readbackBridge.setConnected(false);
   let missingBridgeNotice;
   const missingBridgeDocument = {
     body: { appendChild: (element) => { missingBridgeNotice = element; } },
