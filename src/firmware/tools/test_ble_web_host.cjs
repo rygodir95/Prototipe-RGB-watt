@@ -11,6 +11,9 @@ for (const script of ['prepare:ui', 'prebuild:debug', 'prebuild:release']) {
 }
 require('./prepare_ble_web_ui.cjs');
 const canonical = fs.readFileSync(path.join(__dirname, '../data/web/app.js'), 'utf8');
+const desktopShell = fs.readFileSync(path.join(__dirname, '../desktop/src/shell.js'), 'utf8');
+assert.doesNotMatch(desktopShell, /HubBleBridge\.receiveResult\(payload\)/,
+  'Windows must wait for the matching GATT read before sending the next page');
 for (const target of ['../desktop/src/hub-ui', '../../../mobile/capacitor/www/hub-ui']) {
   const folder = path.join(__dirname, target);
   assert.equal(fs.readFileSync(path.join(folder, 'app.js'), 'utf8'), canonical);
