@@ -82,6 +82,16 @@ bridge.setConnected(true);
     { window: frameWindow, document: frameDocument, Response, DOMException, Promise, setTimeout });
   const infoResponse = await frameWindow.fetch('/api/info');
   assert.equal((await infoResponse.json()).buildId, 'test');
+  let missingBridgeNotice;
+  const missingBridgeDocument = {
+    body: { appendChild: (element) => { missingBridgeNotice = element; } },
+    getElementById: () => null,
+    createElement: () => ({ setAttribute: () => {}, style: {}, textContent: '' }),
+    addEventListener: (event, callback) => { if (event === 'DOMContentLoaded') callback(); },
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'ble_web_api.js'), 'utf8'),
+    { window: { parent: {} }, document: missingBridgeDocument });
+  assert.match(missingBridgeNotice.textContent, /Bluetooth bridge is unavailable/);
   const socket = new frameWindow.WebSocket('ws://localhost/ws');
   await new Promise((resolve) => setTimeout(resolve, 1));
   let message;
