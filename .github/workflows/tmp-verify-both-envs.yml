@@ -1,0 +1,27 @@
+name: ZoneGlow firmware verify (both envs, TEMPORARY)
+
+on:
+  push:
+    branches: ["ci/mutex-fix-both-envs"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build firmware
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [esp32dev-dev, esp32dev-prod]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build firmware
+        working-directory: src/firmware
+        run: pio run -e ${{ matrix.env }}

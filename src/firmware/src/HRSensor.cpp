@@ -4,6 +4,7 @@
 #include <NimBLEDevice.h>
 #include "BleScanRouter.h"
 #include <map>
+#include <freertos/semphr.h>
 
 HRSensor *HRSensor::instance = nullptr;
 
@@ -11,7 +12,22 @@ HRSensor *HRSensor::instance = nullptr;
 static const NimBLEUUID HRS_SERVICE((uint16_t)0x180D);
 static const NimBLEUUID HRS_MEASURE((uint16_t)0x2A37);
 
-static portMUX_TYPE g_hrMux = portMUX_INITIALIZER_UNLOCKED;
+// Shared-data lock. These sections guard STL containers (std::map / std::vector)
+// whose inserts and clears allocate on the heap. A portMUX spinlock is the wrong
+// primitive there: allocating inside a critical section stalls the other core and
+// risks a watchdog reset. A FreeRTOS mutex may block instead of spinning, so it is
+// safe to hold across an allocating operation. Created in begin() before any
+// callback or web task can reach the data.
+static SemaphoreHandle_t g_hrDataMutex = nullptr;
+
+static inline void hrDataLock() {
+  if (g_hrDataMutex) xSemaphoreTake(g_hrDataMutex, portMAX_DELAY);
+}
+
+static inline void hrDataUnlock() {
+  if (g_hrDataMutex) xSemaphoreGive(g_hrDataMutex);
+}
+
 static std::map<std::string, NimBLEAddress> g_hrAddrMap;
 
 #if defined(BUILD_DEV)
@@ -90,7 +106,10 @@ static HRClientCallbacks g_hrClientCB;
 HRSensor::HRSensor() { instance = this; }
 
 void HRSensor::begin() {
-  // NimBLE is initialised once by BLEPower::begin(); nothing to do here.
+  // NimBLE is initialised once by BLEPower::begin(); nothing to do here
+  // except create this module's own shared-data lock, before the unified scan
+  // or the web task can reach the data.
+  if (!g_hrDataMutex) g_hrDataMutex = xSemaphoreCreateMutex();
   Serial.println("[HR] Heart Rate sensor module ready");
 }
 
@@ -104,10 +123,10 @@ void HRSensor::startScan(int seconds) {
 void HRSensor::onScanStart() {
   // Scan preparation invoked by the router before the shared scan starts:
   // drop stale results from the previous discovery run.
-  portENTER_CRITICAL(&g_hrMux);
+  hrDataLock();
   g_hrAddrMap.clear();
   _devices.clear();
-  portEXIT_CRITICAL(&g_hrMux);
+  hrDataUnlock();
 #if defined(BUILD_DEV)
   g_hrAdvSeen = 0;
   g_hrAdvMatched = 0;
@@ -136,27 +155,27 @@ void HRSensor::onScanResult(NimBLEAdvertisedDevice *dev) {
   std::string addr = dev->getAddress().toString();
   std::string name = dev->getName();
   if (name.empty()) name = "Unknown HR Sensor";
-  portENTER_CRITICAL(&g_hrMux);
+  hrDataLock();
   g_hrAddrMap[addr] = dev->getAddress();
-  portEXIT_CRITICAL(&g_hrMux);
+  hrDataUnlock();
   onDeviceFound(addr, name, "HRS", dev->getRSSI());
 }
 
 std::vector<HRDeviceInfo> HRSensor::getDevices() {
   std::vector<HRDeviceInfo> copy;
-  portENTER_CRITICAL(&g_hrMux);
+  hrDataLock();
   copy = _devices;
-  portEXIT_CRITICAL(&g_hrMux);
+  hrDataUnlock();
   return copy;
 }
 
 void HRSensor::onDeviceFound(const std::string &addr, const std::string &name, const std::string &type, int rssi) {
-  portENTER_CRITICAL(&g_hrMux);
+  hrDataLock();
   for (auto &d : _devices) {
-    if (d.address == addr) { d.rssi = rssi; if (d.name.empty()) d.name = name; portEXIT_CRITICAL(&g_hrMux); return; }
+    if (d.address == addr) { d.rssi = rssi; if (d.name.empty()) d.name = name; hrDataUnlock(); return; }
   }
   _devices.push_back({addr, name, type, rssi});
-  portEXIT_CRITICAL(&g_hrMux);
+  hrDataUnlock();
   Serial.printf("[HR] Found %s (%s) [%s]\n", name.c_str(), addr.c_str(), type.c_str());
 }
 
@@ -168,9 +187,9 @@ void HRSensor::onScanEnd() {
 #endif
   Serial.println("[HR] Scan complete");
   if (_desired && !_connected && !_targetAddr.empty()) {
-    portENTER_CRITICAL(&g_hrMux);
+    hrDataLock();
     bool have = g_hrAddrMap.find(_targetAddr) != g_hrAddrMap.end();
-    portEXIT_CRITICAL(&g_hrMux);
+    hrDataUnlock();
     if (have) _doConnect = true;
   }
   // The finite scan window is over: the scanning state must never linger
@@ -184,9 +203,9 @@ void HRSensor::connectToAddress(const std::string &addr, const std::string &name
   _targetName = name;
   _desired    = true;
   if (_scanning) { BleScanRouter::stop(); _scanning = false; }
-  portENTER_CRITICAL(&g_hrMux);
+  hrDataLock();
   bool have = g_hrAddrMap.find(addr) != g_hrAddrMap.end();
-  portEXIT_CRITICAL(&g_hrMux);
+  hrDataUnlock();
   if (have) _doConnect = true;
   else      startScan(6);   // not seen yet -> scan then connect
 }
@@ -212,10 +231,10 @@ void HRSensor::shutdown() {
   _doConnect = false;
   _targetAddr.clear();
   _targetName.clear();
-  portENTER_CRITICAL(&g_hrMux);
+  hrDataLock();
   g_hrAddrMap.clear();
   _devices.clear();
-  portEXIT_CRITICAL(&g_hrMux);
+  hrDataUnlock();
 }
 
 bool HRSensor::isLinkActive() const {
@@ -226,11 +245,11 @@ bool HRSensor::isLinkActive() const {
 }
 
 bool HRSensor::connectInternal(const std::string &addr) {
-  portENTER_CRITICAL(&g_hrMux);
+  hrDataLock();
   auto it = g_hrAddrMap.find(addr);
   bool have = it != g_hrAddrMap.end();
   NimBLEAddress bleAddr = have ? it->second : NimBLEAddress();
-  portEXIT_CRITICAL(&g_hrMux);
+  hrDataUnlock();
   if (!have) return false;
 
   g_tel.state = DeviceState::CONNECTING;
