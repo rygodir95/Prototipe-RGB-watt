@@ -4,6 +4,7 @@
 #include <NimBLEDevice.h>
 #include "BleScanRouter.h"
 #include <map>
+#include <freertos/semphr.h>
 
 BLEPower *BLEPower::instance = nullptr;
 
@@ -14,7 +15,22 @@ static const NimBLEUUID CPS_MEASURE((uint16_t)0x2A63);
 static const NimBLEUUID FTMS_SERVICE((uint16_t)0x1826);
 static const NimBLEUUID FTMS_INDOOR_BIKE((uint16_t)0x2AD2);
 
-static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
+// Shared-data lock. These sections guard STL containers (std::map / std::vector)
+// whose inserts and clears allocate on the heap. A portMUX spinlock is the wrong
+// primitive there: allocating inside a critical section stalls the other core and
+// risks a watchdog reset. A FreeRTOS mutex may block instead of spinning, so it is
+// safe to hold across an allocating operation. Created in begin() before any
+// callback or web task can reach the data.
+static SemaphoreHandle_t g_dataMutex = nullptr;
+
+static inline void dataLock() {
+  if (g_dataMutex) xSemaphoreTake(g_dataMutex, portMAX_DELAY);
+}
+
+static inline void dataUnlock() {
+  if (g_dataMutex) xSemaphoreGive(g_dataMutex);
+}
+
 static std::map<std::string, NimBLEAddress> g_addrMap;
 
 // ---- Free callbacks ---------------------------------------------------------
@@ -47,6 +63,8 @@ BLEPower::BLEPower() { instance = this; }
 void BLEPower::begin() {
   NimBLEDevice::init("");
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+  // Created here, before the unified scan or the web task can touch the data.
+  if (!g_dataMutex) g_dataMutex = xSemaphoreCreateMutex();
   Serial.println("[BLE] Initialised");
 }
 
@@ -60,10 +78,10 @@ void BLEPower::startScan(int seconds) {
 void BLEPower::onScanStart() {
   // Scan preparation invoked by the router before the shared scan starts:
   // drop stale results from the previous discovery run.
-  portENTER_CRITICAL(&g_mux);
+  dataLock();
   g_addrMap.clear();
   _devices.clear();
-  portEXIT_CRITICAL(&g_mux);
+  dataUnlock();
   _scanning = true;
   if (!_connected) g_tel.state = DeviceState::SCANNING;
   Serial.println("[BLE] Scanning...");
@@ -80,27 +98,27 @@ void BLEPower::onScanResult(NimBLEAdvertisedDevice *dev) {
   std::string name = dev->getName();
   if (name.empty()) name = "Unknown Power Source";
   std::string type = cps ? "CPS" : "FTMS";   // prefer CPS when both advertised
-  portENTER_CRITICAL(&g_mux);
+  dataLock();
   g_addrMap[addr] = dev->getAddress();
-  portEXIT_CRITICAL(&g_mux);
+  dataUnlock();
   onDeviceFound(addr, name, type, dev->getRSSI());
 }
 
 std::vector<BLEDeviceInfo> BLEPower::getDevices() {
   std::vector<BLEDeviceInfo> copy;
-  portENTER_CRITICAL(&g_mux);
+  dataLock();
   copy = _devices;
-  portEXIT_CRITICAL(&g_mux);
+  dataUnlock();
   return copy;
 }
 
 void BLEPower::onDeviceFound(const std::string &addr, const std::string &name, const std::string &type, int rssi) {
-  portENTER_CRITICAL(&g_mux);
+  dataLock();
   for (auto &d : _devices) {
-    if (d.address == addr) { d.rssi = rssi; if (d.name.empty()) d.name = name; portEXIT_CRITICAL(&g_mux); return; }
+    if (d.address == addr) { d.rssi = rssi; if (d.name.empty()) d.name = name; dataUnlock(); return; }
   }
   _devices.push_back({addr, name, type, rssi});
-  portEXIT_CRITICAL(&g_mux);
+  dataUnlock();
   Serial.printf("[BLE] Found %s (%s) [%s]\n", name.c_str(), addr.c_str(), type.c_str());
 }
 
@@ -108,9 +126,9 @@ void BLEPower::onScanEnd() {
   _scanning = false;
   Serial.println("[BLE] Scan complete");
   if (_desired && !_connected && !_targetAddr.empty()) {
-    portENTER_CRITICAL(&g_mux);
+    dataLock();
     bool have = g_addrMap.find(_targetAddr) != g_addrMap.end();
-    portEXIT_CRITICAL(&g_mux);
+    dataUnlock();
     if (have) _doConnect = true;
   }
   // The finite scan window is over: the scanning state must never linger
@@ -124,9 +142,9 @@ void BLEPower::connectToAddress(const std::string &addr, const std::string &name
   _targetName = name;
   _desired    = true;
   if (_scanning) { BleScanRouter::stop(); _scanning = false; }
-  portENTER_CRITICAL(&g_mux);
+  dataLock();
   bool have = g_addrMap.find(addr) != g_addrMap.end();
-  portEXIT_CRITICAL(&g_mux);
+  dataUnlock();
   if (have) _doConnect = true;
   else      startScan(6);   // not seen yet -> scan then connect
 }
@@ -152,10 +170,10 @@ void BLEPower::shutdown() {
   _doConnect = false;
   _targetAddr.clear();
   _targetName.clear();
-  portENTER_CRITICAL(&g_mux);
+  dataLock();
   g_addrMap.clear();
   _devices.clear();
-  portEXIT_CRITICAL(&g_mux);
+  dataUnlock();
 }
 
 bool BLEPower::isLinkActive() const {
@@ -166,11 +184,11 @@ bool BLEPower::isLinkActive() const {
 }
 
 bool BLEPower::connectInternal(const std::string &addr) {
-  portENTER_CRITICAL(&g_mux);
+  dataLock();
   auto it = g_addrMap.find(addr);
   bool have = it != g_addrMap.end();
   NimBLEAddress bleAddr = have ? it->second : NimBLEAddress();
-  portEXIT_CRITICAL(&g_mux);
+  dataUnlock();
   if (!have) return false;
 
   g_tel.state = DeviceState::CONNECTING;
