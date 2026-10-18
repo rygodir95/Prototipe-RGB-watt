@@ -31,6 +31,13 @@ static inline void dataUnlock() {
   if (g_dataMutex) xSemaphoreGive(g_dataMutex);
 }
 
+// Readiness predicate: this module may only touch the shared state above while
+// its mutex exists. Set once in begin(); if creation failed the module stays
+// inert - every entry point returns before touching shared state - instead of
+// running unprotected. g_tel.state alone is NOT the mechanism: setup() and the
+// main loop rewrite it, so it cannot carry this fault.
+static inline bool dataReady() { return g_dataMutex != nullptr; }
+
 static std::map<std::string, NimBLEAddress> g_addrMap;
 
 // ---- Free callbacks ---------------------------------------------------------
@@ -65,6 +72,15 @@ void BLEPower::begin() {
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
   // Created here, before the unified scan or the web task can touch the data.
   if (!g_dataMutex) g_dataMutex = xSemaphoreCreateMutex();
+  if (!g_dataMutex) {
+    // Fail safe, never silently continue: dataReady() keeps every entry point
+    // out of the shared state, so the module never scans or connects. The
+    // ERROR state below is only a courtesy signal - it is overwritten by
+    // setup() and the main loop, so it cannot be the mechanism.
+    Serial.println("[BLE] FATAL: shared-data mutex creation failed - power sensing disabled");
+    g_tel.state = DeviceState::ERROR;
+    return;
+  }
   Serial.println("[BLE] Initialised");
 }
 
@@ -76,6 +92,7 @@ void BLEPower::startScan(int seconds) {
 }
 
 void BLEPower::onScanStart() {
+  if (!dataReady()) return;   // no mutex: never touch shared state
   // Scan preparation invoked by the router before the shared scan starts:
   // drop stale results from the previous discovery run.
   dataLock();
@@ -88,6 +105,7 @@ void BLEPower::onScanStart() {
 }
 
 void BLEPower::onScanResult(NimBLEAdvertisedDevice *dev) {
+  if (!dataReady()) return;   // no mutex: never touch shared state
   // Unchanged CPS/FTMS classification (moved verbatim from the driver's old
   // private NimBLEAdvertisedDeviceCallbacks): the router forwards every
   // advertiser of the unified scan, and only power devices pass this gate.
@@ -105,6 +123,7 @@ void BLEPower::onScanResult(NimBLEAdvertisedDevice *dev) {
 }
 
 std::vector<BLEDeviceInfo> BLEPower::getDevices() {
+  if (!dataReady()) return {};   // no mutex: never touch shared state
   std::vector<BLEDeviceInfo> copy;
   dataLock();
   copy = _devices;
@@ -113,6 +132,7 @@ std::vector<BLEDeviceInfo> BLEPower::getDevices() {
 }
 
 void BLEPower::onDeviceFound(const std::string &addr, const std::string &name, const std::string &type, int rssi) {
+  if (!dataReady()) return;   // no mutex: never touch shared state
   dataLock();
   for (auto &d : _devices) {
     if (d.address == addr) { d.rssi = rssi; if (d.name.empty()) d.name = name; dataUnlock(); return; }
@@ -123,11 +143,17 @@ void BLEPower::onDeviceFound(const std::string &addr, const std::string &name, c
 }
 
 void BLEPower::onScanEnd() {
+  if (!dataReady()) return;   // no mutex: never touch shared state
   _scanning = false;
   Serial.println("[BLE] Scan complete");
-  if (_desired && !_connected && !_targetAddr.empty()) {
+  if (_desired && !_connected) {
+    // Snapshot the target under the lock: the web task may reassign or clear
+    // it at any moment (connectToAddress / forget / shutdown), and the
+    // emptiness test and the lookup must see one consistent value.
+    std::string target;
     dataLock();
-    bool have = g_addrMap.find(_targetAddr) != g_addrMap.end();
+    target = _targetAddr;
+    bool have = !target.empty() && g_addrMap.find(target) != g_addrMap.end();
     dataUnlock();
     if (have) _doConnect = true;
   }
@@ -138,8 +164,14 @@ void BLEPower::onScanEnd() {
 }
 
 void BLEPower::connectToAddress(const std::string &addr, const std::string &name) {
+  if (!dataReady()) return;   // no mutex: never touch shared state
+  // Target strings FIRST, then _desired: BleScanRouter::stop() below can end
+  // the scan synchronously and re-enter onScanEnd(), which must never observe
+  // _desired == true paired with a stale target.
+  dataLock();
   _targetAddr = addr;
   _targetName = name;
+  dataUnlock();
   _desired    = true;
   if (_scanning) { BleScanRouter::stop(); _scanning = false; }
   dataLock();
@@ -157,20 +189,28 @@ void BLEPower::disconnect() {
 }
 
 void BLEPower::forget() {
+  if (!dataReady()) return;   // no mutex: never touch shared state
   disconnect();
+  dataLock();
   _targetAddr.clear();
   _targetName.clear();
+  dataUnlock();
+  // Cancel any pending one-shot connect. Without this, update() would still
+  // consume the request on the next tick - a harmless no-op only because the
+  // target string happens to be empty.
+  _doConnect = false;
 }
 
 void BLEPower::shutdown() {
+  if (!dataReady()) return;   // no mutex: never touch shared state
   // Full stop used when switching control source: no scan, no connection,
   // no reconnect attempts, no cached devices.
   disconnect();
   if (_scanning) { BleScanRouter::stop(); _scanning = false; }
   _doConnect = false;
+  dataLock();
   _targetAddr.clear();
   _targetName.clear();
-  dataLock();
   g_addrMap.clear();
   _devices.clear();
   dataUnlock();
@@ -237,6 +277,7 @@ void BLEPower::scheduleReconnect() {
 }
 
 void BLEPower::update() {
+  if (!dataReady()) return;   // no mutex: never touch shared state
   // One-shot connect executor ONLY. The automatic reconnect loop that used
   // to live here restarted a BLE scan roughly every 7 seconds while the
   // desired sensor was not connected - the root cause of the endless
@@ -255,9 +296,18 @@ void BLEPower::update() {
     // the gate is open (direct connects stay immediate).
     if (bleTeardownSettling()) return;
     _doConnect = false;
-    if (connectInternal(_targetAddr)) {
+    // Snapshot under the lock: connectInternal() takes the address by const
+    // reference and reads it again after its own lock is released, so it must
+    // never be handed the live member. The blocking connect below runs with
+    // no lock held.
+    std::string target, targetName;
+    dataLock();
+    target     = _targetAddr;
+    targetName = _targetName;
+    dataUnlock();
+    if (connectInternal(target)) {
       _connected = true;
-      strncpy(g_tel.sourceName, _targetName.c_str(), sizeof(g_tel.sourceName) - 1);
+      strncpy(g_tel.sourceName, targetName.c_str(), sizeof(g_tel.sourceName) - 1);
       g_tel.sourceName[sizeof(g_tel.sourceName) - 1] = '\0';
       g_tel.state = DeviceState::CONNECTED;
     } else {

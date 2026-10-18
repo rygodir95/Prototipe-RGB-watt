@@ -28,6 +28,13 @@ static inline void hrDataUnlock() {
   if (g_hrDataMutex) xSemaphoreGive(g_hrDataMutex);
 }
 
+// Readiness predicate: this module may only touch the shared state above while
+// its mutex exists. Set once in begin(); if creation failed the module stays
+// inert - every entry point returns before touching shared state - instead of
+// running unprotected. g_tel.state alone is NOT the mechanism: setup() and the
+// main loop rewrite it, so it cannot carry this fault.
+static inline bool hrDataReady() { return g_hrDataMutex != nullptr; }
+
 static std::map<std::string, NimBLEAddress> g_hrAddrMap;
 
 #if defined(BUILD_DEV)
@@ -110,6 +117,15 @@ void HRSensor::begin() {
   // except create this module's own shared-data lock, before the unified scan
   // or the web task can reach the data.
   if (!g_hrDataMutex) g_hrDataMutex = xSemaphoreCreateMutex();
+  if (!g_hrDataMutex) {
+    // Fail safe, never silently continue: hrDataReady() keeps every entry
+    // point out of the shared state, so the module never scans or connects.
+    // The ERROR state below is only a courtesy signal - it is overwritten by
+    // setup() and the main loop, so it cannot be the mechanism.
+    Serial.println("[HR] FATAL: shared-data mutex creation failed - heart rate sensing disabled");
+    g_tel.state = DeviceState::ERROR;
+    return;
+  }
   Serial.println("[HR] Heart Rate sensor module ready");
 }
 
@@ -121,6 +137,7 @@ void HRSensor::startScan(int seconds) {
 }
 
 void HRSensor::onScanStart() {
+  if (!hrDataReady()) return;   // no mutex: never touch shared state
   // Scan preparation invoked by the router before the shared scan starts:
   // drop stale results from the previous discovery run.
   hrDataLock();
@@ -137,6 +154,7 @@ void HRSensor::onScanStart() {
 }
 
 void HRSensor::onScanResult(NimBLEAdvertisedDevice *dev) {
+  if (!hrDataReady()) return;   // no mutex: never touch shared state
   // Unchanged HRS classification (moved verbatim from the driver's old
   // private NimBLEAdvertisedDeviceCallbacks). The router forwards EVERY
   // advertiser of the unified scan, so the dev-only diagnostic dump below
@@ -162,6 +180,7 @@ void HRSensor::onScanResult(NimBLEAdvertisedDevice *dev) {
 }
 
 std::vector<HRDeviceInfo> HRSensor::getDevices() {
+  if (!hrDataReady()) return {};   // no mutex: never touch shared state
   std::vector<HRDeviceInfo> copy;
   hrDataLock();
   copy = _devices;
@@ -170,6 +189,7 @@ std::vector<HRDeviceInfo> HRSensor::getDevices() {
 }
 
 void HRSensor::onDeviceFound(const std::string &addr, const std::string &name, const std::string &type, int rssi) {
+  if (!hrDataReady()) return;   // no mutex: never touch shared state
   hrDataLock();
   for (auto &d : _devices) {
     if (d.address == addr) { d.rssi = rssi; if (d.name.empty()) d.name = name; hrDataUnlock(); return; }
@@ -180,15 +200,21 @@ void HRSensor::onDeviceFound(const std::string &addr, const std::string &name, c
 }
 
 void HRSensor::onScanEnd() {
+  if (!hrDataReady()) return;   // no mutex: never touch shared state
   _scanning = false;
 #if defined(BUILD_DEV)
   Serial.printf("[HR][diag] scan end: advertisers=%u matchedHRS=%u\n",
                 (unsigned)g_hrAdvSeen, (unsigned)g_hrAdvMatched);
 #endif
   Serial.println("[HR] Scan complete");
-  if (_desired && !_connected && !_targetAddr.empty()) {
+  if (_desired && !_connected) {
+    // Snapshot the target under the lock: the web task may reassign or clear
+    // it at any moment (connectToAddress / forget / shutdown), and the
+    // emptiness test and the lookup must see one consistent value.
+    std::string target;
     hrDataLock();
-    bool have = g_hrAddrMap.find(_targetAddr) != g_hrAddrMap.end();
+    target = _targetAddr;
+    bool have = !target.empty() && g_hrAddrMap.find(target) != g_hrAddrMap.end();
     hrDataUnlock();
     if (have) _doConnect = true;
   }
@@ -199,8 +225,14 @@ void HRSensor::onScanEnd() {
 }
 
 void HRSensor::connectToAddress(const std::string &addr, const std::string &name) {
+  if (!hrDataReady()) return;   // no mutex: never touch shared state
+  // Target strings FIRST, then _desired: BleScanRouter::stop() below can end
+  // the scan synchronously and re-enter onScanEnd(), which must never observe
+  // _desired == true paired with a stale target.
+  hrDataLock();
   _targetAddr = addr;
   _targetName = name;
+  hrDataUnlock();
   _desired    = true;
   if (_scanning) { BleScanRouter::stop(); _scanning = false; }
   hrDataLock();
@@ -218,20 +250,28 @@ void HRSensor::disconnect() {
 }
 
 void HRSensor::forget() {
+  if (!hrDataReady()) return;   // no mutex: never touch shared state
   disconnect();
+  hrDataLock();
   _targetAddr.clear();
   _targetName.clear();
+  hrDataUnlock();
+  // Cancel any pending one-shot connect. Without this, update() would still
+  // consume the request on the next tick - a harmless no-op only because the
+  // target string happens to be empty.
+  _doConnect = false;
 }
 
 void HRSensor::shutdown() {
+  if (!hrDataReady()) return;   // no mutex: never touch shared state
   // Full stop used when switching control source: no scan, no connection,
   // no reconnect attempts, no cached devices.
   disconnect();
   if (_scanning) { BleScanRouter::stop(); _scanning = false; }
   _doConnect = false;
+  hrDataLock();
   _targetAddr.clear();
   _targetName.clear();
-  hrDataLock();
   g_hrAddrMap.clear();
   _devices.clear();
   hrDataUnlock();
@@ -285,6 +325,7 @@ void HRSensor::scheduleReconnect() {
 }
 
 void HRSensor::update() {
+  if (!hrDataReady()) return;   // no mutex: never touch shared state
   // One-shot connect executor ONLY. The automatic reconnect loop that used
   // to live here restarted a BLE scan roughly every 7 seconds while the
   // desired sensor was not connected - the root cause of the endless
@@ -303,9 +344,18 @@ void HRSensor::update() {
     // the gate is open (direct connects stay immediate).
     if (bleTeardownSettling()) return;
     _doConnect = false;
-    if (connectInternal(_targetAddr)) {
+    // Snapshot under the lock: connectInternal() takes the address by const
+    // reference and reads it again after its own lock is released, so it must
+    // never be handed the live member. The blocking connect below runs with
+    // no lock held.
+    std::string target, targetName;
+    hrDataLock();
+    target     = _targetAddr;
+    targetName = _targetName;
+    hrDataUnlock();
+    if (connectInternal(target)) {
       _connected = true;
-      strncpy(g_tel.sourceName, _targetName.c_str(), sizeof(g_tel.sourceName) - 1);
+      strncpy(g_tel.sourceName, targetName.c_str(), sizeof(g_tel.sourceName) - 1);
       g_tel.sourceName[sizeof(g_tel.sourceName) - 1] = '\0';
       g_tel.state = DeviceState::CONNECTED;
     } else {
