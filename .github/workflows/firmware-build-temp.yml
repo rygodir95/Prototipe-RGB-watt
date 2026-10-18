@@ -1,0 +1,56 @@
+# TEMPORARY firmware build-verification workflow for the ZoneGlow synchronization patch.
+# Compiles both PlatformIO environments only. No hardware tests, no deployment, no releases.
+# Delete once the patch has been verified on hardware.
+name: Firmware Build (temporary)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/mobile-app
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - esp32dev-dev
+          - esp32dev-prod
+    defaults:
+      run:
+        working-directory: src/firmware
+    steps:
+      - name: Check out intended repository and branch
+        uses: actions/checkout@v4
+        with:
+          repository: rygodir95/Prototipe-RGB-watt
+          ref: feature/mobile-app
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build ${{ matrix.env }}
+        id: build
+        run: pio run -e ${{ matrix.env }}
+
+      - name: Report result for ${{ matrix.env }}
+        if: always()
+        run: |
+          {
+            echo "### Firmware environment: ${{ matrix.env }}"
+            echo ""
+            echo "- Result: ${{ steps.build.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
