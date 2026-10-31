@@ -55,7 +55,10 @@ jobs:
           import pathlib
 
           src = pathlib.Path("platformio.ini")
-          pinned = src.read_text().replace(
+          text = src.read_text()
+          # platformio.ini now pins the toolchain itself; only pin an unpinned file
+          # so this CI copy stays idempotent instead of producing "@7.1.3@7.1.3".
+          pinned = text if "espressif32@" in text else text.replace(
               "platform = espressif32", "platform = espressif32@7.1.3"
           )
           pathlib.Path("platformio.ci.ini").write_text(pinned)
