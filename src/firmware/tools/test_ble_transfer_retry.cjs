@@ -12,7 +12,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const CONFIG = JSON.stringify({ ftp: 240, pad: 'x'.repeat(420) });
-const DEVICES = JSON.stringify({ scanning: false, devices: [{ address: 'AA:BB', name: 'Assioma' }] });
+// Multi-page on purpose (like a real scan result list): > CHUNK bytes.
+const DEVICES = JSON.stringify({ scanning: false, devices: [{ address: 'AA:BB', name: 'Assioma Duo ' + 'y'.repeat(160) }] });
 const CHUNK = 80;
 const pagesOf = (data) => Math.ceil(data.length / CHUNK);
 const payloadFor = (op) => (op === 'config_read' ? CONFIG : DEVICES);
