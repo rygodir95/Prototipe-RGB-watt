@@ -42,9 +42,27 @@ jobs:
       - name: Install PlatformIO
         run: pip install --upgrade platformio
 
+      # platformio.ini leaves the platform unpinned ("platform = espressif32"), so a
+      # fresh runner resolves the newest release. espressif32 8.x (Arduino core 3.x)
+      # dropped the mbedtls_sha256_*_ret API used by src/WebInterface.cpp, so the build
+      # only reproduces on the 7.1.3 toolchain. Pin it here instead of editing the
+      # firmware's platformio.ini.
+      - name: Pin ESP32 platform to the known-good toolchain
+        run: |
+          python - <<'PY'
+          import pathlib
+
+          src = pathlib.Path("platformio.ini")
+          pinned = src.read_text().replace(
+              "platform = espressif32", "platform = espressif32@7.1.3"
+          )
+          pathlib.Path("platformio.ci.ini").write_text(pinned)
+          print([l for l in pinned.splitlines() if "platform =" in l])
+          PY
+
       - name: Build ${{ matrix.env }}
         id: build
-        run: pio run -e ${{ matrix.env }}
+        run: pio run -e ${{ matrix.env }} -c platformio.ci.ini
 
       - name: Upload firmware.bin
         if: success()
