@@ -56,7 +56,10 @@ static int testConfigMultiPage() {
   HubBleTransfer transfer;
   const std::string config = "{\"ftp\":240,\"pad\":\"" + payload(200, 'a') + "\"}";
   CHECK(transfer.begin(HubBleTransfer::CONFIG, config.c_str(), 1000) == HubBleTransfer::STATUS_OK);
-  CHECK(transfer.pages(HubBleTransfer::CONFIG) == 4);
+  const uint16_t expectedPages =
+      (uint16_t)((config.size() + HubBleTransfer::kChunkSize - 1) / HubBleTransfer::kChunkSize);
+  CHECK(expectedPages > 1);                                   // genuinely paged
+  CHECK(transfer.pages(HubBleTransfer::CONFIG) == expectedPages);
   CHECK(readAll(transfer, HubBleTransfer::CONFIG, -1, 1000) == config);
   for (int32_t i = 0; i < (int32_t)transfer.pages(HubBleTransfer::CONFIG); ++i) {
     CHECK(pageText(transfer, HubBleTransfer::CONFIG, i, -1, 1000).size() <= HubBleTransfer::kChunkSize);
@@ -69,7 +72,8 @@ static int testDevicesMultiPage() {
   HubBleTransfer transfer;
   const std::string devices = "{\"scanning\":false,\"devices\":[\"" + payload(400, 'A') + "\"]}";
   CHECK(transfer.begin(HubBleTransfer::DEVICES, devices.c_str(), 2000) == HubBleTransfer::STATUS_OK);
-  CHECK(transfer.pages(HubBleTransfer::DEVICES) == 6);
+  CHECK(transfer.pages(HubBleTransfer::DEVICES) ==
+        (uint16_t)((devices.size() + HubBleTransfer::kChunkSize - 1) / HubBleTransfer::kChunkSize));
   CHECK(readAll(transfer, HubBleTransfer::DEVICES, -1, 2000) == devices);
   return 0;
 }
@@ -81,8 +85,12 @@ static int testInterleaved() {
   const std::string devices = "{\"devices\":[\"" + payload(300, 'd') + "\"]}";
   CHECK(transfer.begin(HubBleTransfer::CONFIG, config.c_str(), 3000) == HubBleTransfer::STATUS_OK);
   CHECK(transfer.begin(HubBleTransfer::DEVICES, devices.c_str(), 3000) == HubBleTransfer::STATUS_OK);
+  const uint16_t configPages =
+      (uint16_t)((config.size() + HubBleTransfer::kChunkSize - 1) / HubBleTransfer::kChunkSize);
+  const uint16_t devicePages =
+      (uint16_t)((devices.size() + HubBleTransfer::kChunkSize - 1) / HubBleTransfer::kChunkSize);
   CHECK(transfer.active(HubBleTransfer::CONFIG));                       // not invalidated
-  CHECK(transfer.pages(HubBleTransfer::CONFIG) == 4);
+  CHECK(transfer.pages(HubBleTransfer::CONFIG) == configPages);
   CHECK(pageText(transfer, HubBleTransfer::CONFIG, 1, -1, 3000).size() == HubBleTransfer::kChunkSize);
   CHECK(pageText(transfer, HubBleTransfer::DEVICES, 2, -1, 3000).size() == HubBleTransfer::kChunkSize);
   CHECK(readAll(transfer, HubBleTransfer::CONFIG, -1, 3000) == config);
@@ -90,7 +98,7 @@ static int testInterleaved() {
   const uint32_t configToken = transfer.token(HubBleTransfer::CONFIG);
   CHECK(transfer.begin(HubBleTransfer::CONFIG, config.c_str(), 3100) == HubBleTransfer::STATUS_OK);
   CHECK(transfer.token(HubBleTransfer::CONFIG) == configToken + 1);     // new transfer token
-  CHECK(transfer.pages(HubBleTransfer::DEVICES) == 4);                  // other slot untouched
+  CHECK(transfer.pages(HubBleTransfer::DEVICES) == devicePages);        // other slot untouched
   return 0;
 }
 

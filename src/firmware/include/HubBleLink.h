@@ -95,5 +95,6 @@ private:
 
   // Producers run in the NimBLE task, the consumer in the Arduino loop task:
   // the queue is only ever touched inside this critical section.
+  Queue _queue;
   portMUX_TYPE _queueMux = portMUX_INITIALIZER_UNLOCKED;
 };
