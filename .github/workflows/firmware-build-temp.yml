@@ -46,6 +46,15 @@ jobs:
         id: build
         run: pio run -e ${{ matrix.env }}
 
+      - name: Upload firmware.bin
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.env }}
+          path: src/firmware/.pio/build/${{ matrix.env }}/firmware.bin
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Report result for ${{ matrix.env }}
         if: always()
         run: |
