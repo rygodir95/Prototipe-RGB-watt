@@ -27,6 +27,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Desktop STATUS fallback policy tests (cargo unit tests)
+        run: |
+          npm run prebuild:exe
+          cargo test --manifest-path src-tauri/Cargo.toml --quiet
+
       - name: Build ZoneGlow.exe (release, no bundling)
         run: npm run build:exe
 

@@ -7,8 +7,9 @@
 // BLE, zone and LED logic stays on the backend device.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::Mutex;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use btleplug::api::{Central, Manager as _, Peripheral as _, ScanFilter, WriteType};
 use btleplug::platform::{Manager, Peripheral};
@@ -17,10 +18,21 @@ use serde::Serialize;
 use tauri::{Emitter, State};
 use uuid::Uuid;
 
+mod status_fallback;
+
+use status_fallback::{status_payload, StatusLiveness, STATUS_FALLBACK_TICK_MS};
+
 const SERVICE_UUID: &str = "5ca90000-6d75-4ca5-b4d6-3f9e6c5b0001";
 const STATUS_UUID: &str = "5ca90001-6d75-4ca5-b4d6-3f9e6c5b0001";
 const COMMAND_UUID: &str = "5ca90002-6d75-4ca5-b4d6-3f9e6c5b0001";
 const RESULT_UUID: &str = "5ca90003-6d75-4ca5-b4d6-3f9e6c5b0001";
+
+/// Monotonic milliseconds for the STATUS fallback cadence. Never wall-clock
+/// time: a system clock change must not fabricate or erase liveness.
+fn now_ms() -> u64 {
+    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_millis() as u64
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,24 +118,64 @@ async fn ble_connect(address: String, app: tauri::AppHandle, state: State<'_, Bl
     peripheral.subscribe(&status).await.map_err(|error| error.to_string())?;
     peripheral.subscribe(&result).await.map_err(|error| error.to_string())?;
     let mut notifications = peripheral.notifications().await.map_err(|error| error.to_string())?;
+    // Liveness shared by the notification task and the fallback read task: ONE
+    // owner of "when did a STATUS frame last reach the client".
+    let liveness = Arc::new(Mutex::new(StatusLiveness::default()));
+    let live = Arc::new(AtomicBool::new(true));
     // The Hub notifies on change plus a heartbeat; a GATT read straight after
     // subscribing hands the UI the current status immediately instead of
     // waiting for the next frame (the characteristic stores its last value).
+    // An empty or malformed value is not liveness and is never emitted.
     if let Ok(value) = peripheral.read(&status).await {
-        if let Ok(text) = String::from_utf8(value) {
-            if !text.is_empty() {
-                let _ = app.emit("ble-status", text);
-            }
+        if let Some(text) = status_payload(&value) {
+            if let Ok(mut state) = liveness.lock() { state.on_frame(now_ms()); }
+            let _ = app.emit("ble-status", text);
         }
     }
     let event_app = app.clone();
+    let notification_liveness = liveness.clone();
+    let notification_alive = live.clone();
     tauri::async_runtime::spawn(async move {
+        // Notifications stay the primary path and are never blocked by a read.
         while let Some(notification) = notifications.next().await {
-            let payload = String::from_utf8_lossy(&notification.value).to_string();
-            let event = if notification.uuid == status_uuid { "ble-status" } else if notification.uuid == result_uuid { "ble-result" } else { continue };
-            let _ = event_app.emit(event, payload);
+            if notification.uuid == status_uuid {
+                if let Some(text) = status_payload(&notification.value) {
+                    if let Ok(mut state) = notification_liveness.lock() { state.on_frame(now_ms()); }
+                    let _ = event_app.emit("ble-status", text);
+                }
+            } else if notification.uuid == result_uuid {
+                let _ = event_app.emit("ble-result", String::from_utf8_lossy(&notification.value).to_string());
+            }
         }
+        // The stream ends on a real disconnect: stop the fallback, tell the UI.
+        notification_alive.store(false, Ordering::SeqCst);
         let _ = event_app.emit("ble-connection", false);
+    });
+    // STATUS fallback: GATT reads work even where notifications are not
+    // delivered, so a silent link is READ instead of being declared dead. One
+    // task claims the read slot before it reads: two reads can never overlap.
+    let fallback_app = app.clone();
+    let fallback_peripheral = peripheral.clone();
+    let fallback_status = status.clone();
+    let fallback_liveness = liveness.clone();
+    let fallback_alive = live.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_millis(STATUS_FALLBACK_TICK_MS)).await;
+            if !fallback_alive.load(Ordering::SeqCst) { break; }
+            let due = match fallback_liveness.lock() {
+                Ok(mut state) => state.should_read(now_ms()) && state.begin_read(),
+                Err(_) => false,
+            };
+            if !due { continue; }
+            let payload = match fallback_peripheral.read(&fallback_status).await {
+                Ok(value) => status_payload(&value),
+                Err(_) => None,   // a failed read is retried on the next interval
+            };
+            let ok = payload.is_some();
+            if let Some(text) = payload { let _ = fallback_app.emit("ble-status", text); }
+            if let Ok(mut state) = fallback_liveness.lock() { state.finish_read(now_ms(), ok); }
+        }
     });
     *state.0.lock().map_err(|_| "BLE state lock failed")? = Some(BleSession { peripheral, command, result });
     app.emit("ble-connection", true).map_err(|error| error.to_string())?;

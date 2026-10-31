@@ -151,9 +151,12 @@
   }
   function connectBle(address) {
     BLE_HINT.textContent = "Connecting…";
+    // The Hub emits its first STATUS frame while the connect command runs. The
+    // bridge must already be configured and connected, or that frame is
+    // discarded and liveness depends on notifications alone.
+    HubBleBridge.configure(HubBleTransport);
+    HubBleBridge.setConnected(true);
     HubBleTransport.connect(address).then(function () {
-      HubBleBridge.configure(HubBleTransport);
-      HubBleBridge.setConnected(true);
       // A GATT connection alone does not prove that commands and result
       // notifications work. Keep the picker visible until the UI's first
       // configuration request has actually succeeded.
