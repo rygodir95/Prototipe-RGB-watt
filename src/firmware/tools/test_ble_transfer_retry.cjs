@@ -1,12 +1,22 @@
-// Client-side paged-transfer recovery tests (tools/ble_web_host.js).
+// Client-side paged-transfer recovery tests for tools/ble_web_host.js.
 //
-// A fake Hub implements the firmware contract: independent config/device
-// slots, a transfer token per page-0 request, a 60 s window, the final page
-// kept readable, and explicit correlated errors.
+// The fake Hub implements the firmware contract: independent config/device
+// slots, a transfer token issued per page-0 request, the final page kept
+// readable, and explicit correlated errors. Every response is delivered as a
+// GATT notification, exactly like the Windows shell does, and a command only
+// settles after its response arrived - so the in-flight counter below measures
+// real serialization.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+
+const CONFIG = JSON.stringify({ ftp: 240, pad: 'x'.repeat(420) });
+const DEVICES = JSON.stringify({ scanning: false, devices: [{ address: 'AA:BB', name: 'Assioma' }] });
+const CHUNK = 80;
+const pagesOf = (data) => Math.ceil(data.length / CHUNK);
+const payloadFor = (op) => (op === 'config_read' ? CONFIG : DEVICES);
+const kindOf = (op) => (op === 'config_read' ? 'config' : 'devices');
 
 function loadBridge() {
   return vm.runInNewContext(
@@ -15,184 +25,143 @@ function loadBridge() {
   );
 }
 
-const CONFIG = JSON.stringify({ ftp: 240, pad: 'x'.repeat(420) });
-const DEVICES = JSON.stringify({ scanning: false, devices: [{ address: 'AA:BB', name: 'Assioma' }] });
-
-// Fake Hub with the firmware's transfer semantics.
+// Fake Hub: failPage (0-based) fails once when failOnce is set, always when not.
 function createHub(options) {
-  const settings = Object.assign({ failPage: null, rejectEveryRead: null, startAt: 1 }, options || {});
-  const slots = { config_read: null, devices_read: null };
+  const settings = Object.assign({ failPage: null, failOnce: 0, rejectReads: null }, options || {});
+  const slots = {};
   const log = [];
-  let inFlight = 0;
-  let maxInFlight = 0;
   let token = 0;
 
-  function payloadFor(op) {
-    return op === 'config_read' ? CONFIG : DEVICES;
+  function respond(request, bridge) {
+    const { op, id, part } = request;
+    log.push(request);
+    if (op !== 'config_read' && op !== 'devices_read') {
+      bridge.receiveResult({ v: 1, id, ok: true });
+      return;
+    }
+    const kind = kindOf(op);
+    const data = payloadFor(op);
+    const parts = pagesOf(data);
+
+    if (settings.rejectReads) {
+      bridge.receiveResult({ v: 1, id, ok: false, error: settings.rejectReads });
+      return;
+    }
+    if (part === 0) {
+      token++;
+      slots[kind] = { token, data };
+      bridge.receiveResult({ v: 1, id, ok: true, type: kind, part: 0, parts, t: token, data: data.slice(0, CHUNK) });
+      return;
+    }
+    const failPage = settings.failPage !== null && part === settings.failPage &&
+      (settings.failOnce > 0 || settings.alwaysFailPage);
+    if (failPage) {
+      slots[kind] = null;                     // the slot was replaced/expired
+      if (settings.failOnce > 0) settings.failOnce--;
+      bridge.receiveResult({ v: 1, id, ok: false, error: kind + ' transfer expired' });
+      return;
+    }
+    const slot = slots[kind];
+    if (!slot) {
+      bridge.receiveResult({ v: 1, id, ok: false, error: kind + ' transfer expired' });
+      return;
+    }
+    if (request.t !== undefined && request.t !== slot.token) {
+      bridge.receiveResult({ v: 1, id, ok: false, error: kind + ' transfer expired' });
+      return;
+    }
+    bridge.receiveResult({
+      v: 1, id, ok: true, type: kind, part, parts, t: slot.token,
+      data: data.slice(part * CHUNK, (part + 1) * CHUNK),
+    });
   }
 
-  const transport = {
-    async command(raw) {
+  return { log, respond, starts: (op) => log.filter((item) => item.op === op && item.part === 0) };
+}
+
+// One connected session; counts how many commands were ever in flight at once.
+function session(hub) {
+  const bridge = loadBridge();
+  let inFlight = 0;
+  let maxInFlight = 0;
+  bridge.configure({
+    command: (raw) => new Promise((resolve) => {
       const request = JSON.parse(raw);
       inFlight++;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      log.push(request);
-      try {
-        await Promise.resolve();
-        if (settings.rejectEveryRead) {
-          return undefined; // resolved through the notification below
-        }
-        if (request.op === 'config_read' || request.op === 'devices_read') {
-          const key = request.op;
-          if (settings.failPage !== null && request.part === settings.failPage) {
-            // Simulate the slot being replaced/expired between pages.
-            if (settings.failOnce && settings.failOnce-- > 0) slots[key] = null;
-            else slots[key] = null;
-            return undefined;
-          }
-          if (request.part === 0) {
-            const data = payloadFor(key);
-            token++;
-            slots[key] = { data, token, at: Date.now() };
-            return undefined;
-          }
-          const slot = slots[key];
-          const parts = Math.ceil(payloadFor(key).length / 80);
-          if (!slot) return undefined;
-          if (request.t !== undefined && request.t !== slot.token) return undefined;
-          if (request.part >= parts) return undefined;
-          return undefined;
-        }
-        return undefined;
-      } finally {
-        setTimeout(() => { inFlight--; }, 0);
-      }
-    },
-  };
-
-  // The bridge is driven through notifications (like the Windows shell does).
-  function attach(bridge) {
-    transport.respond = (request) => {
-      const op = request.op;
-      if (op === 'config_read' || op === 'devices_read') {
-        const data = payloadFor(op);
-        const parts = Math.ceil(data.length / 80);
-        if (request.part === 0) {
-          if (settings.rejectEveryRead) {
-            bridge.receiveResult({ v: 1, id: request.id, ok: false, error: settings.rejectEveryRead });
-            return;
-          }
-          if (settings.failPage === 0) {
-            bridge.receiveResult({ v: 1, id: request.id, ok: false, error: op.split('_')[0] + ' transfer expired' });
-            return;
-          }
-          const slot = slots[op];
-          bridge.receiveResult({ v: 1, id: request.id, ok: true, type: op.split('_')[0], part: 0, parts, t: slot ? slot.token : undefined, data: data.slice(0, 80) });
-          return;
-        }
-        const slot = slots[op];
-        if (!slot) {
-          bridge.receiveResult({ v: 1, id: request.id, ok: false, error: (op === 'config_read' ? 'config' : 'devices') + ' transfer expired' });
-          return;
-        }
-        if (settings.failPage !== null && request.part === settings.failPage) {
-          bridge.receiveResult({ v: 1, id: request.id, ok: false, error: (op === 'config_read' ? 'config' : 'devices') + ' transfer expired' });
-          return;
-        }
-        bridge.receiveResult({ v: 1, id: request.id, ok: true, type: op.split('_')[0], part: request.part, parts, t: slot.token, data: data.slice(request.part * 80, (request.part + 1) * 80) });
-        return;
-      }
-      bridge.receiveResult({ v: 1, id: request.id, ok: true });
-    };
-    return bridge;
-  }
-
-  return { transport, log, attach, stats: () => ({ maxInFlight }) };
-}
-
-async function runRead(hub, op) {
-  const bridge = loadBridge();
-  hub.attach(bridge);
-  // Deliver each request notification on the next tick, after it is recorded.
-  bridge.configure({
-    command: async (raw) => {
-      const request = JSON.parse(raw);
-      await hub.transport.command(raw);
-      queueMicrotask(() => hub.transport.respond(request));
-    },
+      if (inFlight > maxInFlight) maxInFlight = inFlight;
+      queueMicrotask(() => {
+        hub.respond(request, bridge);
+        inFlight--;
+        resolve(undefined);            // response already delivered as a notification
+      });
+    }),
   });
   bridge.setConnected(true);
-  return bridge.api(op === 'config_read' ? '/api/config' : '/api/devices', 'GET');
+  return { bridge, stats: () => ({ maxInFlight }) };
 }
 
-const starts = (log, op) => log.filter((item) => item.op === op && item.part === 0).length;
-
 (async () => {
-  // 1. Multi-page config read succeeds and carries the transfer token.
+  // 1. Multi-page configuration read, with the transfer token echoed per page.
   {
     const hub = createHub();
-    const config = await runRead(hub, 'config_read');
+    const { bridge, stats } = session(hub);
+    const config = await bridge.api('/api/config', 'GET');
     assert.equal(config.ftp, 240);
-    const pages = hub.log.filter((item) => item.op === 'config_read');
-    assert.equal(pages.length, Math.ceil(CONFIG.length / 80));
-    assert(pages.slice(1).every((item) => Number.isInteger(item.t)), 'later pages must echo the transfer token');
-    assert.equal(starts(hub.log, 'config_read'), 1);
-    assert.equal(hub.stats().maxInFlight, 1, 'requests must stay serialized');
+    const reads = hub.log.filter((item) => item.op === 'config_read');
+    assert.equal(reads.length, pagesOf(CONFIG));
+    assert(reads.slice(1).every((item) => Number.isInteger(item.t)), 'later pages must echo the transfer token');
+    assert.equal(hub.starts('config_read').length, 1, 'no retry when nothing failed');
+    assert.equal(stats().maxInFlight, 1, 'requests must stay serialized');
   }
 
-  // 2. Interleaved read: a device transfer starting mid-config must not corrupt it.
+  // 2. Interleaved read: the config transfer is invalidated mid-way, the client
+  //    restarts exactly once from page 0 with a fresh request id.
   {
     const hub = createHub({ failPage: 2, failOnce: 1 });
-    const config = await runRead(hub, 'config_read');
+    const { bridge } = session(hub);
+    const config = await bridge.api('/api/config', 'GET');
     assert.equal(config.ftp, 240);
-    assert.equal(starts(hub.log, 'config_read'), 2, 'exactly one retry from page 0');
-    // The retry used a fresh request id.
-    const page0 = hub.log.filter((item) => item.op === 'config_read' && item.part === 0);
-    assert.notEqual(page0[0].id, page0[1].id, 'retry must use a fresh request id');
+    const starts = hub.starts('config_read');
+    assert.equal(starts.length, 2, 'exactly one retry from page 0');
+    assert.notEqual(starts[0].id, starts[1].id, 'the retry must use a fresh request id');
   }
 
   // 3. A transfer that keeps failing: one retry, then the error surfaces.
   {
-    const hub = createHub({ failPage: 1 });
-    await assert.rejects(() => runRead(hub, 'config_read'), /transfer expired/);
-    assert.equal(starts(hub.log, 'config_read'), 2, 'never retries more than once');
+    const hub = createHub({ failPage: 1, alwaysFailPage: true });
+    const { bridge } = session(hub);
+    await assert.rejects(() => bridge.api('/api/config', 'GET'), /transfer expired/);
+    assert.equal(hub.starts('config_read').length, 2, 'never retries more than once');
   }
 
   // 4. Unrelated errors are never retried.
   {
-    const hub = createHub({ rejectEveryRead: 'Hub rejected the command' });
-    await assert.rejects(() => runRead(hub, 'config_read'), /Hub rejected the command/);
-    assert.equal(starts(hub.log, 'config_read'), 1, 'a rejection must not be retried');
+    const hub = createHub({ rejectReads: 'Hub rejected the command' });
+    const { bridge } = session(hub);
+    await assert.rejects(() => bridge.api('/api/config', 'GET'), /Hub rejected the command/);
+    assert.equal(hub.starts('config_read').length, 1, 'a rejected command must not be retried');
   }
 
-  // 5. Device-list read retries on an expired transfer too.
+  // 5. Device-list transfer retries on an expired transfer too.
   {
     const hub = createHub({ failPage: 1, failOnce: 1 });
-    const devices = await runRead(hub, 'devices_read');
+    const { bridge } = session(hub);
+    const devices = await bridge.api('/api/devices', 'GET');
     assert.equal(devices.devices[0].address, 'AA:BB');
-    assert.equal(starts(hub.log, 'devices_read'), 2);
+    assert.equal(hub.starts('devices_read').length, 2);
   }
 
-  // 6. Repeated final page is served (no retry needed at all).
+  // 6. Repeated final page: two consecutive reads each open their own transfer
+  //    and need no retry at all (the Hub keeps the final page readable).
   {
     const hub = createHub();
-    const bridge = loadBridge();
-    hub.attach(bridge);
-    let calls = 0;
-    bridge.configure({
-      command: async (raw) => {
-        const request = JSON.parse(raw);
-        await hub.transport.command(raw);
-        calls++;
-        queueMicrotask(() => hub.transport.respond(request));
-      },
-    });
-    bridge.setConnected(true);
+    const { bridge } = session(hub);
     await bridge.api('/api/config', 'GET');
     await bridge.api('/api/config', 'GET');
-    const lastPage = Math.ceil(CONFIG.length / 80) - 1;
-    assert(calls >= lastPage * 2);
-    assert.equal(starts(hub.log, 'config_read'), 2, 'each read starts its own transfer, no retry');
+    const starts = hub.starts('config_read');
+    assert.equal(starts.length, 2, 'each read starts its own transfer, no retry');
+    assert.notEqual(starts[0].id, starts[1].id);
+    assert.equal(hub.log.filter((item) => item.op === 'config_read').length, pagesOf(CONFIG) * 2);
   }
 
   console.log('ble transfer retry tests passed');
