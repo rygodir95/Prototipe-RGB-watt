@@ -2,6 +2,7 @@
 #include "WebContent.h"
 #include "AppState.h"
 #include "Config.h"
+#include "ConfigJson.h"
 #include "Storage.h"
 #include "BLEPower.h"
 #include "HRSensor.h"
@@ -137,7 +138,8 @@ static void otaFinish(size_t total) {
   Serial.printf("[OTA] Firmware update accepted (%u bytes)\n", (unsigned)total);
 }
 
-static void buildConfigJson(JsonDocument &doc) {
+// Declared in ConfigJson.h: shared with the BLE control link.
+void buildConfigJson(JsonDocument &doc) {
   doc["controlSource"] = (g_config.controlSource == SRC_HEART_RATE) ? "hr" : "power";
   doc["ftp"]          = g_config.ftp;
   doc["smoothing"]    = g_config.smoothing;
@@ -185,7 +187,8 @@ static void buildConfigJson(JsonDocument &doc) {
 
 // ---- POST /api/config -------------------------------------------------------
 
-static void applyConfigPatch(JsonDocument &doc) {
+// Declared in ConfigJson.h: shared with the BLE control link.
+void applyConfigPatch(JsonDocument &doc) {
   // The control source is derived state: it follows the category of the last
   // connected sensor (set through /api/connect) and can no longer be
   // switched manually. A controlSource field in the patch - sent by older

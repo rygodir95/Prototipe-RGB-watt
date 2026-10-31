@@ -13,6 +13,7 @@
 #include "BLEPower.h"
 #include "HRSensor.h"
 #include "BleScanRouter.h"
+#include "HubBleLink.h"
 #include "Simulation.h"
 #include "WebInterface.h"
 #include "Security.h"
@@ -27,6 +28,7 @@ PowerProcessor        processor;
 BLEPower       ble;
 HRSensor       hrBle;
 BleScanRouter  bleScan;   // single owner of the shared NimBLE scan
+HubBleLink     hubBle;    // local BLE control GATT server (Windows / phone client)
 Simulation     sim;
 WebInterface   web;
 
@@ -301,6 +303,13 @@ void setup() {
   hrBle.setAutoReconnect(g_config.autoReconnect);
   bleScan.begin(&ble, &hrBle);   // single owner of the shared NimBLE scan
 
+  // Local BLE control service (GATT server) for the Windows app / phone.
+  // It coexists with the sensor central role: one link for the selected
+  // sensor, one for the control client. Advertising failures are reported.
+  if (!hubBle.begin()) {
+    Serial.println("[HUB BLE] WARNING: control service unavailable (BLE control disabled)");
+  }
+
   web.begin();
 
   // Auto-reconnect to the saved source of the ACTIVE control source on boot.
@@ -334,6 +343,8 @@ void loop() {
 
   lighting.update();
   web.loop();
+
+  hubBle.loop();   // BLE control link: bounded queue, max one command per pass
 
   if (s_rebootAt && millis() >= s_rebootAt) {
     Serial.println("[SYS] Rebooting...");
