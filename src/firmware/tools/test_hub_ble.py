@@ -3,7 +3,8 @@
 
 1. Compiles and runs tools/tests/hub_ble/test.cpp (HubBleTransfer and the
    advertising policy, no hardware and no Arduino dependency).
-2. Checks the source invariants this fix depends on, so a later edit cannot
+2. Checks the source invariants this fix depends on (including the status
+   heartbeat, whole-read exclusivity and the About/banner link state), so a later edit cannot
    silently reintroduce the shared transfer slot, drop the October mutex fixes
    or forget the second NimBLE connection.
 
@@ -50,6 +51,9 @@ def check_invariants():
     transfer_h = read("include/HubBleTransfer.h")
     platformio = read("platformio.ini")
     host_bridge = read("tools/ble_web_host.js")
+    heartbeat_h = read("include/HubBleStatusHeartbeat.h")
+    ble_adapter = read("tools/ble_web_api.js")
+    web_ui = read("data/web/app.js")
 
     # Hub GATT service contract (Task 1).
     for uuid in ("5ca90000-6d75-4ca5-b4d6-3f9e6c5b0001",
@@ -98,6 +102,29 @@ def check_invariants():
     main_cpp = read("src/main.cpp")
     expect("hubBle.begin()" in main_cpp and "hubBle.loop()" in main_cpp,
            "main.cpp does not start/service the hub BLE link")
+
+    # Status heartbeat: an unchanged value is repeated while a client is attached,
+    # so the client's 6 s silence watchdog never closes a healthy idle link.
+    expect("HUB_BLE_STATUS_HEARTBEAT_MS = 2000" in heartbeat_h,
+           "the status heartbeat interval is not 2 s")
+    expect("hubBleStatusPublishDue(force, changed, _clients > 0" in hub_cpp,
+           "publishStatus() does not apply the change/heartbeat cadence")
+    publish = hub_cpp.split("void HubBleLink::publishStatus", 1)[-1]
+    expect(publish.count("_status->notify()") == 1,
+           "publishStatus() must notify through the STATUS characteristic only")
+
+    # Whole-read exclusivity: one slot per transfer kind, covering page 0 to the
+    # final page (and the single retry), while config and devices stay separate.
+    expect("readLocks" in host_bridge and "withReadSlot" in host_bridge,
+           "client does not hold an exclusive slot for a whole paged read")
+    expect("withReadSlot(op, async function ()" in host_bridge,
+           "the retry loop is not inside the exclusive read slot")
+
+    # About/banner truth: the UI must ask the transport, not inspect the socket.
+    expect("ZoneGlowBleLink" in ble_adapter and "staleMs" in ble_adapter,
+           "the BLE adapter does not expose link freshness")
+    expect("window.ZoneGlowBleLink" in web_ui,
+           "the web UI does not consult the transport for connection state")
 
     if failures:
         print("FAIL: source invariants")

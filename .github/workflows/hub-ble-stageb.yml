@@ -38,6 +38,10 @@ jobs:
         working-directory: src/firmware
         run: node tools/test_ble_transfer_retry.cjs
 
+      - name: BLE liveness tests (heartbeat, initial status, banner/About)
+        working-directory: src/firmware
+        run: node tools/tests/ble_liveness/test_liveness.cjs
+
       - name: PC simulator regression tests (Power + Heart Rate)
         working-directory: src/firmware/tools/pc-simulator
         run: python -m unittest discover -s tests -v

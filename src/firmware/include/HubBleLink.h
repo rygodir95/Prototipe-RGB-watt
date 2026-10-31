@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "Config.h"
+#include "HubBleStatusHeartbeat.h"
 #include "HubBleTransfer.h"
 
 class NimBLECharacteristic;
@@ -77,7 +78,8 @@ private:
   NimBLECharacteristic *_result = nullptr;
   NimBLEServer         *_server = nullptr;
 
-  uint32_t _lastStatus = 0;
+  uint32_t _lastStatus = 0;            // loop() publication cadence
+  uint32_t _lastStatusPublished = 0;   // last STATUS notify (change or heartbeat)
   String   _previousStatus;
   uint8_t  _clients = 0;
   bool     _advertising = false;

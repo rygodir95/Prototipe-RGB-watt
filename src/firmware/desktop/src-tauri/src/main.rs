@@ -106,6 +106,16 @@ async fn ble_connect(address: String, app: tauri::AppHandle, state: State<'_, Bl
     peripheral.subscribe(&status).await.map_err(|error| error.to_string())?;
     peripheral.subscribe(&result).await.map_err(|error| error.to_string())?;
     let mut notifications = peripheral.notifications().await.map_err(|error| error.to_string())?;
+    // The Hub notifies on change plus a heartbeat; a GATT read straight after
+    // subscribing hands the UI the current status immediately instead of
+    // waiting for the next frame (the characteristic stores its last value).
+    if let Ok(value) = peripheral.read(&status).await {
+        if let Ok(text) = String::from_utf8(value) {
+            if !text.is_empty() {
+                let _ = app.emit("ble-status", text);
+            }
+        }
+    }
     let event_app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(notification) = notifications.next().await {

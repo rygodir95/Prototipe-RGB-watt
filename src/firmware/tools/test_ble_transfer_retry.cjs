@@ -165,6 +165,69 @@ function session(hub) {
     assert.equal(hub.log.filter((item) => item.op === 'config_read').length, pagesOf(CONFIG) * 2);
   }
 
+  // 7. Two simultaneous config reads: the second waits for the first, so neither
+  //    can replace the other's transfer token.
+  {
+    const hub = createHub();
+    const { bridge, stats } = session(hub);
+    const [a, b] = await Promise.all([
+      bridge.api('/api/config', 'GET'),
+      bridge.api('/api/config', 'GET'),
+    ]);
+    assert.equal(a.ftp, 240);
+    assert.equal(b.ftp, 240);
+    const reads = hub.log.filter((item) => item.op === 'config_read');
+    assert.equal(reads.length, pagesOf(CONFIG) * 2, 'both reads complete');
+    assert.equal(hub.starts('config_read').length, 2, 'one page 0 per read, no expiry retry');
+    assert.ok(reads.every((item, index) => index === 0 || item.id === reads[index - 1].id + 1),
+      'the two reads must not interleave (contiguous request ids)');
+    assert.equal(stats().maxInFlight, 1);
+  }
+
+  // 8. The single permitted retry stays inside the same exclusive read: a
+  //    competing read cannot slip a page-0 request in between.
+  {
+    const hub = createHub({ failPage: 1, failOnce: 1 });
+    const { bridge } = session(hub);
+    const [a, b] = await Promise.all([
+      bridge.api('/api/config', 'GET'),
+      bridge.api('/api/config', 'GET'),
+    ]);
+    assert.equal(a.ftp, 240);
+    assert.equal(b.ftp, 240);
+    const ids = hub.log.filter((item) => item.op === 'config_read').map((item) => item.id);
+    assert.equal(hub.starts('config_read').length, 3, 'A(page 0) + A(retry) + B(page 0)');
+    assert.equal(ids[1], ids[0] + 1, 'the retry follows its failure inside the same slot');
+    assert.ok(ids.every((id, index) => index === 0 || id === ids[index - 1] + 1),
+      'no interleaving: the competing read waits for the retry to finish');
+  }
+
+  // 9. Config and devices reads keep independent slots and never block each other.
+  {
+    const hub = createHub();
+    const { bridge, stats } = session(hub);
+    const [configRead, devicesRead] = await Promise.all([
+      bridge.api('/api/config', 'GET'),
+      bridge.api('/api/devices', 'GET'),
+    ]);
+    assert.equal(configRead.ftp, 240);
+    assert.equal(devicesRead.devices[0].address, 'AA:BB');
+    assert.equal(hub.starts('config_read').length, 1);
+    assert.equal(hub.starts('devices_read').length, 1);
+    assert.equal(stats().maxInFlight, 1);
+  }
+
+  // 10. No deadlock: a write ends by re-reading the config, so it takes the same
+  //     kind's read slot from inside an unrelated operation.
+  {
+    const hub = createHub();
+    const { bridge } = session(hub);
+    const result = await bridge.api('/api/config', 'POST', { ftp: 250 });
+    assert.equal(result.ftp, 240);   // fake Hub always serves the same document
+    assert.ok(hub.log.some((item) => item.op === 'config_write'));
+    assert.equal(hub.starts('config_read').length, 1);
+  }
+
   console.log('ble transfer retry tests passed');
 })().catch((error) => {
   console.error(error);

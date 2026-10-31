@@ -467,7 +467,12 @@ function initWs() {
   ws = new WebSocket(proto + "://" + location.host + "/ws");
   ws.onmessage = (e) => { armWsWatchdog(); showHubReconnected(); try { updateLive(JSON.parse(e.data)); } catch (_) {} };
   ws.onerror = () => { try { ws.close(); } catch (_) {} };
-  ws.onclose = () => { clearTimeout(wsWatchdog); showHubBanner(true); setTimeout(initWs, 2000); };
+  ws.onclose = () => {
+    clearTimeout(wsWatchdog);
+    showHubBanner(true);
+    if (activeView === "about") fillAbout();   // About must not keep saying "connected"
+    setTimeout(initWs, 2000);
+  };
   armWsWatchdog();   // a socket that never opens at all must not hang either
 }
 const STATE_MAP = {
@@ -995,10 +1000,14 @@ function refreshAbout() {
   loadHubInfo().then(fillAbout, fillAbout);
 }
 function wsStatusText() {
+  // Over Bluetooth the transport owns the answer: it knows whether a frame
+  // actually arrived recently. "The socket object exists" is not proof that the
+  // Hub is reachable, so About and the connection banner share this one value.
+  const link = (typeof window !== "undefined") && window.ZoneGlowBleLink;
+  if (link && typeof link.status === "function") return link.status();
   if (!ws) return "not started";
-  if (ws.readyState === 1) return "connected";
-  if (ws.readyState === 0) return "connecting";
-  return "disconnected";
+  if (ws.readyState !== 1) return ws.readyState === 0 ? "connecting" : "disconnected";
+  return "connected";
 }
 function fillAbout() {
   if (!$("aboutAppVersion")) return;

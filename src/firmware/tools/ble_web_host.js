@@ -10,12 +10,26 @@ var HubBleBridge = (function () {
   var serial = Promise.resolve();
   var config = null;
   var telemetryListeners = [];
+  var lastFrame = null;
+  var lastFrameAt = 0;
+  // A status frame older than this is never replayed to a late subscriber: the
+  // UI watchdog uses the same window, so replaying stale data would report a
+  // dead link as alive.
+  var STATUS_STALE_MS = 6000;
+  // One exclusive slot per paged-transfer KIND. It covers the WHOLE read (page 0
+  // to the final page, including the single permitted retry): the Hub keeps one
+  // transfer slot per kind, so a second page-0 request would replace the token
+  // under the first reader and answer "transfer expired". config_read and
+  // devices_read keep independent slots.
+  var readLocks = {};
 
   function configure(value) { transport = value; }
   function setConnected(value) {
     connected = !!value;
     if (!connected) {
       if (pending) { clearTimeout(pending.timer); pending.reject(new Error("Hub disconnected")); pending = null; }
+      lastFrame = null;
+      lastFrameAt = 0;
       telemetryListeners.forEach(function (listener) { listener(null); });
     }
   }
@@ -81,16 +95,27 @@ var HubBleBridge = (function () {
     }
     return JSON.parse(chunks.join(""));
   }
+  // Run a whole paged read inside its kind's exclusive slot. A second read of
+  // the same kind waits for the first to finish, so it can never replace the
+  // transfer token mid-read; the retry below stays inside the same slot too.
+  function withReadSlot(op, task) {
+    var previous = readLocks[op] || Promise.resolve();
+    var run = previous.then(task, task);        // run even if the previous read failed
+    readLocks[op] = run.then(function () {}, function () {});
+    return run;
+  }
   async function readPaged(op) {
-    var attempts = 0;
-    for (;;) {
-      try {
-        return await readPagedOnce(op);
-      } catch (error) {
-        if (attempts >= TRANSFER_RETRY_LIMIT || !isTransferFailure(error)) throw error;
-        attempts++;
+    return withReadSlot(op, async function () {
+      var attempts = 0;
+      for (;;) {
+        try {
+          return await readPagedOnce(op);
+        } catch (error) {
+          if (attempts >= TRANSFER_RETRY_LIMIT || !isTransferFailure(error)) throw error;
+          attempts++;
+        }
       }
-    }
+    });
   }
   async function readConfig() { config = await readPaged("config_read"); return config; }
   async function writeConfig(patch) {
@@ -161,10 +186,18 @@ var HubBleBridge = (function () {
       color: status.color || "#000000", source: status.sim ? "Simulation" :
         (config ? (hr ? config.hrSourceName : config.sourceName) : "")
     };
+    lastFrame = frame;
+    lastFrameAt = Date.now();
     telemetryListeners.slice().forEach(function (listener) { listener(frame); });
   }
   function subscribeTelemetry(listener) {
     telemetryListeners.push(listener);
+    // A subscriber that arrives between notifications still gets the current
+    // frame at once - but only while it is fresh.
+    if (connected && lastFrame && (Date.now() - lastFrameAt) <= STATUS_STALE_MS) {
+      var current = lastFrame;
+      setTimeout(function () { listener(current); }, 0);
+    }
     return function () { telemetryListeners = telemetryListeners.filter(function (item) { return item !== listener; }); };
   }
   return { configure: configure, setConnected: setConnected, receiveResult: receiveResult,

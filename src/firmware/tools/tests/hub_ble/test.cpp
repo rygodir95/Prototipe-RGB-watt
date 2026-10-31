@@ -9,6 +9,7 @@
 #include <string>
 
 #include "../../../include/HubBleAdvertising.h"
+#include "../../../include/HubBleStatusHeartbeat.h"
 #include "../../../include/HubBleTransfer.h"
 
 static int g_checks = 0;
@@ -150,7 +151,42 @@ static int testInvalidPage() {
   return 0;
 }
 
-// 8. Advertising policy (testable part of the advertising lifecycle).
+// 8. Status heartbeat: an idle (unchanged) status is still published often
+//    enough that the client's 6 s silence watchdog never closes a healthy link.
+static int testStatusHeartbeat() {
+  const uint32_t clientSilenceMs = 6000;   // app.js WS_SILENCE_MS / BLE adapter
+  CHECK(HUB_BLE_STATUS_HEARTBEAT_MS < clientSilenceMs);
+
+  // 10 s of idle time; publishStatus() runs once per second from loop().
+  uint32_t last = 0;
+  bool have = false;
+  int published = 0;
+  uint32_t maxGap = 0;
+  for (uint32_t now = 0; now <= 10000; now += 1000) {
+    if (!hubBleStatusPublishDue(false, false, true, now, last)) continue;
+    if (have && now - last > maxGap) maxGap = now - last;
+    last = now;
+    have = true;
+    ++published;
+  }
+  CHECK(published >= 5);                       // ~one heartbeat per 2 s
+  CHECK(maxGap <= HUB_BLE_STATUS_HEARTBEAT_MS);
+  CHECK(maxGap < clientSilenceMs);             // never idle long enough to trip the client
+
+  // No client attached: an unchanged value is never repeated.
+  CHECK(!hubBleStatusPublishDue(false, false, false, 30000, 1000));
+  // A changed value publishes immediately, with or without a client.
+  CHECK(hubBleStatusPublishDue(false, true, false, 30000, 1000));
+  CHECK(hubBleStatusPublishDue(false, true, true, 1001, 1000));
+  // Forced publishes (connect / disconnect) are never suppressed.
+  CHECK(hubBleStatusPublishDue(true, false, true, 1001, 1000));
+  CHECK(hubBleStatusPublishDue(true, false, false, 1001, 1000));
+  // A heartbeat is not emitted before its interval has elapsed.
+  CHECK(!hubBleStatusPublishDue(false, false, true, 1999, 0));
+  return 0;
+}
+
+// 9. Advertising policy (testable part of the advertising lifecycle).
 static int testAdvertisingPolicy() {
   CHECK(hubBleAdvertisingWanted(0));
   CHECK(!hubBleAdvertisingWanted(1));
@@ -166,6 +202,7 @@ int main() {
     {"repeated final page", testRepeatedFinalPage},
     {"expired", testExpired},
     {"invalid page", testInvalidPage},
+    {"status heartbeat", testStatusHeartbeat},
     {"advertising policy", testAdvertisingPolicy},
   };
   int failures = 0;

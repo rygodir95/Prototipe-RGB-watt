@@ -41,15 +41,23 @@
 
   // The existing dashboard expects WebSocket-style telemetry. Preserve that
   // interface locally; frames themselves come from the Hub's BLE status GATT.
+  // A synthetic socket is OPEN only once a REAL status frame has arrived: the
+  // mere existence of the object proves nothing about the Hub link.
+  var STALE_MS = 6000;
+  var currentSocket = null;
   function BleSocket() {
     var self = this;
-    this.readyState = 0;
+    this.readyState = 0;        // CONNECTING until the first telemetry frame
+    this.lastFrameAt = 0;
     this.onmessage = null; this.onerror = null; this.onclose = null; this.onopen = null;
     this.unsubscribe = bridge.subscribeTelemetry(function (frame) {
       if (frame === null) { self.close(); return; }
-      if (self.readyState === 1 && self.onmessage) self.onmessage({ data: JSON.stringify(frame) });
+      if (self.readyState === 3) return;
+      self.lastFrameAt = Date.now();
+      if (self.readyState === 0) { self.readyState = 1; if (self.onopen) self.onopen(); }
+      if (self.onmessage) self.onmessage({ data: JSON.stringify(frame) });
     });
-    setTimeout(function () { if (self.readyState === 0) { self.readyState = 1; if (self.onopen) self.onopen(); } }, 0);
+    currentSocket = this;
   }
   BleSocket.CONNECTING = 0; BleSocket.OPEN = 1; BleSocket.CLOSING = 2; BleSocket.CLOSED = 3;
   BleSocket.prototype.close = function () {
@@ -59,6 +67,20 @@
     if (this.onclose) this.onclose();
   };
   window.WebSocket = BleSocket;
+
+  // Single source of truth for "is the Hub reachable RIGHT NOW". The web UI's
+  // connection banner and its About page both read this, so they can never
+  // disagree, and an existing-but-silent socket is never reported as connected.
+  window.ZoneGlowBleLink = {
+    staleMs: STALE_MS,
+    status: function () {
+      var socket = currentSocket;
+      if (!socket) return "not started";
+      if (socket.readyState === 0) return "connecting";
+      if (socket.readyState !== 1) return "disconnected";
+      return (Date.now() - socket.lastFrameAt) > STALE_MS ? "stale" : "connected";
+    }
+  };
 
   // These operations require a protected network upload/provisioning path.
   // Do not silently claim success or send Wi-Fi secrets over unpaired GATT.

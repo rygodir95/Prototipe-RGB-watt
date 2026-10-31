@@ -676,9 +676,19 @@ void HubBleLink::publishStatus(bool force) {
 
   String out;
   serializeJson(doc, out);
-  if (!force && out == _previousStatus) return;
+  // Change-based publishing stays as the primary path. On top of it, an
+  // UNCHANGED status is repeated as a heartbeat while a control client is
+  // attached: the client's silence watchdog only re-arms on received frames, so
+  // a healthy but idle link must still produce traffic (cadence rule:
+  // HubBleStatusHeartbeat.h).
+  const uint32_t now = millis();
+  const bool changed = (out != _previousStatus);
+  if (!hubBleStatusPublishDue(force, changed, _clients > 0, now, _lastStatusPublished)) return;
   _previousStatus = out;
+  _lastStatusPublished = now;
   if (!_status) return;
+  // The value is stored before notifying, so a client that subscribes late can
+  // read the current status immediately instead of waiting for the next frame.
   _status->setValue((const uint8_t *)out.c_str(), out.length());
   if (_clients) _status->notify();
 }
