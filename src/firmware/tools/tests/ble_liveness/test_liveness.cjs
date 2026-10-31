@@ -201,5 +201,7 @@ test('bridge replays a fresh status to a late subscriber, never a stale one', as
     }
   }
   console.log(tests.length + ' liveness checks, ' + failed + ' failures');
-  if (failed) process.exitCode = 1;
+  // The UI retries its socket forever after a close (by design), so leftover
+  // timers would keep this process alive. Exit explicitly with the result.
+  process.exit(failed ? 1 : 0);
 })();
