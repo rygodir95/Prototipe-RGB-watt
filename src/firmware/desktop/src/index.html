@@ -26,6 +26,7 @@
     <span id="statusText">Connecting…</span>
     <span class="sep">·</span>
     <span id="backendLabel">PC Simulator</span>
+    <button id="bleShellDisconnect" class="ble-shell-disconnect" type="button" hidden>Disconnect Bluetooth</button>
   </header>
 
   <!-- The existing ZoneGlow web UI (Dashboard / Devices / Zones / Settings),
@@ -50,10 +51,38 @@
         <input id="backendUrl" type="text" spellcheck="false" placeholder="http://localhost:8080" />
         <button id="connectBtn" type="button">Connect</button>
       </div>
+      <button id="bleBtn" class="secondary-btn" type="button">Use Bluetooth instead</button>
+    </div>
+  </div>
+
+  <div id="blePanel" class="ble-panel" hidden>
+    <div class="overlay-card">
+      <div class="overlay-brand"><span class="overlay-dot"></span><div><h1>Bluetooth Hub</h1><p>Local control connection</p></div></div>
+      <p id="bleHint" class="overlay-hint">Search for a nearby Training Hub.</p>
+      <div id="bleDevices" class="ble-devices"></div>
+      <div id="bleLive" class="ble-live" hidden></div>
+      <div id="bleConfig" class="ble-live" hidden></div>
+      <div id="bleSetup" class="ble-devices" hidden>
+        <label>FTP (W) <input id="bleFtp" type="number" min="0" max="1000"></label>
+        <label>Max HR <input id="bleHrMax" type="number" min="0" max="230"></label>
+        <label>Brightness <input id="bleBrightness" type="number" min="0" max="100"></label>
+        <button id="bleSaveSetup" type="button">Save setup</button>
+      </div>
+      <div id="bleZones" class="ble-devices" hidden></div>
+      <div id="bleSensors" class="ble-devices"></div>
+      <div class="ble-actions">
+        <button id="bleScanBtn" type="button">Search</button>
+        <button id="bleSensorScanBtn" class="secondary-btn" type="button" disabled>Find sensors</button>
+        <button id="bleLightingBtn" class="secondary-btn" type="button" disabled>Lighting Test</button>
+        <button id="bleDisconnectBtn" class="secondary-btn" type="button" disabled>Disconnect</button>
+      </div>
     </div>
   </div>
 
   <script src="transport.js"></script>
+  <script src="ble-transport.js"></script>
+  <script src="ble-web-host.js"></script>
   <script src="shell.js"></script>
 </body>
 </html>
+
