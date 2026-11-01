@@ -416,10 +416,10 @@ input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
   box-shadow: var(--shadow-menu);
 }
 .demo-banner {
-  background: var(--bg-elev); border: 1px solid var(--accent); color: var(--text);
+  background: var(--bg-elev); border: 1px solid var(--accent-bright); color: var(--text);
   box-shadow: var(--shadow-menu);
 }
-.demo-banner .pill-dot { background: var(--accent); }
+.demo-banner .pill-dot { background: var(--accent-bright); }
 /* Same class-vs-[hidden] conflict as .onboarding: the display:flex above
    overrides the browser's [hidden] handling, so Stop test / natural
    completion (demoBanner.hidden = true) never visually hides the banner. */
