@@ -156,9 +156,7 @@ body {
 .brand { display: flex; align-items: center; gap: var(--space-3); }
 .brand-dot {
   width: 40px; height: 40px; border-radius: var(--radius);
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 0 24px var(--accent-glow);
-  transition: background .4s ease, box-shadow .4s ease;
+  background: var(--lime);   /* fixed brand mark - never the live zone colour */
 }
 .brand h1 { font-family: var(--font-heading); font-size: 19px; letter-spacing: var(--tracking-heading); color: var(--heading); }
 .brand-sub { font-size: 12px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; }
@@ -269,18 +267,32 @@ body {
 .muted { color: var(--muted); font-size: 13px; line-height: 1.5; }
 
 /* Power card */
-.power-card { grid-column: 1 / -1; position: relative; overflow: hidden; text-align: center; padding: 34px var(--space-5) 26px; }
-.power-glow {
-  position: absolute; top: -60px; left: 50%; transform: translateX(-50%);
-  width: 320px; height: 320px; border-radius: var(--radius-pill);
-  background: radial-gradient(circle, var(--glow-accent), transparent 70%);
-  filter: blur(30px); transition: background .3s ease; pointer-events: none;
+/* Power card: compact live strip (44px desktop / 32px mobile). The coloured
+   left edge is #powerGlow - app.js paints it with the active zone colour. */
+.power-card {
+  grid-column: 1 / -1; position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: var(--space-3);
+  height: 44px; padding: 0 var(--space-4) 0 18px; text-align: left;
 }
-.power-value { font-size: 84px; font-weight: 800; line-height: 1; letter-spacing: -3px; position: relative; }
-.power-value em { font-size: 28px; font-style: normal; color: var(--muted); margin-left: 6px; font-weight: 600; }
+.power-glow {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: var(--border-strong);   /* resting state; app.js sets the zone colour */
+  transition: background-color .25s ease; pointer-events: none;
+}
+.power-value { display: flex; align-items: baseline; font-size: 24px; font-weight: 800; line-height: 1; letter-spacing: -.5px; }
+.power-value em { font-size: 13px; font-style: normal; color: var(--muted); margin-left: 4px; font-weight: 600; }
 .zone-badge {
-  display: inline-block; margin-top: var(--space-4); padding: var(--space-2) 18px; border-radius: var(--radius-pill);
-  background: var(--bg-elev); border: 1px solid var(--border); font-weight: 700; font-size: 15px; position: relative;
+  margin-left: auto; display: inline-flex; align-items: center; height: 22px; min-width: 0;
+  padding: 0 10px; overflow: hidden; border-radius: var(--radius-pill);
+  background: var(--bg-elev); border: 1px solid var(--border);
+  font-weight: 700; font-size: 12px; white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .power-card { height: 32px; gap: var(--space-2); padding: 0 var(--space-3) 0 14px; }
+  .power-glow { width: 3px; }
+  .power-value { font-size: 17px; letter-spacing: -.2px; }
+  .power-value em { font-size: 11px; margin-left: 3px; }
+  .zone-badge { height: 19px; padding: 0 8px; font-size: 11px; }
 }
 
 /* Source mini */

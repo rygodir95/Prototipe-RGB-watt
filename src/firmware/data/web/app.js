@@ -515,14 +515,13 @@ function updateLive(t) {
   lastTel = t;
   if (activeView === "about") fillAbout();
 
-  // Colour glow + brand: must show the SAME zone as the label. Use the current
+  // Live zone edge: #powerGlow shows the SAME zone as the label. Use the current
   // zone's configured colour of the ACTIVE control source so
-  // zone number = zone name = displayed colour.
+  // zone number = zone name = displayed edge colour. The brand mark stays fixed
+  // Performance Lime and must never take the live zone colour.
   const zones = hr ? (config.hrZones || []) : (config.zones || []);
   const zoneColor = (t.zone >= 0 && t.zone < zones.length) ? zones[t.zone].color : t.color;
-  $("powerGlow").style.background = "radial-gradient(circle, " + zoneColor + "cc, transparent 70%)";
-  $("brandDot").style.background = zoneColor;
-  $("brandDot").style.boxShadow = "0 0 24px " + zoneColor + "88";
+  $("powerGlow").style.background = zoneColor;
 
   // Dashboard source
   $("dashSourceName").textContent = t.source || (t.sim ? "Simulation" : "—");
