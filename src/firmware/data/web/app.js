@@ -88,6 +88,15 @@ async function postConfig(patch) {
 // source follows the connected device's category (Devices -> Connect); the
 // UI only READS config.controlSource for units/zones/state display.
 
+// Sliders: paint the lime active track. Presentation only - it reads the
+// input's own value, so no state is duplicated and nothing is sent anywhere.
+function paintSliderFill(el) {
+  const min = Number(el.min) || 0;
+  const max = Number(el.max) || 100;
+  const pct = max > min ? ((Number(el.value) - min) / (max - min)) * 100 : 0;
+  el.style.setProperty("--fill", Math.max(0, Math.min(100, pct)) + "%");
+}
+
 // ---------------- Populate forms ----------------
 function fillForms() {
   $("ftpInput").value = config.ftp;
@@ -102,6 +111,8 @@ function fillForms() {
   $("ledEffectSel").value = config.ledEffect;
   $("brightInput").value = config.brightness;
   $("brightVal").textContent = config.brightness + "%";
+  paintSliderFill($("smoothInput"));
+  paintSliderFill($("brightInput"));
   $("autoReconnect").checked = config.autoReconnect;
   $("debugToggle").checked = config.debug;
   $("wifiSsid").value = config.wifiSsid || "";
@@ -1097,8 +1108,8 @@ async function init() {
   $("otaBtn").addEventListener("click", otaUpload);
   $("ledEffectSel").addEventListener("change", async () => { await postConfig({ ledEffect: +$("ledEffectSel").value }); toast("Effect updated"); });
   $("scanBtn").addEventListener("click", scan);
-  $("smoothInput").addEventListener("input", () => ($("smoothVal").textContent = $("smoothInput").value));
-  $("brightInput").addEventListener("input", () => ($("brightVal").textContent = $("brightInput").value + "%"));
+  $("smoothInput").addEventListener("input", () => { $("smoothVal").textContent = $("smoothInput").value; paintSliderFill($("smoothInput")); });
+  $("brightInput").addEventListener("input", () => { $("brightVal").textContent = $("brightInput").value + "%"; paintSliderFill($("brightInput")); });
 
   // ---- Demo Mode ----
   $("demoBtn").addEventListener("click", () => startDemo());
