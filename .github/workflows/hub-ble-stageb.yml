@@ -39,8 +39,24 @@ jobs:
       - name: All mobile regression suites
         shell: bash
         run: |
-          set -e
-          for suite in mobile/tests/test-*.cjs; do node "$suite"; done
+          failed=0
+          for suite in mobile/tests/test-*.cjs; do
+            echo "REGRESSION_SUITE=$suite"
+            if node "$suite"; then echo "REGRESSION_PASS=$suite"; else echo "REGRESSION_FAIL=$suite"; failed=1; fi
+          done
+          exit "$failed"
       - name: PC simulator regression tests (Power + Heart Rate)
+        if: always()
         working-directory: src/firmware/tools/pc-simulator
         run: python -m unittest discover -s tests -v
+      - name: Compare mobile regressions against requested starting commit
+        if: always()
+        shell: bash
+        run: |
+          git fetch origin 9c2fe2d5159abbe3634c04c4a050f8c52a2c5925 --depth=1
+          git worktree add --detach "$RUNNER_TEMP/ble-baseline" 9c2fe2d5159abbe3634c04c4a050f8c52a2c5925
+          cd "$RUNNER_TEMP/ble-baseline"
+          for suite in mobile/tests/test-*.cjs; do
+            echo "BASELINE_SUITE=$suite"
+            if node "$suite"; then echo "BASELINE_PASS=$suite"; else echo "BASELINE_FAIL=$suite"; fi
+          done

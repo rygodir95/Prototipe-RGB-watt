@@ -32,6 +32,7 @@ struct BleSession {
     result: Option<btleplug::api::Characteristic>,
 }
 struct BleState {
+    request: Mutex<bool>, // disconnect in progress; serializes admission/invalidation
     operation: tokio::sync::Mutex<()>,
     link: Mutex<Option<BleSession>>,
     sessions: Sessions,
@@ -50,7 +51,7 @@ impl BleState {
             };
             let _ = app.emit(name, NativeEvent { session: message.generation, client_id: message.client_id, value });
         });
-        Self { operation: tokio::sync::Mutex::new(()), link: Mutex::new(None), sessions }
+        Self { request: Mutex::new(false), operation: tokio::sync::Mutex::new(()), link: Mutex::new(None), sessions }
     }
     async fn close_link(&self) -> Result<(), String> {
         let old = self.link.lock().map_err(|_| "BLE state lock failed")?.take();
@@ -102,8 +103,12 @@ async fn find_peripheral(address: String) -> Result<Peripheral, String> {
 async fn ble_connect(address: String, client_id: String, state: State<'_, BleState>) -> Result<u64, String> {
     // Reject concurrent attempts instead of queueing a stale connect behind a
     // newer disconnect. Disconnect invalidates the generation before waiting.
-    let _operation = state.operation.try_lock().map_err(|_| "A BLE connection operation is already running")?;
-    let scope = state.sessions.begin(client_id);
+    let (_operation, scope) = {
+        let disconnecting = state.request.lock().map_err(|_| "BLE request lock failed")?;
+        if *disconnecting { return Err("BLE disconnect is still running".into()); }
+        let operation = state.operation.try_lock().map_err(|_| "A BLE connection operation is already running")?;
+        (operation, state.sessions.begin(client_id))
+    };
     let outcome = async {
         state.close_link().await?;
         let peripheral = scope.run(find_peripheral(address)).await?;
@@ -201,9 +206,16 @@ async fn ble_command(message: String, client_id: String, state: State<'_, BleSta
 }
 #[tauri::command]
 async fn ble_disconnect(state: State<'_, BleState>) -> Result<(), String> {
-    state.sessions.stop(); // immediate cancellation, even during connect/read
+    {
+        let mut disconnecting = state.request.lock().map_err(|_| "BLE request lock failed")?;
+        if *disconnecting { return Ok(()); }
+        *disconnecting = true;
+        state.sessions.stop(); // immediate cancellation, even during connect/read
+    }
     let _operation = state.operation.lock().await;
-    state.close_link().await
+    let result = state.close_link().await;
+    *state.request.lock().map_err(|_| "BLE request lock failed")? = false;
+    result
 }
 fn main() {
     tauri::Builder::default()
