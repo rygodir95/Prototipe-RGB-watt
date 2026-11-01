@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZoneGlow</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
@@ -30,12 +30,27 @@
     </header>
 
     <!-- Nav -->
-    <nav class="nav" id="nav">
-      <button class="nav-btn active" data-view="dashboard" data-testid="nav-dashboard">Dashboard</button>
-      <button class="nav-btn" data-view="devices" data-testid="nav-devices">Devices</button>
-      <button class="nav-btn" data-view="zones" data-testid="nav-zones">Zones</button>
-      <button class="nav-btn" data-view="settings" data-testid="nav-settings">Settings</button>
-      <button class="nav-btn" data-view="about" data-testid="nav-about">About</button>
+    <nav class="nav" id="nav" aria-label="Main">
+      <button class="nav-btn active" data-view="dashboard" data-testid="nav-dashboard" aria-current="page">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span class="nav-label">Dashboard</span>
+      </button>
+      <button class="nav-btn" data-view="devices" data-testid="nav-devices">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
+        <span class="nav-label">Devices</span>
+      </button>
+      <button class="nav-btn" data-view="zones" data-testid="nav-zones">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+        <span class="nav-label">Zones</span>
+      </button>
+      <button class="nav-btn" data-view="settings" data-testid="nav-settings">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg>
+        <span class="nav-label">Settings</span>
+      </button>
+      <button class="nav-btn" data-view="about" data-testid="nav-about">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span class="nav-label">About</span>
+      </button>
     </nav>
 
     <main class="content">

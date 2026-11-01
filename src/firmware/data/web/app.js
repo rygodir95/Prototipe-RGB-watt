@@ -53,9 +53,13 @@ function toast(msg) {
 function initNav() {
   document.querySelectorAll(".nav-btn").forEach((b) => {
     b.addEventListener("click", () => {
-      document.querySelectorAll(".nav-btn").forEach((x) => x.classList.remove("active"));
+      document.querySelectorAll(".nav-btn").forEach((x) => {
+        x.classList.remove("active");
+        x.removeAttribute("aria-current");
+      });
       document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
       b.classList.add("active");
+      b.setAttribute("aria-current", "page");
       $("view-" + b.dataset.view).classList.add("active");
       activeView = b.dataset.view;
       if (activeView === "devices") refreshDevices();
