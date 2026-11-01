@@ -148,10 +148,11 @@ console.log("5. Web UI accepts 0 = not set and stays in sync");
     "FTP input allows 0");
   assert(SRC.indexHtml.includes('id="hrMaxInput" data-testid="hr-max-input" min="0" max="230"'),
     "Max HR input allows 0");
-  assert(SRC.indexHtml.includes('<span id="hysUnit">BPM</span>'),
-    "hysteresis is labelled BPM (HR-only; Power is FTP-relative)");
-  assert(SRC.appJs.includes('$("hysUnit").textContent = "BPM";'),
-    "fillForms always labels hysteresis in BPM");
+  assert(!SRC.indexHtml.includes('id="hysUnit"') &&
+         !SRC.indexHtml.includes('data-testid="hysteresis-input"'),
+    "no user-facing hysteresis control (the HR margin stays internal)");
+  assert(!SRC.appJs.includes('hysInput') && !SRC.appJs.includes('hysUnit'),
+    "the UI neither reads nor writes the hysteresis control");
   assert(SRC.webContent.includes('id="statFtp">0<') &&
          SRC.webContent.includes('id="ftpInput" data-testid="ftp-input" min="0" max="1000"'),
     "embedded WebContent.h was regenerated from data/web");

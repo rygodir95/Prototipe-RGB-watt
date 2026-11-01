@@ -37,7 +37,7 @@ function fire(el, ev) { (el._listeners[ev] || []).forEach((fn) => fn({})); }
 function makeElement(elements) {
   const el = {
     _tc: "", _ih: "", _children: [], _listeners: {}, _id: "",
-    style: {}, dataset: {}, value: "",
+    style: { setProperty(k, v) { this[k] = v; } }, dataset: {}, value: "",
     checked: false, disabled: false, className: "", hidden: false,
     files: [],
     classList: {
