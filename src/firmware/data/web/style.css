@@ -25,7 +25,7 @@
   /* ---- lines ---- */
   --border: #C9D3E0;         /* hairline: dividers, decorative only */
   --border-strong: #A9B6C9;  /* stronger divider, never a control boundary */
-  --field-border: #79899F;   /* control boundary, >=3:1 on every surface */
+  --field-border: #6B7C92;   /* control boundary, >=3:1 on every surface it paints against */
   /* ---- interaction: Electric Blue ---- */
   --accent: #3567D4;
   --accent-hover: #2C58B8;
@@ -94,7 +94,7 @@
   /* ---- lines ---- */
   --border: #33465F;
   --border-strong: #5B7290;
-  --field-border: #5F7895;
+  --field-border: #869CB4;   /* control boundary, >=3:1 on every surface it paints against */
   /* ---- interaction: Electric Blue ---- */
   --accent: #3567D4;
   --accent-hover: #2C58B8;
