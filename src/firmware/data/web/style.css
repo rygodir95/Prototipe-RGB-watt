@@ -1,11 +1,18 @@
 /* ==========================================================================
-   ZoneGlow design tokens - Phase 2 "Deep Blue + Performance Lime"
-   Precision-instrument system: Racing Graphite / Deep Navy surfaces, Electric
-   Blue for interaction, Performance Lime for the brand mark only.
-   Dark is the primary theme; light is the Ice White variant of the palette.
-   Phase 2.1: tokens, typography, spacing, radius, borders and focus rings.
-   Selectors, layout, markup and behaviour are unchanged; the two confirmed
-   dead segmented-control blocks were removed.
+   ZoneGlow design tokens - Visual Identity 1.1 "Deep Blue + Performance Lime"
+   Precision-instrument system: Deep Navy / Racing Graphite surfaces.
+   Performance Lime is an INTERACTION colour, not only a brand mark:
+     lime   brand + interactive emphasis (primary buttons, ON switch tracks,
+            slider fill and thumb, active nav indicator, active card border)
+     blue   power-sensor identity and technical interaction (focus rings,
+            theme switch, links, live values)
+     hr     heart-rate source identity and HR states
+     ok/warn/err  dedicated status colours - never lime
+   The old "maximum N lime elements per screen" cap is replaced by these
+   semantic rules: lime may repeat while it reports real interaction state, and
+   must never become decoration or stand in for a status colour.
+   Both themes are first-class and use DIFFERENT content colours on a lime fill
+   (white on light, navy on dark) - see --on-lime.
    Power and heart-rate ZONE colours are functional data supplied by the Hub
    config at runtime and are deliberately NOT defined here.
    ========================================================================== */
@@ -30,16 +37,22 @@
   --accent: #3567D4;
   --accent-hover: #2C58B8;
   --accent-bright: #3567D4;
-  --control-fill: #3567D4;   /* toggle/slider fills, >=3:1 on card */
+  --control-fill: #3567D4;   /* Electric-Blue fill, kept for technical (non-lime) use */
   --accent-text: #3567D4;
   --on-accent: #FFFFFF;
   --accent-glow: rgba(53, 103, 212, .16);
   --glow-accent: rgba(53, 103, 212, .10);
-  /* ---- brand: Performance Lime (non-text accent in light theme) ---- */
-  --lime: #547F18;        /* non-text accents and decoration */
-  --lime-text: #4C7416;   /* lime for text and small icons */
-  --on-lime: #FFFFFF;     /* content on a lime fill */
-  --accent-2: var(--lime);   /* legacy secondary-accent slot, now lime */
+  /* ---- Performance Lime: brand + interactive emphasis (Identity 1.1) ----
+     Deep Lime #547F18 is the light-theme lime: 4.5:1 or better against every
+     surface it paints on (4.74:1 on white, 4.50:1 on the elevated surface). A lime FILL takes white content
+     in this theme - never reuse the dark theme's navy here. */
+  --lime: #547F18;          /* Deep Lime - fills, outlines, indicators */
+  --lime-hover: #456A13;    /* filled primary hover (6.3:1 with white) */
+  --lime-text: #4C7416;     /* Lime Text - lime used as text / small icons */
+  --lime-border: rgba(84, 127, 24, .45);   /* subtle active-card border */
+  --lime-tint: rgba(84, 127, 24, .10);     /* secondary-button hover wash */
+  --on-lime: #FFFFFF;       /* approved content ON a lime fill (light) */
+  --accent-2: var(--lime);  /* legacy secondary-accent slot, now lime */
   /* ---- status ---- */
   --ok: #1F7A54;
   --warn: #8A5A00;
@@ -99,15 +112,18 @@
   --accent: #3567D4;
   --accent-hover: #2C58B8;
   --accent-bright: #5C8BE8;
-  --control-fill: #5C8BE8;
+  --control-fill: #5C8BE8;   /* Electric-Blue fill, kept for technical (non-lime) use */
   --accent-text: #7FA6F0;
   --on-accent: #FFFFFF;
   --accent-glow: rgba(92, 139, 232, .18);
   --glow-accent: rgba(53, 103, 212, .16);
-  /* ---- brand: Performance Lime ---- */
-  --lime: #B9E63B;
-  --lime-text: #B9E63B;
-  --on-lime: #111C30;
+  /* ---- Performance Lime: brand + interactive emphasis (Identity 1.1) ---- */
+  --lime: #B9E63B;          /* Performance Lime - fills, outlines, indicators */
+  --lime-hover: #A8D42B;    /* filled primary hover (9.9:1 with navy) */
+  --lime-text: #B9E63B;     /* lime as text (9.8:1 on the graphite card) */
+  --lime-border: rgba(185, 230, 59, .38);  /* subtle active-card border */
+  --lime-tint: rgba(185, 230, 59, .12);    /* secondary-button hover wash */
+  --on-lime: #111C30;       /* approved dark content ON a lime fill */
   /* ---- status ---- */
   --ok: #4FC08D;
   --warn: #E9A23B;
@@ -268,14 +284,17 @@ body {
 
 /* Power card */
 /* Power card: compact live strip (44px desktop / 32px mobile). The coloured
-   left edge is #powerGlow - app.js paints it with the active zone colour. */
+   left edge is #powerGlow - app.js paints it with the exact active zone colour
+   and it is never recoloured here. This strip is the one ACTIVE card on the
+   Dashboard, so it is the only card that carries the subtle lime border; every
+   other card keeps its neutral graphite/surface hairline. */
 .power-card {
-  grid-column: 1 / -1; position: relative; overflow: hidden;
+  grid-column: 1 / -1; position: relative; overflow: hidden; border-color: var(--lime-border);
   display: flex; align-items: center; gap: var(--space-3);
   height: 44px; padding: 0 var(--space-4) 0 18px; text-align: left;
 }
 .power-glow {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
   background: var(--border-strong);   /* resting state; app.js sets the zone colour */
   transition: background-color .25s ease; pointer-events: none;
 }
@@ -289,7 +308,6 @@ body {
 }
 @media (max-width: 640px) {
   .power-card { height: 32px; gap: var(--space-2); padding: 0 var(--space-3) 0 14px; }
-  .power-glow { width: 3px; }
   .power-value { font-size: 17px; letter-spacing: -.2px; }
   .power-value em { font-size: 11px; margin-left: 3px; }
   .zone-badge { height: 19px; padding: 0 8px; font-size: 11px; }
@@ -306,16 +324,22 @@ body {
 .stat-k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 .stat-v { font-size: 22px; font-weight: 700; margin-top: var(--space-1); }
 
-/* Buttons */
+/* Buttons - combined system (Identity 1.1)
+   primary    filled Performance Lime, theme-specific content colour
+   secondary  surface background, lime outline and lime text
+   destructive keeps its dedicated error fill and is never lime
+   The focus ring stays Electric Blue: on a lime fill a lime ring would be
+   invisible (1.1:1 light / 2.3:1 dark), and the 2px offset puts the ring on
+   the card, where it measures 5.2:1 light / 4.3:1 dark. */
 .btn {
-  border: 1px solid var(--field-border); background: var(--bg-elev); color: var(--text);
+  border: 1px solid var(--lime); background: var(--bg-elev); color: var(--lime-text);
   padding: 11px 18px; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; font-size: 14px;
   transition: background .2s, border-color .2s, transform .2s, box-shadow .2s;
 }
-.btn:hover { transform: translateY(-1px); border-color: var(--accent-bright); background: var(--surface-hover); }
-.btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-color: var(--accent-bright); box-shadow: none; }
-.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-.btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn:hover { transform: translateY(-1px); border-color: var(--lime); background: var(--lime-tint); }
+.btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: none; }
+.btn.primary { background: var(--lime); color: var(--on-lime); border-color: var(--lime); }
+.btn.primary:hover { background: var(--lime-hover); border-color: var(--lime-hover); color: var(--on-lime); }
 /* Error is a filled chip with white text and a label, never red text. */
 .btn.danger { background: var(--err-fill); color: var(--on-err-fill); border-color: var(--err-fill); }
 .btn.danger:hover { background: var(--err-fill); border-color: var(--err); }
@@ -337,19 +361,33 @@ input[type="text"], input[type="number"], input[type="password"], select {
 input:focus, select:focus { border-color: var(--accent-bright); box-shadow: none; }
 input:focus-visible, select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 
-/* Sliders */
-.slider { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: var(--radius-pill); background: var(--field-border); outline: none; }
-.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: var(--radius-pill); background: var(--control-fill); cursor: pointer; box-shadow: var(--shadow-sm); }
-.slider::-moz-range-thumb { width: 22px; height: 22px; border: none; border-radius: var(--radius-pill); background: var(--control-fill); cursor: pointer; }
-.slider:disabled { opacity: .5; }
+/* Sliders - lime active track and lime thumb, neutral unfilled track.
+   The unfilled part keeps --field-border so the control boundary stays >=3:1
+   against the card (4.3:1 light / 5.0:1 dark). --fill is written by app.js on
+   load and on input; Firefox paints its own progress portion. Disabled
+   controls are never lime. */
+.slider {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: var(--radius-pill); outline: none;
+  background: linear-gradient(to right, var(--lime) 0 var(--fill, 0%), var(--field-border) var(--fill, 0%) 100%);
+}
+.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border: 2px solid var(--card); border-radius: var(--radius-pill); background: var(--lime); cursor: pointer; box-shadow: var(--shadow-sm); }
+.slider::-moz-range-track { height: 8px; border-radius: var(--radius-pill); background: var(--field-border); }
+.slider::-moz-range-progress { height: 8px; border-radius: var(--radius-pill); background: var(--lime); }
+.slider::-moz-range-thumb { width: 18px; height: 18px; border: 2px solid var(--card); border-radius: var(--radius-pill); background: var(--lime); cursor: pointer; }
+.slider:disabled { opacity: 1; background: var(--field-border); }
+.slider:disabled::-webkit-slider-thumb { background: var(--field-border); }
+.slider:disabled::-moz-range-thumb { background: var(--field-border); }
 
 /* Toggle */
 .toggle { position: relative; display: inline-block; width: 46px; height: 26px; }
 .toggle input { display: none; }
 .toggle-track { position: absolute; inset: 0; background: var(--field-border); border-radius: var(--radius-pill); transition: .25s; cursor: pointer; }
 .toggle-track:before { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: var(--toggle-knob); border-radius: var(--radius-pill); transition: .25s; }
-.toggle input:checked + .toggle-track { background: var(--control-fill); }
-.toggle input:checked + .toggle-track:before { transform: translateX(20px); }
+.toggle input:checked + .toggle-track { background: var(--lime); }
+.toggle input:checked + .toggle-track:before { transform: translateX(20px); background: var(--on-lime); }
+/* Disabled: neutral track and knob, never lime. */
+.toggle input:disabled + .toggle-track { background: var(--field-border); cursor: not-allowed; }
+.toggle input:disabled + .toggle-track:before { background: var(--toggle-knob); }
 
 /* Device list */
 .device-list { display: flex; flex-direction: column; gap: 10px; }
@@ -384,7 +422,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--focus-ring)
 
 /* OTA */
 .ota-progress { height: 8px; border-radius: var(--radius-pill); background: var(--field-border); overflow: hidden; margin: 14px 0; }
-.ota-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .2s; }
+.ota-bar { height: 100%; width: 0%; background: var(--lime); transition: width .2s; }
 input[type="file"] { width: 100%; font-size: 13px; color: var(--muted); }
 .ota-status { margin-top: var(--space-3); font-size: 14px; font-weight: 600; }
 .ota-status.ok { color: var(--ok); }
