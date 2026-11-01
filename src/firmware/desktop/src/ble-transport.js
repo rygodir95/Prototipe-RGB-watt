@@ -2,6 +2,7 @@
 "use strict";
 var HubBleTransport = (function () {
   var sequence = 0, clientId = null, session = null, connecting = false;
+  var instance = window.crypto.randomUUID();
   var ready = Promise.resolve();
   function core() { return window.__TAURI__ && window.__TAURI__.core; }
   function invoke(command, args) {
@@ -28,7 +29,7 @@ var HubBleTransport = (function () {
     scan: function () { return invoke("ble_scan"); },
     connect: function (address) {
       if (connecting || clientId !== null) return Promise.reject(new Error("A BLE session is already active or connecting"));
-      var token = "desktop-" + (++sequence);
+      var token = "desktop-" + instance + "-" + (++sequence);
       clientId = token; session = null; connecting = true;
       // Native event subscriptions must finish before native startup can emit.
       return ready.then(function () {

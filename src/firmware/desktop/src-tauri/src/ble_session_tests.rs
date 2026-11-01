@@ -60,7 +60,7 @@ impl Harness {
         Self { sessions, events, connected: Arc::new(AtomicBool::new(true)) }
     }
     fn start(&self, notifications: Notifications, read: ReadStatus) -> Session {
-        let scope = self.sessions.begin("desktop-1".into());
+        let scope = self.sessions.begin("desktop-test-client-1".into());
         scope.start(notifications, read, physical(self.connected.clone())).unwrap();
         scope
     }

@@ -8,10 +8,11 @@ const root = path.resolve(__dirname, '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
 const tick = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 function deferred() { let resolve, reject; const promise = new Promise((a,b) => { resolve=a; reject=b; }); return { promise, resolve, reject }; }
-function nativeHost(invoke, registration) {
+function nativeHost(invoke, registration, identity = 'test-client') {
   const events = {}, calls = [];
   const context = { Promise, JSON, console, TextEncoder, Date, setTimeout, clearTimeout };
   context.window = context;
+  context.crypto = { randomUUID: () => identity };
   context.__TAURI__ = {
     core: { invoke(name, args) { calls.push({ name, args }); return invoke(name, args); } },
     event: { listen(name, callback) { events[name] = callback; return registration ? registration.promise : Promise.resolve(() => {}); } }
@@ -80,6 +81,18 @@ test('native generation and client token reject queued obsolete events', async (
   host.emit('ble-status', { clientId: current, session: 1, value: 'wrong-generation' });
   host.emit('ble-status', { clientId: current, session: 2, value: 'current' });
   assert.deepEqual(seen, ['old-before', 'current']);
+});
+test('reloaded shell rejects events from an earlier frontend instance', async () => {
+  const before = nativeHost(() => Promise.resolve(1), null, 'before-reload');
+  await before.transport.connect('hub'); const oldToken = before.calls[0].args.clientId;
+  const pending = deferred(), seen = [];
+  const after = nativeHost(() => pending.promise, null, 'after-reload');
+  await after.transport.listen('ble-status', value => seen.push(value));
+  const connecting = after.transport.connect('hub'); await tick();
+  after.emit('ble-status', { clientId: oldToken, session: 1, value: 'obsolete' });
+  assert.deepEqual(seen, []); pending.resolve(2); await connecting;
+  after.emit('ble-status', { clientId: after.calls[0].args.clientId, session: 2, value: 'current' });
+  assert.deepEqual(seen, ['current']);
 });
 test('native rejects duplicate connection attempts', async () => {
   const pending = deferred(); const host = nativeHost(() => pending.promise);
