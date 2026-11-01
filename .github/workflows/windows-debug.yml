@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Tauri ACL capability check
+        run: node ../tools/tests/tauri_acl/test_event_capability.cjs
+
       - name: Rust policy and actual session lifecycle tests
         run: |
           npm run prebuild:exe

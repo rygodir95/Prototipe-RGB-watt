@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop-events",
+  "description": "Grants the ZoneGlow main window only the event listen/unlisten commands its BLE bridge uses. Nothing else: app commands are always allowed and need no permission.",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

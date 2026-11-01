@@ -11,6 +11,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "ZoneGlow — Training Zone Lighting",
         "width": 1180,
         "height": 860,
