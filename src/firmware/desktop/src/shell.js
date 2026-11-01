@@ -10,7 +10,7 @@
 //   forced reload is needed unless the backend URL changed.
 "use strict";
 
-/* global ZoneGlowTransport */   // defined in transport.js (plain <script> global)
+/* global ZoneGlowTransport, HubBleBridge, HubBleTransport */   // provided by the desktop's plain <script> files
 
 (function () {
   var $ = function (id) { return document.getElementById(id); };
