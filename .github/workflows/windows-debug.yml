@@ -27,17 +27,34 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Desktop STATUS fallback policy tests (cargo unit tests)
+      - name: Rust policy and actual session lifecycle tests
         run: |
           npm run prebuild:exe
-          cargo test --manifest-path src-tauri/Cargo.toml --quiet
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:BLE_LIFECYCLE_TRACE = "$env:RUNNER_TEMP/ble-lifecycle-trace.json"
+          cargo test --manifest-path src-tauri/Cargo.toml -- --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node ../tools/tests/ble_liveness/test_session_lifecycle.cjs $env:BLE_LIFECYCLE_TRACE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build ZoneGlow.exe (release, no bundling)
         run: npm run build:exe
+
+      - name: Record exact commit and executable checksum
+        run: |
+          $sha = (Get-FileHash src-tauri/target/release/ZoneGlow.exe -Algorithm SHA256).Hash.ToLower()
+          $commit = git rev-parse HEAD
+          Write-Output "ZONEGLOW_BUILD_COMMIT=$commit"
+          Write-Output "ZONEGLOW_EXE_SHA256=$sha"
+          "$sha  ZoneGlow.exe" | Set-Content -Encoding ascii src-tauri/target/release/SHA256SUMS.txt
+          $commit | Set-Content -Encoding ascii src-tauri/target/release/COMMIT.txt
 
       - name: Upload ZoneGlow.exe
         uses: actions/upload-artifact@v4
         with:
           name: ZoneGlow-Windows-Exe
-          path: src/firmware/desktop/src-tauri/target/release/ZoneGlow.exe
+          path: |
+            src/firmware/desktop/src-tauri/target/release/ZoneGlow.exe
+            src/firmware/desktop/src-tauri/target/release/SHA256SUMS.txt
+            src/firmware/desktop/src-tauri/target/release/COMMIT.txt
           if-no-files-found: error

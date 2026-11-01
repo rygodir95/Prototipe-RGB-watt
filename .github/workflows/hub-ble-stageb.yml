@@ -1,14 +1,11 @@
 name: Hub BLE Stage B Verification (temporary)
 
-# Temporary verification pipeline for the Stage B port: runs the firmware and
-# desktop test suites (including the new Hub BLE transfer tests) on every push
-# that touches the firmware tree. Removed once Stage B is accepted.
-
 on:
   push:
     branches: [feature/mobile-app]
     paths:
       - "src/firmware/**"
+      - "mobile/tests/**"
       - ".github/workflows/hub-ble-stageb.yml"
   workflow_dispatch:
 
@@ -19,33 +16,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: Hub BLE transfer tests (host state machine + source invariants)
         working-directory: src/firmware
         run: python tools/test_hub_ble.py
-
       - name: Client paged-transfer retry tests
         working-directory: src/firmware
         run: node tools/test_ble_transfer_retry.cjs
-
       - name: BLE liveness tests (heartbeat, initial status, banner/About)
         working-directory: src/firmware
         run: node tools/tests/ble_liveness/test_liveness.cjs
-
       - name: Desktop STATUS fallback tests (read fallback + startup ordering)
         working-directory: src/firmware
         run: node tools/tests/ble_liveness/test_status_fallback.cjs
-
+      - name: All mobile regression suites
+        shell: bash
+        run: |
+          set -e
+          for suite in mobile/tests/test-*.cjs; do node "$suite"; done
       - name: PC simulator regression tests (Power + Heart Rate)
         working-directory: src/firmware/tools/pc-simulator
         run: python -m unittest discover -s tests -v
