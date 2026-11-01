@@ -104,7 +104,6 @@ function fillForms() {
   $("smoothInput").value = config.smoothing;
   $("smoothVal").textContent = config.smoothing;
   $("timeoutInput").value = config.powerTimeout;
-  $("hysInput").value = config.hysteresis;
   $("ledPinInput").value = config.ledPin;
   $("ledCountInput").value = config.ledCount;
   $("ledTypeSel").value = config.ledType;
@@ -125,8 +124,6 @@ function fillForms() {
   $("statFtp").textContent = hr ? config.hrMax : config.ftp;
   $("statFtpUnit").textContent = hr ? "BPM" : "W";
   $("statZones").textContent = hr ? (config.hrZones ? config.hrZones.length : 5) : config.zoneCount;
-  // Hysteresis applies to Heart Rate zones only (Power is FTP-relative).
-  $("hysUnit").textContent = "BPM";
   $("sourceMiniLabel").textContent = hr ? "Heart Rate" : "Power Source";
 
   // ---- Devices page: per-type saved source hints ----
@@ -251,7 +248,6 @@ async function saveSettings() {
   await postConfig({
     smoothing: +$("smoothInput").value,
     powerTimeout: +$("timeoutInput").value,
-    hysteresis: +$("hysInput").value,
     ledPin: +$("ledPinInput").value,
     ledCount: +$("ledCountInput").value,
     ledType: $("ledTypeSel").value,

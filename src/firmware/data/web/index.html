@@ -188,15 +188,10 @@
           </div>
         </div>
 
-        <!-- Power hysteresis is FTP-relative (automatic); the absolute margin
-             applies to Heart Rate zones only. -->
-        <div class="card">
-          <div class="card-title">Heart Rate Processing</div>
-          <div class="field">
-            <label>Hysteresis (<span id="hysUnit">BPM</span>)</label>
-            <input type="number" id="hysInput" data-testid="hysteresis-input" min="0" />
-          </div>
-        </div>
+        <!-- Heart Rate hysteresis (an absolute BPM margin) is still applied by
+             the firmware from config.hysteresis. Identity 1.1 removed it from
+             this UI on purpose: it is neither shown nor written here, and the
+             stored value is left untouched. -->
 
         <div class="card">
           <div class="card-title">LED Strip</div>
